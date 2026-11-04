@@ -1,0 +1,216 @@
+cmake_minimum_required(VERSION 3.22)
+project(cdin_frontend VERSION 1.0.0 LANGUAGES C)
+
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+include(CTest)
+
+option(CDIN_FRONTEND_USE_LOG_STUB "Use the test-only logger ABI shim (never for release)" OFF)
+option(CDIN_FRONTEND_BUILD_UI_TUI "Build the interactive terminal UI adapter" ON)
+option(CDIN_FRONTEND_BUILD_UI_SDL "Build the independent SDL3 desktop UI preview" OFF)
+option(CDIN_FRONTEND_BUILD_APPS "Build runnable adapter preview applications" ON)
+option(CDIN_FRONTEND_BUILD_UI_HEADLESS "Build the display-free reference recorder/replayer" ON)
+option(CDIN_FRONTEND_BUILD_EXAMPLES "Build small Frontend examples" ON)
+
+if(CDIN_FRONTEND_USE_LOG_STUB)
+    add_library(cdin_test_log_stub STATIC tests/support/log_stub.c)
+    target_include_directories(cdin_test_log_stub PUBLIC tests/support/include)
+    add_library(m-mdy-m::log ALIAS cdin_test_log_stub)
+else()
+    find_package(m-mdy-m-log 0.1.0 CONFIG REQUIRED)
+endif()
+
+# CORE: UI-neutral Frontend services and public contracts only.
+# It contains no terminal, SDL, window-system or drawing code.
+add_library(cdin_frontend_core STATIC
+    core/src/diagnostics/log.c
+    core/src/capabilities.c
+    core/src/protocol/wire.c
+    core/src/protocol/client.c
+    core/src/protocol/async_client.c
+    core/src/session/session.c
+    core/src/model/state.c
+    core/src/model/semantic.c)
+add_library(cdin::frontend_core ALIAS cdin_frontend_core)
+set_target_properties(cdin_frontend_core PROPERTIES
+    EXPORT_NAME frontend_core
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR})
+target_compile_features(cdin_frontend_core PUBLIC c_std_11)
+target_include_directories(cdin_frontend_core
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+target_link_libraries(cdin_frontend_core PUBLIC m-mdy-m::log)
+
+function(cdin_frontend_enable_strict target)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(${target} PRIVATE
+            -Wall -Wextra -Wshadow -Wconversion -Wstrict-prototypes
+            -Wformat=2 -Wpedantic -Werror)
+    elseif(MSVC)
+        target_compile_options(${target} PRIVATE /W4 /WX)
+    endif()
+endfunction()
+
+function(cdin_frontend_enable_test_strict target)
+    cdin_frontend_enable_strict(${target})
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(${target} PRIVATE -UNDEBUG)
+    elseif(MSVC)
+        target_compile_options(${target} PRIVATE /UNDEBUG)
+    endif()
+endfunction()
+
+cdin_frontend_enable_strict(cdin_frontend_core)
+
+# UI/TUI: experimental peer adapter, not part of the stable Core package. It
+# depends only on Core and terminal APIs. It is built for development/tests but
+# is deliberately not installed or exported by Foundation 1.0.0.
+if(CDIN_FRONTEND_BUILD_UI_TUI)
+    if(WIN32)
+        set(CDIN_FRONTEND_TUI_TERMINAL_SOURCE ui/tui/src/platform/terminal_windows.c)
+    else()
+        set(CDIN_FRONTEND_TUI_TERMINAL_SOURCE ui/tui/src/platform/terminal_posix.c)
+    endif()
+    add_library(cdin_frontend_ui_tui STATIC
+        ui/tui/src/render/tui.c
+        ui/tui/src/model/model.c
+        ui/tui/src/session/session.c
+        ui/tui/src/session/event_loop.c
+        ui/tui/src/input/terminal_input.c
+        ui/tui/src/input/parser.c
+        ${CDIN_FRONTEND_TUI_TERMINAL_SOURCE})
+    add_library(cdin::frontend_ui_tui ALIAS cdin_frontend_ui_tui)
+    set_target_properties(cdin_frontend_ui_tui PROPERTIES EXPORT_NAME frontend_ui_tui)
+    target_compile_features(cdin_frontend_ui_tui PUBLIC c_std_11)
+    target_include_directories(cdin_frontend_ui_tui
+        PUBLIC
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/ui/tui/include>
+            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+    target_link_libraries(cdin_frontend_ui_tui PUBLIC cdin::frontend_core)
+    cdin_frontend_enable_strict(cdin_frontend_ui_tui)
+    if(CDIN_FRONTEND_BUILD_APPS)
+        add_executable(cdin_frontend_tui_preview apps/tui/main.c)
+        target_compile_features(cdin_frontend_tui_preview PRIVATE c_std_11)
+        target_link_libraries(cdin_frontend_tui_preview PRIVATE cdin::frontend_ui_tui)
+        cdin_frontend_enable_strict(cdin_frontend_tui_preview)
+    endif()
+endif()
+
+# GUI-SDL is a peer adapter: SDL is intentionally confined to this target.
+# The current executable is a presentation smoke preview, not a live editor.
+if(CDIN_FRONTEND_BUILD_UI_SDL)
+    find_package(SDL3 3.2 CONFIG REQUIRED)
+    add_executable(cdin_frontend_gui_sdl_preview ui/gui-sdl/app/main.c)
+    target_compile_features(cdin_frontend_gui_sdl_preview PRIVATE c_std_11)
+    target_link_libraries(cdin_frontend_gui_sdl_preview PRIVATE SDL3::SDL3 cdin::frontend_core)
+    cdin_frontend_enable_strict(cdin_frontend_gui_sdl_preview)
+endif()
+if(CDIN_FRONTEND_BUILD_UI_HEADLESS)
+    add_library(cdin_frontend_ui_headless STATIC
+        ui/headless/src/recorder.c)
+    add_library(cdin::frontend_ui_headless ALIAS cdin_frontend_ui_headless)
+    set_target_properties(cdin_frontend_ui_headless PROPERTIES
+        EXPORT_NAME frontend_ui_headless)
+    target_compile_features(cdin_frontend_ui_headless PUBLIC c_std_11)
+    target_include_directories(cdin_frontend_ui_headless
+        PUBLIC
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/ui/headless/include>
+            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+    target_link_libraries(cdin_frontend_ui_headless PUBLIC cdin::frontend_core)
+    cdin_frontend_enable_strict(cdin_frontend_ui_headless)
+endif()
+
+if(BUILD_TESTING)
+    function(cdin_frontend_core_test target source)
+        add_executable(${target} ${source})
+        target_link_libraries(${target} PRIVATE cdin::frontend_core)
+        target_compile_features(${target} PRIVATE c_std_11)
+        cdin_frontend_enable_test_strict(${target})
+        add_test(NAME ${target} COMMAND ${target})
+    endfunction()
+    cdin_frontend_core_test(cdin_frontend_logging_tests tests/core/unit/logging.c)
+    cdin_frontend_core_test(cdin_frontend_capability_tests tests/core/unit/capabilities.c)
+    add_executable(cdin_frontend_version_tests tests/core/unit/version.c)
+    target_link_libraries(cdin_frontend_version_tests PRIVATE cdin::frontend_core)
+    target_compile_features(cdin_frontend_version_tests PRIVATE c_std_11)
+    target_compile_definitions(cdin_frontend_version_tests PRIVATE
+        CDIN_FRONTEND_PROJECT_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
+        CDIN_FRONTEND_PROJECT_VERSION_MINOR=${PROJECT_VERSION_MINOR}
+        CDIN_FRONTEND_PROJECT_VERSION_PATCH=${PROJECT_VERSION_PATCH})
+    cdin_frontend_enable_test_strict(cdin_frontend_version_tests)
+    add_test(NAME cdin_frontend_version_tests COMMAND cdin_frontend_version_tests)
+    cdin_frontend_core_test(cdin_frontend_model_tests tests/core/unit/model_state.c)
+    cdin_frontend_core_test(cdin_frontend_semantic_model_tests tests/core/unit/semantic_model.c)
+    cdin_frontend_core_test(cdin_frontend_protocol_wire_tests tests/core/unit/protocol_wire.c)
+    cdin_frontend_core_test(cdin_frontend_protocol_client_tests tests/core/integration/protocol_client.c)
+    cdin_frontend_core_test(cdin_frontend_async_protocol_client_tests tests/core/integration/async_protocol_client.c)
+    cdin_frontend_core_test(cdin_frontend_session_tests tests/core/integration/session_state.c)
+
+    if(CDIN_FRONTEND_BUILD_UI_HEADLESS)
+        add_executable(cdin_frontend_headless_recorder_tests
+            tests/ui/headless/integration/recorder.c)
+        target_link_libraries(cdin_frontend_headless_recorder_tests
+            PRIVATE cdin::frontend_ui_headless)
+        target_compile_features(cdin_frontend_headless_recorder_tests PRIVATE c_std_11)
+        cdin_frontend_enable_test_strict(cdin_frontend_headless_recorder_tests)
+        add_test(NAME cdin_frontend_headless_recorder_tests
+            COMMAND cdin_frontend_headless_recorder_tests)
+    endif()
+
+    if(CDIN_FRONTEND_BUILD_UI_TUI)
+        function(cdin_frontend_tui_test target source)
+            add_executable(${target} ${source})
+            target_link_libraries(${target} PRIVATE cdin::frontend_ui_tui)
+            target_compile_features(${target} PRIVATE c_std_11)
+            cdin_frontend_enable_test_strict(${target})
+            add_test(NAME ${target} COMMAND ${target})
+        endfunction()
+        cdin_frontend_tui_test(cdin_frontend_tui_render_tests tests/ui/tui/integration/tui_render.c)
+        cdin_frontend_tui_test(cdin_frontend_tui_model_tests tests/ui/tui/integration/tui_model.c)
+        cdin_frontend_tui_test(cdin_frontend_input_parser_tests tests/ui/tui/integration/input_parser.c)
+        cdin_frontend_tui_test(cdin_frontend_tui_session_tests tests/ui/tui/integration/tui_session.c)
+        cdin_frontend_tui_test(cdin_frontend_tui_scrolling_tests tests/ui/tui/integration/tui_scrolling.c)
+        cdin_frontend_tui_test(cdin_frontend_tui_event_loop_tests tests/ui/tui/integration/event_loop.c)
+    endif()
+endif()
+
+if(CDIN_FRONTEND_BUILD_EXAMPLES)
+    add_executable(cdin_frontend_logging_example examples/logging/main.c)
+    target_link_libraries(cdin_frontend_logging_example PRIVATE cdin::frontend_core)
+    target_compile_features(cdin_frontend_logging_example PRIVATE c_std_11)
+    cdin_frontend_enable_strict(cdin_frontend_logging_example)
+endif()
+
+# Foundation 1.0.0 installs and exports Core only. Experimental UI adapters
+# remain source/build targets until their own implementation/release gates pass.
+if(NOT CDIN_FRONTEND_USE_LOG_STUB)
+    set(CDIN_FRONTEND_INSTALL_TARGETS cdin_frontend_core)
+    install(TARGETS ${CDIN_FRONTEND_INSTALL_TARGETS}
+        EXPORT cdinFrontendTargets
+        ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+        LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+        INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+    install(DIRECTORY include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+        FILES_MATCHING PATTERN "*.h")
+    install(EXPORT cdinFrontendTargets
+        FILE cdinFrontendTargets.cmake
+        NAMESPACE cdin::
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/cdinFrontend")
+
+    set(CDIN_FRONTEND_CONFIG_NEEDS_SDL FALSE)
+    configure_package_config_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/cdinFrontendConfig.cmake.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/cdinFrontendConfig.cmake"
+        INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/cdinFrontend")
+    write_basic_package_version_file(
+        "${CMAKE_CURRENT_BINARY_DIR}/cdinFrontendConfigVersion.cmake"
+        VERSION "${PROJECT_VERSION}"
+        COMPATIBILITY SameMajorVersion)
+    install(FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/cdinFrontendConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/cdinFrontendConfigVersion.cmake"
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/cdinFrontend")
+endif()

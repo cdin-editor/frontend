@@ -1,0 +1,32 @@
+name: Bug report
+description: Report a reproducible Frontend issue.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the problem and expected behavior.
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform and compiler
+      placeholder: Linux x86-64, GCC 14
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant [FRONTEND] logs
+      description: Remove private document contents, tokens and other secrets.
+    validations:
+      required: false
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true

@@ -1,0 +1,10 @@
+CDIN Frontend
+
+Copyright (C) CDIN contributors.
+
+This repository is distributed under GNU GPL version 3 or later. See LICENSE.
+
+The Frontend consumes the public `cdin_protocol` target from cdin-editor/backend
+at a pinned source commit. It does not copy Backend implementation files and
+does not link Kernel or Runtime. The dependency's own license and notices remain
+applicable to its source distribution.

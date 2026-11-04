@@ -1,0 +1,25 @@
+name: Build and publish release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Check and publish Frontend source package
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    uses: m-mdy-m/pipeline/.github/workflows/release.yml@main
+    with:
+      pipeline-ref: main
+      changelog-path: CHANGELOG.md
+      test-command: make check
+      build-command: bash scripts/package-release.sh
+      artifact-path: |
+        dist/cdin-frontend-*.tar.gz
+        dist/cdin-frontend-*.tar.gz.sha256

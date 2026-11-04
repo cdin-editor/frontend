@@ -1,0 +1,47 @@
+schema_version = 1
+
+[project]
+name = "cdin-frontend"
+description = "UI-neutral Frontend Core plus peer TUI, SDL desktop and Headless UI adapters."
+
+[defaults]
+timeout_seconds = 900
+fail_fast = true
+
+[tasks.deps]
+description = "Install the pinned standalone m-mdy-m/log.c C11 logger"
+command = ["bash", "scripts/install-deps.sh"]
+timeout_seconds = 600
+
+[tasks.build]
+description = "Build UI-neutral Core and the independent TUI UI peer"
+command = ["make", "build"]
+depends_on = ["deps"]
+
+[tasks.test]
+description = "Run Core Protocol/session tests and UI/TUI integration tests"
+command = ["make", "test"]
+depends_on = ["build"]
+
+[tasks.boundary]
+description = "Enforce Core/UI peer boundaries and Backend/Kernel/Runtime isolation"
+command = ["bash", "scripts/check-boundaries.sh"]
+
+[tasks.lint]
+description = "Lint Markdown and validate repository whitespace"
+command = ["bash", "scripts/lint-docs.sh"]
+
+[tasks.structure]
+description = "Check required repository structure and governance files with PSX"
+command = ["psx", "check"]
+
+[tasks.check]
+description = "Run logger install, strict build, integration tests, boundaries and documentation checks"
+command = ["bash", "scripts/ci-check.sh"]
+timeout_seconds = 900
+
+[tasks.package]
+description = "Create the versioned Frontend source archive"
+command = ["bash", "scripts/package-release.sh"]
+depends_on = ["check"]
+timeout_seconds = 600

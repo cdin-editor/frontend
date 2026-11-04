@@ -1,0 +1,5 @@
+# Verified immutable dependency release metadata.
+name = "m-mdy-m/log.c"
+version = "0.1.0"
+url = "https://github.com/m-mdy-m/log.c/releases/download/v0.1.0/m-mdy-m-log-v0.1.0-source.tar.gz"
+sha256 = "cbac350215bb787ad5a82ffde87f29f032c4e0a709568d82748d0ce7c9f71e19"
