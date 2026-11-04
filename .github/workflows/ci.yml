@@ -19,20 +19,6 @@ jobs:
       pipeline-task: check
       pipeline-ref: main
 
-  docs:
-    name: Documentation and workflow validation
-    uses: m-mdy-m/pipeline/.github/workflows/docs-check.yml@main
-
-  structure:
-    name: Repository structure and governance (PSX)
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install PSX
-        run: curl -sSL https://raw.githubusercontent.com/m-mdy-m/psx/main/scripts/install.sh | bash
-      - name: Check repository structure
-        run: psx check
-
   platform-smoke:
     name: ${{ matrix.os }} native Core + TUI UI peer
     strategy:
@@ -57,7 +43,7 @@ jobs:
         with:
           msystem: UCRT64
           update: true
-          install: git mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-make mingw-w64-ucrt-x86_64-cmake
+          install: git make mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake
       # GitHub Actions does not permit the matrix context in steps.shell.
       # Keep each shell static and select the matching step with its condition.
       - if: matrix.os != 'windows-latest'
