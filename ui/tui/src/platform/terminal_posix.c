@@ -32,6 +32,10 @@ static ptrdiff_t terminal_read(void *opaque, uint8_t *buffer, size_t capacity)
         return -1;
     }
     if (ready < 0 || (readiness.revents & (POLLERR | POLLNVAL)) != 0) return -1;
+    if ((readiness.revents & (POLLIN | POLLHUP)) == 0) {
+        errno = EAGAIN;
+        return -1;
+    }
     do { amount = read(context->input_fd, buffer, capacity); } while (amount < 0 && errno == EINTR);
     return (ptrdiff_t)amount;
 }
