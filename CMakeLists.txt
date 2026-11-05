@@ -21,6 +21,7 @@ else()
 endif()
 
 # CORE: UI-neutral Frontend services and public contracts only.
+# FE-001 / FE-016: the session package encodes typed Protocol peer messages.
 # It contains no terminal, SDL, window-system or drawing code.
 add_library(cdin_frontend_core STATIC
     core/src/diagnostics/log.c
@@ -29,6 +30,7 @@ add_library(cdin_frontend_core STATIC
     core/src/protocol/client.c
     core/src/protocol/async_client.c
     core/src/session/session.c
+    core/src/session/command.c
     core/src/model/state.c
     core/src/model/semantic.c)
 add_library(cdin::frontend_core ALIAS cdin_frontend_core)
@@ -64,9 +66,9 @@ endfunction()
 
 cdin_frontend_enable_strict(cdin_frontend_core)
 
-# UI/TUI: experimental peer adapter, not part of the stable Core package. It
-# depends only on Core and terminal APIs. It is built for development/tests but
-# is deliberately not installed or exported by Foundation 1.0.0.
+# UI/TUI: peer adapter. Export the reusable adapter library and its public
+# headers when built; the preview executable remains a development-only app.
+# Exporting a linkable target does not claim FE-019 or product readiness.
 if(CDIN_FRONTEND_BUILD_UI_TUI)
     if(WIN32)
         set(CDIN_FRONTEND_TUI_TERMINAL_SOURCE ui/tui/src/platform/terminal_windows.c)
@@ -147,6 +149,7 @@ if(BUILD_TESTING)
     cdin_frontend_core_test(cdin_frontend_protocol_client_tests tests/core/integration/protocol_client.c)
     cdin_frontend_core_test(cdin_frontend_async_protocol_client_tests tests/core/integration/async_protocol_client.c)
     cdin_frontend_core_test(cdin_frontend_session_tests tests/core/integration/session_state.c)
+    cdin_frontend_core_test(cdin_frontend_command_request_tests tests/core/integration/command_request.c)
 
     if(CDIN_FRONTEND_BUILD_UI_HEADLESS)
         add_executable(cdin_frontend_headless_recorder_tests
@@ -183,10 +186,14 @@ if(CDIN_FRONTEND_BUILD_EXAMPLES)
     cdin_frontend_enable_strict(cdin_frontend_logging_example)
 endif()
 
-# Foundation 1.0.0 installs and exports Core only. Experimental UI adapters
-# remain source/build targets until their own implementation/release gates pass.
+# The production package installs Core and, when enabled, the reusable TUI
+# adapter. The adapter is still a partial application until FE-019 and live
+# product gates pass; consumers receive its public target without vendoring.
 if(NOT CDIN_FRONTEND_USE_LOG_STUB)
     set(CDIN_FRONTEND_INSTALL_TARGETS cdin_frontend_core)
+    if(CDIN_FRONTEND_BUILD_UI_TUI)
+        list(APPEND CDIN_FRONTEND_INSTALL_TARGETS cdin_frontend_ui_tui)
+    endif()
     install(TARGETS ${CDIN_FRONTEND_INSTALL_TARGETS}
         EXPORT cdinFrontendTargets
         ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
@@ -195,6 +202,10 @@ if(NOT CDIN_FRONTEND_USE_LOG_STUB)
         INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
     install(DIRECTORY include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
         FILES_MATCHING PATTERN "*.h")
+    if(CDIN_FRONTEND_BUILD_UI_TUI)
+        install(DIRECTORY ui/tui/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+            FILES_MATCHING PATTERN "*.h")
+    endif()
     install(EXPORT cdinFrontendTargets
         FILE cdinFrontendTargets.cmake
         NAMESPACE cdin::
