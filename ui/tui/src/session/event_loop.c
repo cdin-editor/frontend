@@ -4,9 +4,11 @@ static cdin_frontend_tui_loop_status drain_source(
     cdin_frontend_tui_drain_fn drain,
     void *context,
     size_t budget,
-    cdin_frontend_tui_loop_status closed_status)
+    cdin_frontend_tui_loop_status closed_status,
+    int *out_budget_exhausted)
 {
     size_t processed = 0u;
+    if (out_budget_exhausted != NULL) *out_budget_exhausted = 0;
     while (processed < budget) {
         size_t amount = 0u;
         size_t remaining = budget - processed;
@@ -25,6 +27,7 @@ static cdin_frontend_tui_loop_status drain_source(
             amount > remaining) return CDIN_FRONTEND_TUI_LOOP_IO_ERROR;
         processed += amount;
     }
+    if (out_budget_exhausted != NULL) *out_budget_exhausted = 1;
     return CDIN_FRONTEND_TUI_LOOP_OK;
 }
 
@@ -67,14 +70,16 @@ cdin_frontend_tui_loop_status cdin_frontend_tui_event_loop_run(
          * A bounded drain may require multiple readiness turns. */
         if ((ready & CDIN_FRONTEND_TUI_EVENT_TERMINATE) != 0u) {
             if ((ready & CDIN_FRONTEND_TUI_EVENT_BACKEND_READABLE) != 0u) {
+                int budget_exhausted = 0;
                 status = drain_source(loop->drain_backend, loop->context,
                                       loop->max_items_per_source,
-                                      CDIN_FRONTEND_TUI_LOOP_BACKEND_CLOSED);
+                                      CDIN_FRONTEND_TUI_LOOP_BACKEND_CLOSED,
+                                      &budget_exhausted);
                 if (status != CDIN_FRONTEND_TUI_LOOP_OK) {
                     notify_shutdown(loop, status);
                     return status;
                 }
-                continue;
+                if (budget_exhausted) continue;
             }
             notify_shutdown(loop, CDIN_FRONTEND_TUI_LOOP_OK);
             return CDIN_FRONTEND_TUI_LOOP_OK;
@@ -83,7 +88,7 @@ cdin_frontend_tui_loop_status cdin_frontend_tui_event_loop_run(
         if ((ready & CDIN_FRONTEND_TUI_EVENT_TERMINAL_READABLE) != 0u) {
             status = drain_source(loop->drain_terminal, loop->context,
                                   loop->max_items_per_source,
-                                  CDIN_FRONTEND_TUI_LOOP_TERMINAL_CLOSED);
+                                  CDIN_FRONTEND_TUI_LOOP_TERMINAL_CLOSED, NULL);
             if (status != CDIN_FRONTEND_TUI_LOOP_OK) {
                 notify_shutdown(loop, status);
                 return status;
