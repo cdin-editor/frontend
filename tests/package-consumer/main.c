@@ -19,7 +19,7 @@ static int wait_for_shutdown(void *opaque, uint32_t requested, int timeout_ms, u
 static cdin_frontend_tui_io_result drain_no_work(void *opaque, size_t budget, size_t *processed)
 {
     (void)opaque;
-    if (budget == 0u || processed == NULL) return CDIN_FRONTEND_TUI_IO_ERROR;
+    if (budget == 0u || processed == NULL) return CDIN_FRONTEND_TUI_IO_FAILURE;
     *processed = 0u;
     return CDIN_FRONTEND_TUI_IO_AGAIN;
 }
