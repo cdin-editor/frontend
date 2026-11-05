@@ -133,6 +133,12 @@ cdin_frontend_capability_mask cdin_frontend_session_accepted_capabilities(
     return session == NULL ? 0u : session->accepted_capabilities;
 }
 
+int cdin_frontend_session_is_driver(const cdin_frontend_session *session)
+{
+    return session != NULL && session->state == CDIN_FRONTEND_SESSION_ATTACHED &&
+           session->driver != 0;
+}
+
 void cdin_frontend_session_init(cdin_frontend_session *session,
                                 cdin_frontend_client *client,
                                 cdin_frontend_logger *logger,
@@ -200,6 +206,7 @@ cdin_frontend_protocol_status cdin_frontend_session_receive(
         const uint8_t *accepted_array = NULL;
         size_t accepted_array_length = 0u;
         cdin_frontend_capability_mask accepted = 0u;
+        cdin_frontend_protocol_status epoch_status;
         if (cdin_frontend_protocol_payload_get_uint(out_message->payload, out_message->payload_length,
                                                      "session_id", &session->session_id) != CDIN_FRONTEND_PROTOCOL_OK ||
             cdin_frontend_protocol_payload_get_uint(out_message->payload, out_message->payload_length,
@@ -216,7 +223,34 @@ cdin_frontend_protocol_status cdin_frontend_session_receive(
                 CDIN_FRONTEND_CAPABILITY_OK) {
             return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
         }
+        epoch_status = cdin_frontend_protocol_payload_get_uint(
+            out_message->payload, out_message->payload_length, "driver_role_epoch", &value);
+        if (epoch_status == CDIN_FRONTEND_PROTOCOL_OK) {
+            session->driver_role_epoch = value;
+        } else if (epoch_status != CDIN_FRONTEND_PROTOCOL_UNSUPPORTED) {
+            return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
+        }
+        if (cdin_frontend_capability_has(session->accepted_capabilities,
+                                         CDIN_FRONTEND_CAP_DRIVER_ROLE_EVENTS) &&
+            session->driver_role_epoch == 0u) {
+            return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
+        }
         session->state = CDIN_FRONTEND_SESSION_NEGOTIATED;
+    } else if (out_message->type == CDIN_FRONTEND_PROTOCOL_DRIVER_ROLE_CHANGED) {
+        int driver = 0;
+        uint64_t epoch = 0u;
+        if (session->state != CDIN_FRONTEND_SESSION_ATTACHED ||
+            !cdin_frontend_capability_has(session->accepted_capabilities,
+                                          CDIN_FRONTEND_CAP_DRIVER_ROLE_EVENTS) ||
+            cdin_frontend_protocol_payload_get_bool(out_message->payload, out_message->payload_length,
+                                                     "driver", &driver) != CDIN_FRONTEND_PROTOCOL_OK ||
+            cdin_frontend_protocol_payload_get_uint(out_message->payload, out_message->payload_length,
+                                                     "epoch", &epoch) != CDIN_FRONTEND_PROTOCOL_OK ||
+            epoch == 0u || epoch <= session->driver_role_epoch) {
+            return CDIN_FRONTEND_PROTOCOL_INVALID_FRAME;
+        }
+        session->driver = driver;
+        session->driver_role_epoch = epoch;
     } else if (out_message->type == CDIN_FRONTEND_PROTOCOL_UI_FLUSH) {
         char scope[16];
         size_t length = 0u;
