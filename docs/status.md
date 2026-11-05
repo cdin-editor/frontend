@@ -1,8 +1,11 @@
 # Implementation and release status
 
 **Source snapshot:** `cdin-editor/frontend` Foundation 1.0.0 working tree,
-reviewed 2026-11-04. This status describes code present in this repository. It
-does not promote accepted Spec requirements into implementation claims.
+reviewed 2026-11-05. The POSIX terminal-ownership/readiness follow-up is in
+[PR #5](https://github.com/cdin-editor/frontend/pull/5); it is not part of
+`main` until merged and verified. This status describes code present in the
+inspected source tree and does not promote accepted Spec requirements into
+implementation claims.
 
 ## 1. Release scope
 
@@ -36,10 +39,10 @@ Foundation 1.0.0 and the Protocol 1.0.0 Core codec/session contract are versione
 | Session lifecycle | `IMPLEMENTED 1.0.0` | Hello/attach/driver/flush ACK/detach and requested/accepted capability state, negotiating exact Protocol 1.0.0. |
 | Capability registry | `IMPLEMENTED IN CORE` | Nine registered Spec names, unknown-name ignore, duplicate/malformed rejection, accepted-subset validation. Concrete adapter masks remain empty unless explicitly set. |
 | Semantic model | `PARTIAL — expanded` | Added bounded typed snapshot values and allocation-free validation for 32 views, 16 panels, layout tree, typed options, styles, UTF-8 values and non-regressing view/document revisions. Protocol message projection, widget schema and multi-view/concurrent line request tracking remain unimplemented; the TUI now validates its single outstanding request by exact view/version/range identity. |
-| TUI terminal lifecycle | `PARTIAL` | POSIX and Windows terminal open/close code exists; a runnable read-only preview now exercises enter/render/input/restore, but signal-safe lifecycle and readiness integration remain. |
+| TUI terminal lifecycle | `PARTIAL — POSIX READINESS FOLLOW-UP` | POSIX now opens a dedicated input descriptor and probes it with zero-timeout `poll` before reading, avoiding changes to process STDIN/STDOUT flags. The preview waits for input readiness and handles a raced `EAGAIN`. These changes and PTY regressions are in [PR #5](https://github.com/cdin-editor/frontend/pull/5); native macOS verification is still pending. Windows terminal lifecycle code remains present, but the native console path is not yet a proven FE-019 adapter. |
 | TUI input parser | `PARTIAL` | Incremental CSI/UTF-8/Escape/paste parsing; complete keyboard/mouse/IME matrix remains. |
 | TUI renderer | `PARTIAL` | One-view text/cursor/selection/status rendering. No full PaneTree, style-role, widget or multi-pane support. |
-| TUI event loop/application | `PARTIAL` | `cdin::frontend_ui_tui` and its public headers are installed/exported when TUI is enabled; the independent consumer check is part of CI. The preview executable remains read-only. The readiness coordinator is not yet wired to a platform wait bridge or live Backend pump; editor commands remain Runtime-owned. |
+| TUI event loop/application | `PARTIAL` | `cdin::frontend_ui_tui` and its public headers are installed/exported. The transport-agnostic coordinator has bounded drains and now keeps servicing already-ready Backend work across multiple turns when termination is latched; it suppresses new terminal input during that drain. PR #5 adds regression coverage, but its native matrix has not yet passed. The preview remains read-only, and CDIN still owns the combined terminal/Backend/resize/signal wait bridge and live Backend pump. Editor commands remain Runtime-owned. |
 | TUI text fidelity | `PARTIAL` | Basic cell output and common-width handling; complete grapheme, shaping, bidi and Persian mapping remain. |
 | Headless reference frontend | `PARTIAL` | Bounded validated trace recorder/replayer builds by default; live peer wiring, scripted input harness and shared-vector runner remain pending. Backend's separate test harness is not this adapter. |
 | SDL desktop frontend | `PARTIAL — preview only` | Isolated SDL3 3.2+ smoke-preview executable and event loop; production text/font/layout/rendering, semantic widgets, capabilities and live Protocol integration remain. |
@@ -71,7 +74,7 @@ See the detailed [Foundation 1.0.0 validation record](FOUNDATION-1.0.0-VALIDATIO
   model state, wire codec, blocking and async Protocol clients, session lifecycle, Headless trace
   record/replay and TUI rendering/model/input/session/scroll/event loop.
 - Core/UI and dependency boundary checker: PASS, including the SDL-only-in-GUI-SDL rule.
-- TUI read-only preview: pseudo-terminal launch/render/quit/terminal-restore smoke test PASS; GUI-SDL source is present but could not be compiled because SDL3 3.2+ is unavailable here. See [UI preview validation](validation-ui-preview.md).
+- TUI read-only preview: the earlier POSIX PTY launch/render/quit/terminal-restore smoke passed before the nonblocking-read follow-up. Post-merge macOS CI later exposed a timeout in the terminal PTY regression and CodeQL review identified shared-stdin/stdout nonblocking and preview-EAGAIN issues. [PR #5](https://github.com/cdin-editor/frontend/pull/5) corrects those paths; its current native Linux/macOS/Windows matrix must pass before this terminal contract is treated as verified. GUI-SDL source is present but could not be compiled because SDL3 3.2+ is unavailable in the inspected environment. See [UI preview validation](validation-ui-preview.md).
 - CMake install/export plus a separate consumer configure/build/run: PASS for
   the Foundation Core package in the earlier validation record using a local
   test-stub logger package. The new clean-prefix consumer additionally checks
@@ -90,8 +93,10 @@ See the detailed [Foundation 1.0.0 validation record](FOUNDATION-1.0.0-VALIDATIO
   (SDL3 unavailable in this environment), live Headless peer wiring and live
   product E2E: NOT RUN / NOT IMPLEMENTED as applicable.
 - The optional Headless trace recorder/replayer and TUI readiness coordinator
-  were added after the original Foundation validation record; see the current
-  CTest result and `docs/traceability.md`.
+  were added after the original Foundation validation record. PR #5 extends
+  the coordinator tests for Backend work pending during shutdown; its current
+  CTest/native result remains pending and the historical 16/16 result does not
+  cover this newer code. See `docs/traceability.md` and PR #5.
 
 The test-only logger shim is never a production dependency and is excluded
 from the installed/exported package.
@@ -110,7 +115,10 @@ from the installed/exported package.
    the adapter can actually service in that process/session.
 4. Connect the implemented readiness-driven partial-progress Protocol I/O
    (`PROGRESS`, `AGAIN`, EOF and error) to the concrete terminal/transport wait
-   implementation supplied by `cdin`; add native wait and cleanup integration.
+   implementation supplied by `cdin`; complete and verify the POSIX/Windows
+   wait bridges, signal/resize delivery, pending-work shutdown and cleanup. PR #5
+   improves the reusable Frontend coordinator and POSIX input/preview contract,
+   but does not implement CDIN's combined wait bridge.
 5. Turn the TUI read-only preview into a connected interactive editor with
    terminal restoration, multi-pane rendering, text mapping, and Runtime event flow.
 6. Complete GUI-SDL rendering, fonts/shaping, semantic widgets and capabilities;
