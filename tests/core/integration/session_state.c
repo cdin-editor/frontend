@@ -84,12 +84,12 @@ int main(void)
     };
     static const uint8_t promoted_role[] = {
         0xa2u,
-        0x65u, 'e','p','o','c','h', 0x04u,
+        0x65u, 'e','p','o','c','h', 0x03u,
         0x66u, 'd','r','i','v','e','r', 0xf5u
     };
     static const uint8_t revoked_role[] = {
         0xa2u,
-        0x65u, 'e','p','o','c','h', 0x03u,
+        0x65u, 'e','p','o','c','h', 0x04u,
         0x66u, 'd','r','i','v','e','r', 0xf4u
     };
     fake_stream stream;
