@@ -115,6 +115,28 @@ static const uint8_t response_flush_4[] = {
     0x68u, 's','e','q','u','e','n','c','e', 0x04u
 };
 
+static const uint8_t stale_snapshot_flush_5[] = {
+    0xa3u,
+    0x65u, 's','c','o','p','e', 0x68u, 's','n','a','p','s','h','o','t',
+    0x68u, 'r','e','v','i','s','i','o','n', 0x01u,
+    0x68u, 's','e','q','u','e','n','c','e', 0x05u
+};
+
+static const uint8_t version_2_lines_payload[] = {
+    0xa4u,
+    0x65u, 'l','i','n','e','s', 0x81u,
+        0xa1u, 0x65u, 'b','y','t','e','s', 0x45u, 'F','r','e','s','h',
+    0x67u, 'v','e','r','s','i','o','n', 0x02u,
+    0x67u, 'v','i','e','w','_','i','d', 0x66u, 'v','i','e','w','-','1',
+    0x6au, 'f','i','r','s','t','_','l','i','n','e', 0x00u
+};
+
+static const uint8_t response_flush_6[] = {
+    0xa2u,
+    0x65u, 's','c','o','p','e', 0x68u, 'r','e','s','p','o','n','s','e',
+    0x68u, 's','e','q','u','e','n','c','e', 0x06u
+};
+
 static cdin_frontend_tui_model_status apply(
     cdin_frontend_tui_model *model,
     cdin_frontend_protocol_message_type type,
@@ -242,6 +264,29 @@ int main(void)
     cdin_frontend_tui_model_mark_request_pending(model);
     cdin_frontend_tui_model_request_failed(model);
     assert(cdin_frontend_tui_model_needs_lines(model));
+
+    /* A duplicate snapshot must not cancel the outstanding version-pinned
+     * line request. Its response can already be queued behind the snapshot. */
+    assert(cdin_frontend_tui_model_request_range(model, &first_line, &line_count, &version) ==
+           CDIN_FRONTEND_TUI_MODEL_OK);
+    assert(first_line == 0u && line_count == 32u && version == 2u);
+    cdin_frontend_tui_model_mark_request_pending(model);
+    assert(!cdin_frontend_tui_model_needs_lines(model));
+    assert(apply(model, CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
+                 stale_snapshot_flush_5, sizeof(stale_snapshot_flush_5), 0) ==
+           CDIN_FRONTEND_TUI_MODEL_STALE);
+    assert(!cdin_frontend_tui_model_needs_lines(model));
+    assert(apply(model, CDIN_FRONTEND_PROTOCOL_VIEW_LINES,
+                 version_2_lines_payload, sizeof(version_2_lines_payload), 0) ==
+           CDIN_FRONTEND_TUI_MODEL_OK);
+    assert(apply(model, CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
+                 response_flush_6, sizeof(response_flush_6), 1) ==
+           CDIN_FRONTEND_TUI_MODEL_OK);
+    assert(!cdin_frontend_tui_model_needs_lines(model));
+    assert(cdin_frontend_tui_model_get_frame(model, &frame) == CDIN_FRONTEND_TUI_MODEL_OK);
+    assert(frame.document_version == 2u && frame.line_count == 1u);
+    assert(frame.lines[0].length == 5u);
+    assert(memcmp(frame.lines[0].bytes, "Fresh", 5u) == 0);
 
     cdin_frontend_tui_model_destroy(model);
     return 0;
