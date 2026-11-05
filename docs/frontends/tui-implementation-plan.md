@@ -28,11 +28,11 @@ integration remain open.**
   `PROGRESS`/`AGAIN`/EOF/error results, and are bounded per turn.
 - Simultaneously ready terminal and Backend sources are both serviced before
   rendering; resize and termination events are routed through callbacks.
-- POSIX terminal reads now use a dedicated input descriptor with a
-  zero-timeout readiness probe. This gives drain callbacks nonblocking
-  semantics without setting O_NONBLOCK on the tty or changing process
-  STDIN/STDOUT status flags. The standalone preview waits for terminal
-  readiness before reading and handles a raced EAGAIN result.
+- POSIX terminal reads now probe process STDIN with a zero-timeout readiness
+  poll. This gives drain callbacks nonblocking semantics without opening or
+  duplicating the tty, setting O_NONBLOCK, or changing process STDIN/STDOUT
+  flags. The standalone preview waits for terminal readiness before reading
+  and handles a raced EAGAIN result.
 - The coordinator drains Backend work already reported ready before honoring a
   simultaneous termination event, while suppressing new terminal input.
 - Still required: the CDIN-owned POSIX/Windows wait bridge, readiness-driven
