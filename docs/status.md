@@ -15,10 +15,13 @@ Foundation 1.0.0 stabilizes and installs the UI-neutral C Core API:
 - snapshot revision, flush sequence and document-version bookkeeping;
 - input value types and Frontend-owned diagnostics facade.
 
-The stable installed CMake package exports `cdin::frontend_core` only. The independent wire codec/client/session now implement shared Protocol 1.0.0. TUI is
-built as a development preview when enabled, but its headers and target are not
-installed/exported in Foundation 1.0.0. Headless is a build/test-only trace
-primitive and is not installed/exported; GUI-SDL has a smoke-preview executable but not a production adapter.
+The installed CMake package always exports `cdin::frontend_core` and, when
+`CDIN_FRONTEND_BUILD_UI_TUI=ON`, also exports the reusable
+`cdin::frontend_ui_tui` adapter library and its public headers. The independent
+wire codec/client/session implement shared Protocol 1.0.0. Exporting the TUI
+library makes it consumable by CDIN; it does not promote the preview app or
+FE-019 loop to product-ready status. Headless remains a build/test-only trace
+primitive; GUI-SDL has a smoke-preview executable but not a production adapter.
 
 Foundation 1.0.0 and the Protocol 1.0.0 Core codec/session contract are versioned and tested at source level. This is **not** a claim that the full Frontend product or complete CDIN application is ready.
 
@@ -36,7 +39,7 @@ Foundation 1.0.0 and the Protocol 1.0.0 Core codec/session contract are versione
 | TUI terminal lifecycle | `PARTIAL` | POSIX and Windows terminal open/close code exists; a runnable read-only preview now exercises enter/render/input/restore, but signal-safe lifecycle and readiness integration remain. |
 | TUI input parser | `PARTIAL` | Incremental CSI/UTF-8/Escape/paste parsing; complete keyboard/mouse/IME matrix remains. |
 | TUI renderer | `PARTIAL` | One-view text/cursor/selection/status rendering. No full PaneTree, style-role, widget or multi-pane support. |
-| TUI event loop/application | `PARTIAL` | A runnable read-only preview executable now exists. The tested readiness coordinator is not yet wired to a platform wait bridge or live Backend pump; editor commands remain Runtime-owned. |
+| TUI event loop/application | `PARTIAL` | `cdin::frontend_ui_tui` and its public headers are installed/exported when TUI is enabled; the independent consumer check is part of CI. The preview executable remains read-only. The readiness coordinator is not yet wired to a platform wait bridge or live Backend pump; editor commands remain Runtime-owned. |
 | TUI text fidelity | `PARTIAL` | Basic cell output and common-width handling; complete grapheme, shaping, bidi and Persian mapping remain. |
 | Headless reference frontend | `PARTIAL` | Bounded validated trace recorder/replayer builds by default; live peer wiring, scripted input harness and shared-vector runner remain pending. Backend's separate test harness is not this adapter. |
 | SDL desktop frontend | `PARTIAL — preview only` | Isolated SDL3 3.2+ smoke-preview executable and event loop; production text/font/layout/rendering, semantic widgets, capabilities and live Protocol integration remain. |
@@ -69,11 +72,11 @@ See the detailed [Foundation 1.0.0 validation record](FOUNDATION-1.0.0-VALIDATIO
   record/replay and TUI rendering/model/input/session/scroll/event loop.
 - Core/UI and dependency boundary checker: PASS, including the SDL-only-in-GUI-SDL rule.
 - TUI read-only preview: pseudo-terminal launch/render/quit/terminal-restore smoke test PASS; GUI-SDL source is present but could not be compiled because SDL3 3.2+ is unavailable here. See [UI preview validation](validation-ui-preview.md).
-- CMake install/export plus a separate consumer configure/build/run: PASS using
-  a local test-stub logger package; the follow-up consumer also includes and
-  links against the installed async-client API. This verifies package metadata, exported
-  target naming, installed headers and consumer linkage shape, not the
-  production logger implementation.
+- CMake install/export plus a separate consumer configure/build/run: PASS for
+  the Foundation Core package in the earlier validation record using a local
+  test-stub logger package. The new clean-prefix consumer additionally checks
+  the exported TUI target and command API; its CI result is pending for this
+  source branch and must not be inferred from the earlier Core-only test.
 - AddressSanitizer + UndefinedBehaviorSanitizer build and tests:
   PASS, 16/16, with leak detection enabled and both sanitizers configured to
   halt on the first finding.
