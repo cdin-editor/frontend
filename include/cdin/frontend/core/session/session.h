@@ -28,7 +28,6 @@ typedef struct cdin_frontend_session {
     uint64_t session_id;
     uint64_t client_id;
     uint64_t last_flush_sequence;
-    uint64_t driver_role_epoch;
     cdin_frontend_capability_mask requested_capabilities;
     cdin_frontend_capability_mask accepted_capabilities;
     int driver;
