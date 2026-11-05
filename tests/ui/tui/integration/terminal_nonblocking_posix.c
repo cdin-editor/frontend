@@ -6,6 +6,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#include <signal.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -20,6 +22,7 @@ static int child_check(const char *slave_name)
     uint8_t byte = 0u;
     ptrdiff_t amount;
     int original_flags;
+    int original_output_flags;
     int slave = open(slave_name, O_RDWR | O_NOCTTY);
     assert(slave >= 0);
     assert(dup2(slave, STDIN_FILENO) == STDIN_FILENO);
@@ -27,11 +30,22 @@ static int child_check(const char *slave_name)
     if (slave > STDOUT_FILENO) close(slave);
 
     original_flags = fcntl(STDIN_FILENO, F_GETFL, 0);
-    assert(original_flags >= 0);
+    original_output_flags = fcntl(STDOUT_FILENO, F_GETFL, 0);
+    assert(original_flags >= 0 && original_output_flags >= 0);
     assert(tcgetattr(STDIN_FILENO, &before) == 0);
     memset(&terminal, 0, sizeof(terminal));
     assert(cdin_frontend_terminal_open(&terminal) == CDIN_FRONTEND_TERMINAL_OK);
     assert(terminal.active == 1);
+    /* The adapter must not alter process descriptor flags. In PTY launches,
+     * stdin/stdout may refer to one open-file description. */
+    assert(fcntl(STDIN_FILENO, F_GETFL, 0) == original_flags);
+    assert(fcntl(STDOUT_FILENO, F_GETFL, 0) == original_output_flags);
+    {
+        static const uint8_t marker[] = "blocking-output";
+        assert(terminal.write(terminal.context, marker, sizeof(marker) - 1u) ==
+               (ptrdiff_t)(sizeof(marker) - 1u));
+        assert(tcdrain(STDOUT_FILENO) == 0);
+    }
     errno = 0;
     amount = terminal.read(terminal.context, &byte, 1u);
     assert(amount == -1);
@@ -39,6 +53,7 @@ static int child_check(const char *slave_name)
     cdin_frontend_terminal_close(&terminal);
     assert(terminal.active == 0);
     assert(fcntl(STDIN_FILENO, F_GETFL, 0) == original_flags);
+    assert(fcntl(STDOUT_FILENO, F_GETFL, 0) == original_output_flags);
     assert(tcgetattr(STDIN_FILENO, &after) == 0);
     assert(before.c_iflag == after.c_iflag);
     assert(before.c_oflag == after.c_oflag);
@@ -64,12 +79,17 @@ int main(void)
     if (child == 0) {
         int result;
         (void)close(master);
+        /* Bound failures inside terminal setup/read/restore so a platform
+         * regression is reported by CTest rather than hanging the job. */
+        (void)alarm(4u);
         result = child_check(slave_name);
         _exit(result);
     }
     assert(waitpid(child, &status, 0) == child);
     (void)close(master);
-    assert(WIFEXITED(status));
-    assert(WEXITSTATUS(status) == 0);
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        (void)fprintf(stderr, "POSIX terminal PTY child failed or timed out (status=%d)\\n", status);
+        return 1;
+    }
     return 0;
 }
