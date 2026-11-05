@@ -176,6 +176,10 @@ if(BUILD_TESTING)
         cdin_frontend_tui_test(cdin_frontend_tui_session_tests tests/ui/tui/integration/tui_session.c)
         cdin_frontend_tui_test(cdin_frontend_tui_scrolling_tests tests/ui/tui/integration/tui_scrolling.c)
         cdin_frontend_tui_test(cdin_frontend_tui_event_loop_tests tests/ui/tui/integration/event_loop.c)
+        if(UNIX)
+            cdin_frontend_tui_test(cdin_frontend_terminal_nonblocking_tests
+                tests/ui/tui/integration/terminal_nonblocking_posix.c)
+        endif()
     endif()
 endif()
 
