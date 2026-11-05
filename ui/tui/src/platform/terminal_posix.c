@@ -3,6 +3,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -20,8 +21,19 @@ typedef struct terminal_context {
 static ptrdiff_t terminal_read(void *opaque, uint8_t *buffer, size_t capacity)
 {
     terminal_context *context = (terminal_context *)opaque;
+    struct pollfd readiness;
     ssize_t amount;
+    int ready;
     if (context == NULL || buffer == NULL || capacity == 0u) return -1;
+    readiness.fd = context->input_fd;
+    readiness.events = POLLIN;
+    readiness.revents = 0;
+    do { ready = poll(&readiness, 1u, 0); } while (ready < 0 && errno == EINTR);
+    if (ready == 0) {
+        errno = EAGAIN;
+        return -1;
+    }
+    if (ready < 0 || (readiness.revents & (POLLERR | POLLNVAL)) != 0) return -1;
     do { amount = read(context->input_fd, buffer, capacity); } while (amount < 0 && errno == EINTR);
     return (ptrdiff_t)amount;
 }
@@ -65,11 +77,11 @@ cdin_frontend_terminal_status cdin_frontend_terminal_open(cdin_frontend_terminal
         if (input_name == NULL) return CDIN_FRONTEND_TERMINAL_NOT_INTERACTIVE;
         context = (terminal_context *)calloc(1u, sizeof(*context));
         if (context == NULL) return CDIN_FRONTEND_TERMINAL_IO_ERROR;
-        /* Open a new file description for input. O_NONBLOCK on STDIN_FILENO
-         * also changes STDOUT_FILENO when both descriptors share an open-file
-         * description (the normal PTY launch case). Keeping input separate
-         * ensures renderer writes remain blocking and cannot fail with EAGAIN. */
-        context->input_fd = open(input_name, O_RDONLY | O_NONBLOCK | O_NOCTTY);
+        /* Open a separate descriptor so terminal setup never changes process
+         * stdin/stdout flags. terminal_read performs a zero-timeout poll before
+         * read(), giving drain callbacks nonblocking semantics without relying
+         * on O_NONBLOCK propagation through tty device descriptors. */
+        context->input_fd = open(input_name, O_RDONLY | O_NOCTTY);
         context->output_fd = STDOUT_FILENO;
         if (context->input_fd < 0 ||
             fstat(context->input_fd, &input_device) != 0 ||
