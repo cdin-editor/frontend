@@ -85,10 +85,61 @@ static int codepoint_is_combining(uint32_t value)
            (value >= 0xfe20u && value <= 0xfe2fu);
 }
 
+static int codepoint_is_regional_indicator(uint32_t value)
+{
+    return value >= 0x1f1e6u && value <= 0x1f1ffu;
+}
+
+static int codepoint_is_emoji_modifier(uint32_t value)
+{
+    return value >= 0x1f3fbu && value <= 0x1f3ffu;
+}
+
+static int codepoint_is_variation_selector(uint32_t value)
+{
+    return (value >= 0xfe00u && value <= 0xfe0fu) ||
+           (value >= 0xe0100u && value <= 0xe01efu);
+}
+
+static int codepoint_is_grapheme_extend(uint32_t value)
+{
+    return codepoint_is_combining(value) ||
+           codepoint_is_variation_selector(value) ||
+           codepoint_is_emoji_modifier(value) ||
+           (value >= 0xe0020u && value <= 0xe007fu);
+}
+
+static int codepoint_is_emoji(uint32_t value)
+{
+    return (value >= 0x1f000u && value <= 0x1faffu) ||
+           (value >= 0x2600u && value <= 0x27ffu) ||
+           value == 0x00a9u || value == 0x00aeu ||
+           value == 0x203cu || value == 0x2049u ||
+           value == 0x2122u || value == 0x2139u ||
+           (value >= 0x2194u && value <= 0x2199u) ||
+           (value >= 0x21a9u && value <= 0x21aau) ||
+           value == 0x2300u || value == 0x2307u ||
+           (value >= 0x231au && value <= 0x231bu) ||
+           value == 0x2328u || value == 0x23cfu ||
+           (value >= 0x23e9u && value <= 0x23f3u) ||
+           (value >= 0x23f8u && value <= 0x23fau) ||
+           value == 0x24c2u ||
+           (value >= 0x25aau && value <= 0x25abu) ||
+           value == 0x25b6u || value == 0x25c0u ||
+           (value >= 0x25fbu && value <= 0x25feu) ||
+           (value >= 0x2934u && value <= 0x2935u) ||
+           (value >= 0x2b05u && value <= 0x2b07u) ||
+           (value >= 0x2b1bu && value <= 0x2b1cu) ||
+           value == 0x2b50u || value == 0x2b55u ||
+           value == 0x3030u || value == 0x303du ||
+           value == 0x3297u || value == 0x3299u;
+}
+
 static size_t codepoint_cell_width(uint32_t value)
 {
+    if (codepoint_is_regional_indicator(value)) return 2u;
     if (codepoint_is_combining(value) || value == 0x200du ||
-        (value >= 0xfe00u && value <= 0xfe0fu)) return 0u;
+        codepoint_is_variation_selector(value)) return 0u;
     if (value >= 0x1100u &&
         (value <= 0x115fu || value == 0x2329u || value == 0x232au ||
          (value >= 0x2e80u && value <= 0xa4cfu) ||
@@ -103,6 +154,83 @@ static size_t codepoint_cell_width(uint32_t value)
     return 1u;
 }
 
+/* Returns the byte length and terminal-cell width of one extended
+ * grapheme cluster. This bounded iterator covers combining/variation marks,
+ * emoji modifiers, regional-indicator pairs and ZWJ emoji sequences. It is
+ * intentionally not a full Unicode bidi/shaping engine. */
+static size_t grapheme_cluster_length(const uint8_t *bytes, size_t length,
+                                      size_t *out_width)
+{
+    size_t first_length;
+    size_t offset;
+    uint32_t first;
+    size_t width;
+    int regional_pair = 0;
+    if (bytes == NULL || out_width == NULL || length == 0u) {
+        if (out_width != NULL) *out_width = 0u;
+        return 0u;
+    }
+    first_length = utf8_sequence_length(bytes[0]);
+    if (first_length == 0u || first_length > length ||
+        !valid_utf8_sequence(bytes, first_length)) {
+        *out_width = 1u;
+        return 1u;
+    }
+    first = decode_codepoint(bytes, first_length);
+    width = codepoint_cell_width(first);
+    offset = first_length;
+    if (codepoint_is_regional_indicator(first) && offset < length) {
+        size_t next_length = utf8_sequence_length(bytes[offset]);
+        if (next_length != 0u && next_length <= length - offset &&
+            valid_utf8_sequence(bytes + offset, next_length) &&
+            codepoint_is_regional_indicator(decode_codepoint(bytes + offset, next_length))) {
+            offset += next_length;
+            width = 2u;
+            regional_pair = 1;
+        }
+    }
+    if (!regional_pair) {
+        while (offset < length) {
+            size_t next_length = utf8_sequence_length(bytes[offset]);
+            uint32_t next;
+            if (next_length == 0u || next_length > length - offset ||
+                !valid_utf8_sequence(bytes + offset, next_length)) break;
+            next = decode_codepoint(bytes + offset, next_length);
+            if (next == '\r' || next == '\n') break;
+            if (codepoint_is_grapheme_extend(next)) {
+                if (next == 0xfe0fu && width != 0u) width = 2u;
+                else if (next == 0xfe0eu && width > 1u) width = 1u;
+                offset += next_length;
+                continue;
+            }
+            if (next == 0x200du) {
+                size_t joined_length;
+                uint32_t joined;
+                /* U+200D appears outside emoji sequences in ordinary text.
+                 * Only collapse a join when both sides are recognized emoji;
+                 * otherwise leave the ZWJ for the next zero-width cluster so
+                 * adjacent letters keep their independent cell widths. */
+                if (!codepoint_is_emoji(first) || offset + next_length >= length) break;
+                joined_length = utf8_sequence_length(bytes[offset + next_length]);
+                if (joined_length == 0u || joined_length > length - offset - next_length ||
+                    !valid_utf8_sequence(bytes + offset + next_length, joined_length)) {
+                    break;
+                }
+                joined = decode_codepoint(bytes + offset + next_length, joined_length);
+                if (!codepoint_is_emoji(joined)) break;
+                if (codepoint_cell_width(joined) > width) {
+                    width = codepoint_cell_width(joined);
+                }
+                offset += next_length + joined_length;
+                continue;
+            }
+            break;
+        }
+    }
+    *out_width = width;
+    return offset;
+}
+
 static size_t visible_width_before(const cdin_frontend_tui_line *line, size_t byte_limit)
 {
     size_t offset = 0u;
@@ -111,7 +239,8 @@ static size_t visible_width_before(const cdin_frontend_tui_line *line, size_t by
     if (byte_limit > line->length) byte_limit = line->length;
     while (offset < byte_limit) {
         uint8_t value = line->bytes[offset];
-        size_t sequence;
+        size_t cluster_bytes;
+        size_t cluster_width = 0u;
         if (value == '\r' || value == '\n') break;
         if (value == '\t') {
             cells += 4u - (cells % 4u);
@@ -123,15 +252,12 @@ static size_t visible_width_before(const cdin_frontend_tui_line *line, size_t by
             offset++;
             continue;
         }
-        sequence = utf8_sequence_length(value);
-        if (sequence == 0u || sequence > byte_limit - offset ||
-            !valid_utf8_sequence(line->bytes + offset, sequence)) {
-            cells++;
-            offset++;
-            continue;
-        }
-        cells += codepoint_cell_width(decode_codepoint(line->bytes + offset, sequence));
-        offset += sequence;
+        cluster_bytes = grapheme_cluster_length(line->bytes + offset,
+                                                 byte_limit - offset,
+                                                 &cluster_width);
+        if (cluster_bytes == 0u) break;
+        cells += cluster_width;
+        offset += cluster_bytes;
     }
     return cells;
 }
@@ -203,7 +329,9 @@ static void append_visible_line(output_buffer *output, const cdin_frontend_tui_l
             offset++;
             continue;
         }
-        width = codepoint_cell_width(decode_codepoint(line->bytes + offset, sequence));
+        sequence = grapheme_cluster_length(line->bytes + offset,
+                                             line->length - offset, &width);
+        if (sequence == 0u) break;
         if (width > maximum_cells - cells) break;
         selected = byte_is_selected(absolute_offset, sequence, selection_start, selection_end, selection_known);
         set_selection_output(output, selected, &selection_active);

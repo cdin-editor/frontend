@@ -114,5 +114,84 @@ int main(void)
     assert(cdin_frontend_tui_render(&terminal, &frame, NULL) == CDIN_FRONTEND_TUI_OK);
     assert(contains_bytes(captured.output, captured.length,
                           cursor_expected, sizeof(cursor_expected) - 1u));
+    {
+        static const uint8_t family[] = {
+            0xf0u,0x9fu,0x91u,0xa9u, 0xe2u,0x80u,0x8du,
+            0xf0u,0x9fu,0x91u,0xa9u, 0xe2u,0x80u,0x8du,
+            0xf0u,0x9fu,0x91u,0xa7u, 0xe2u,0x80u,0x8du,
+            0xf0u,0x9fu,0x91u,0xa6u, 'X'
+        };
+        static const uint8_t flag[] = {
+            0xf0u,0x9fu,0x87u,0xaeu, 0xf0u,0x9fu,0x87u,0xb7u, 'X'
+        };
+        static const uint8_t heart[] = {
+            0xe2u,0x9du,0xa4u, 0xefu,0xb8u,0x8fu, 'X'
+        };
+        static const uint8_t combining[] = { 'A', 0xccu,0x81u, 'X' };
+        static const uint8_t invalid_utf8[] = { 0xffu, 'X' };
+        static const uint8_t family_cursor[] = "\033[2;11H";
+        static const uint8_t text_cursor[] = "\033[2;10H";
+        static const uint8_t replacement[] = "\xef\xbf\xbd";
+
+        lines[0].bytes = family;
+        lines[0].length = sizeof(family);
+        frame.lines = lines;
+        frame.line_count = 1u;
+        frame.cursor_line = 0u;
+        frame.cursor_byte = sizeof(family) - 1u;
+        frame.selection_known = 0;
+        captured.length = 0u;
+        assert(cdin_frontend_tui_render(&terminal, &frame, NULL) == CDIN_FRONTEND_TUI_OK);
+        assert(contains_bytes(captured.output, captured.length, family, sizeof(family)));
+        assert(contains_bytes(captured.output, captured.length,
+                              family_cursor, sizeof(family_cursor) - 1u));
+
+        lines[0].bytes = flag;
+        lines[0].length = sizeof(flag);
+        frame.cursor_byte = sizeof(flag) - 1u;
+        captured.length = 0u;
+        assert(cdin_frontend_tui_render(&terminal, &frame, NULL) == CDIN_FRONTEND_TUI_OK);
+        assert(contains_bytes(captured.output, captured.length,
+                              family_cursor, sizeof(family_cursor) - 1u));
+
+        lines[0].bytes = heart;
+        lines[0].length = sizeof(heart);
+        frame.cursor_byte = sizeof(heart) - 1u;
+        captured.length = 0u;
+        assert(cdin_frontend_tui_render(&terminal, &frame, NULL) == CDIN_FRONTEND_TUI_OK);
+        assert(contains_bytes(captured.output, captured.length,
+                              family_cursor, sizeof(family_cursor) - 1u));
+
+        lines[0].bytes = combining;
+        lines[0].length = sizeof(combining);
+        frame.cursor_byte = sizeof(combining) - 1u;
+        captured.length = 0u;
+        assert(cdin_frontend_tui_render(&terminal, &frame, NULL) == CDIN_FRONTEND_TUI_OK);
+        assert(contains_bytes(captured.output, captured.length,
+                              text_cursor, sizeof(text_cursor) - 1u));
+
+        lines[0].bytes = invalid_utf8;
+        lines[0].length = sizeof(invalid_utf8);
+        frame.cursor_byte = 0u;
+        captured.length = 0u;
+        assert(cdin_frontend_tui_render(&terminal, &frame, NULL) == CDIN_FRONTEND_TUI_OK);
+        assert(contains_bytes(captured.output, captured.length,
+                              replacement, sizeof(replacement) - 1u));
+        assert(!contains_bytes(captured.output, captured.length, invalid_utf8, 1u));
+
+        {
+            static const uint8_t ordinary_zwj[] = { 'A', 0xe2u,0x80u,0x8du, 'B', 'X' };
+            static const uint8_t ordinary_cursor[] = "\033[2;11H";
+            lines[0].bytes = ordinary_zwj;
+            lines[0].length = sizeof(ordinary_zwj);
+            frame.cursor_byte = sizeof(ordinary_zwj) - 1u;
+            captured.length = 0u;
+            assert(cdin_frontend_tui_render(&terminal, &frame, NULL) == CDIN_FRONTEND_TUI_OK);
+            assert(contains_bytes(captured.output, captured.length,
+                                  ordinary_zwj, sizeof(ordinary_zwj)));
+            assert(contains_bytes(captured.output, captured.length,
+                                  ordinary_cursor, sizeof(ordinary_cursor) - 1u));
+        }
+    }
     return 0;
 }

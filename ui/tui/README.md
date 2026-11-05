@@ -15,6 +15,11 @@ commands, keymaps, Runtime policy or Kernel state.
 - Read-only single-view rendering and a version-aware presentation cache.
 - A readiness-driven event-loop coordinator (`event_loop.h`).
 
+The renderer includes a bounded, cluster-aware width projection for combining
+marks, emoji variation selectors/modifiers, regional-indicator pairs and ZWJ
+emoji sequences. Original UTF-8 bytes are preserved. This is not complete
+UAX #29 segmentation, script shaping or bidi reordering.
+
 The event-loop coordinator is deliberately transport-agnostic. When a
 termination and Backend-readiness event arrive together, it gives the already
 ready Backend source one bounded drain turn before calling shutdown; it does
