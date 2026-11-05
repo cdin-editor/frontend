@@ -88,7 +88,7 @@ int main(void)
     assert(waitpid(child, &status, 0) == child);
     (void)close(master);
     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-        (void)fprintf(stderr, "POSIX terminal PTY child failed or timed out (status=%d)\\n", status);
+        (void)fprintf(stderr, "POSIX terminal PTY child failed or timed out (status=%d)\n", status);
         return 1;
     }
     return 0;
