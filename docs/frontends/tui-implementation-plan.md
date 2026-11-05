@@ -28,13 +28,22 @@ integration remain open.**
   `PROGRESS`/`AGAIN`/EOF/error results, and are bounded per turn.
 - Simultaneously ready terminal and Backend sources are both serviced before
   rendering; resize and termination events are routed through callbacks.
-- Still required: concrete POSIX/Windows wait bridge, readiness-driven partial
-  Protocol I/O, ESC deadline integration and orderly signal cleanup.
+- POSIX terminal reads now use a dedicated nonblocking descriptor, so input
+  readiness never changes the shared status flags of STDIN/STDOUT or makes
+  renderer output nonblocking. The standalone preview waits for terminal
+  readiness before reading and handles a raced EAGAIN result.
+- The coordinator drains Backend work already reported ready before honoring a
+  simultaneous termination event, while suppressing new terminal input.
+- Still required: the CDIN-owned POSIX/Windows wait bridge, readiness-driven
+  partial Protocol I/O, ESC deadline integration, orderly signal cleanup and
+  native console/PTY product tests. The Frontend coordinator itself is not a
+  platform wait implementation.
 - Keep Backend pump/Runtime/Lua dispatch on the Backend owner thread.
 
-**Exit:** fake coordinator test passes; product exit still requires PTY/console
-and fake-transport tests proving neither side blocks the other, no busy wait,
-no unbounded queue and no `AGAIN`/EOF confusion.
+**Exit:** fake coordinator tests cover simultaneous shutdown/readiness and
+invalid progress accounting. Product exit still requires PTY/console and
+fake-transport tests proving neither side blocks the other, no busy wait, no
+unbounded queue and no `AGAIN`/EOF confusion.
 
 ## T2 — Reliable one-view editor path
 
