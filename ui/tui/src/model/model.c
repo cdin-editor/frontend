@@ -504,10 +504,27 @@ static cdin_frontend_tui_model_status commit_group(cdin_frontend_tui_model *mode
     size_t index;
     cdin_frontend_protocol_status wire_status;
     if (cdin_frontend_protocol_payload_get_text(message->payload, message->payload_length,
-                                                "scope", scope, sizeof(scope), &scope_length) != CDIN_FRONTEND_PROTOCOL_OK ||
-        cdin_frontend_protocol_payload_get_uint(message->payload, message->payload_length,
-                                                "sequence", &sequence) != CDIN_FRONTEND_PROTOCOL_OK ||
-        sequence <= model->last_flush_sequence) return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
+                                                "scope", scope, sizeof(scope), &scope_length) != CDIN_FRONTEND_PROTOCOL_OK) {
+        if (model->logger != NULL) {
+            CDIN_FRONTEND_ERROR(model->logger, "MODEL", "UI flush has no valid scope");
+        }
+        return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
+    }
+    if (cdin_frontend_protocol_payload_get_uint(message->payload, message->payload_length,
+                                                "sequence", &sequence) != CDIN_FRONTEND_PROTOCOL_OK) {
+        if (model->logger != NULL) {
+            CDIN_FRONTEND_ERROR(model->logger, "MODEL", "UI flush has no valid sequence");
+        }
+        return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
+    }
+    if (sequence <= model->last_flush_sequence) {
+        if (model->logger != NULL) {
+            CDIN_FRONTEND_ERROR(model->logger, "MODEL",
+                "UI flush sequence=%llu is not newer than committed sequence=%llu",
+                (unsigned long long)sequence, (unsigned long long)model->last_flush_sequence);
+        }
+        return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
+    }
     snapshot = scope_length == 8u && memcmp(scope, "snapshot", 8u) == 0;
     if (!snapshot && !(scope_length == 8u && memcmp(scope, "response", 8u) == 0)) {
         return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
@@ -515,14 +532,36 @@ static cdin_frontend_tui_model_status commit_group(cdin_frontend_tui_model *mode
     wire_status = cdin_frontend_protocol_payload_get_uint(message->payload, message->payload_length,
                                                           "revision", &revision);
     if (snapshot) {
-        if (wire_status != CDIN_FRONTEND_PROTOCOL_OK ||
-            (model->committed.revision != 0u && revision <= model->committed.revision)) {
+        if (wire_status != CDIN_FRONTEND_PROTOCOL_OK) {
+            if (model->logger != NULL) {
+                CDIN_FRONTEND_ERROR(model->logger, "MODEL",
+                    "snapshot flush sequence=%llu has no valid revision",
+                    (unsigned long long)sequence);
+            }
+            return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
+        }
+        if (model->committed.revision != 0u && revision <= model->committed.revision) {
+            if (model->logger != NULL) {
+                CDIN_FRONTEND_WARN(model->logger, "MODEL",
+                    "ignored stale snapshot flush sequence=%llu revision=%llu committed_revision=%llu",
+                    (unsigned long long)sequence, (unsigned long long)revision,
+                    (unsigned long long)model->committed.revision);
+            }
             return CDIN_FRONTEND_TUI_MODEL_STALE;
         }
         clear_data(&model->staging, model->committed.view_id);
     } else {
-        if (wire_status != CDIN_FRONTEND_PROTOCOL_UNSUPPORTED) return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
-        if (clone_data(&model->staging, &model->committed) != 0) return CDIN_FRONTEND_TUI_MODEL_NO_MEMORY;
+        if (wire_status != CDIN_FRONTEND_PROTOCOL_UNSUPPORTED) {
+            if (model->logger != NULL) {
+                CDIN_FRONTEND_ERROR(model->logger, "MODEL",
+                    "response flush sequence=%llu unexpectedly contains a revision field",
+                    (unsigned long long)sequence);
+            }
+            return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
+        }
+        if (clone_data(&model->staging, &model->committed) != 0) {
+            return CDIN_FRONTEND_TUI_MODEL_NO_MEMORY;
+        }
     }
     for (index = 0u; index < model->pending_count; index++) {
         if (!snapshot && model->pending[index].type == CDIN_FRONTEND_PROTOCOL_UI_LAYOUT) {
@@ -534,6 +573,15 @@ static cdin_frontend_tui_model_status commit_group(cdin_frontend_tui_model *mode
             model->pending[index].payload_length);
         if (status == CDIN_FRONTEND_TUI_MODEL_STALE) continue;
         if (status != CDIN_FRONTEND_TUI_MODEL_OK) {
+            if (model->logger != NULL) {
+                const char *name = cdin_frontend_protocol_message_name(
+                    (cdin_frontend_protocol_message_type)model->pending[index].type);
+                CDIN_FRONTEND_ERROR(model->logger, "MODEL",
+                    "flush sequence=%llu scope=%s revision=%llu rejected pending message type=%u name=%s status=%d",
+                    (unsigned long long)sequence, snapshot ? "snapshot" : "response",
+                    (unsigned long long)revision, model->pending[index].type,
+                    name != NULL ? name : "unknown", (int)status);
+            }
             clear_data(&model->staging, model->committed.view_id);
             return status;
         }
@@ -599,8 +647,15 @@ cdin_frontend_tui_model_status cdin_frontend_tui_model_apply_message(
     *out_committed = 0;
     if (message->type == CDIN_FRONTEND_PROTOCOL_UI_FLUSH) {
         status = commit_group(model, message);
-        if (status == CDIN_FRONTEND_TUI_MODEL_OK) *out_committed = 1;
-        else model->request_pending = 0;
+        if (status == CDIN_FRONTEND_TUI_MODEL_OK) {
+            *out_committed = 1;
+        } else if (status != CDIN_FRONTEND_TUI_MODEL_STALE) {
+            /* A stale snapshot is a no-op: it must not invalidate a pending
+             * version-pinned view.lines request. That response may already
+             * be queued behind this older snapshot flush. Invalid groups
+             * still clear the request so the adapter can recover explicitly. */
+            model->request_pending = 0;
+        }
         discard_pending(model);
         return status;
     }
