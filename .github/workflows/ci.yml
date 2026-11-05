@@ -7,6 +7,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Only the newest commit of a pull request needs a full native matrix.
+# Cancel stale in-flight runs when the PR receives another update.
+concurrency:
+  group: frontend-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
