@@ -33,8 +33,9 @@ integration remain open.**
   duplicating the tty, setting O_NONBLOCK, or changing process STDIN/STDOUT
   flags. The standalone preview waits for terminal readiness before reading
   and handles a raced EAGAIN result.
-- The coordinator drains Backend work already reported ready before honoring a
-  simultaneous termination event, while suppressing new terminal input.
+- The coordinator drains Backend work over bounded turns while termination is
+  latched, stopping when the source reports `AGAIN`; new terminal input is
+  suppressed during this drain.
 - Still required: the CDIN-owned POSIX/Windows wait bridge, readiness-driven
   partial Protocol I/O, ESC deadline integration, orderly signal cleanup and
   native console/PTY product tests. The Frontend coordinator itself is not a
@@ -70,8 +71,14 @@ stale geometry or document-byte changes.
 
 ## T4 — Text fidelity
 
-- Implement byte-to-code-point-to-grapheme-to-cell mapping.
-- Add width handling for combining marks, wide characters and emoji sequences.
+- [PARTIAL — PR #6] The renderer groups combining marks, emoji variation
+  selectors/modifiers, regional-indicator pairs and ZWJ emoji sequences when
+  calculating terminal cell width; original UTF-8 bytes are emitted unchanged.
+  Cursor-column regressions cover family emoji, flags, heart presentation and
+  combining acute, as well as invalid-UTF-8 replacement behavior.
+- Still required: full UAX #29 grapheme segmentation, byte-to-code-point-to-
+  cluster mapping for all scripts, complete wide-character/emoji tables and
+  wrap-aware cursor/selection behavior.
 - Implement visual-line movement and wrap-aware cursor placement.
 - Define and test terminal-specific bidi behavior for Persian/Arabic and mixed
   RTL/LTR content.
