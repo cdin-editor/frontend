@@ -2,6 +2,17 @@
 #include <string.h>
 
 /* Validate UTF-8 without locale state; semantic identifiers are wire text. */
+/* IDs are bounded by the public semantic model contract. */
+static int same_semantic_id(const char *left, const char *right)
+{
+    size_t i;
+    if (left == NULL || right == NULL) return 0;
+    for (i = 0u; i <= CDIN_FRONTEND_SEMANTIC_ID_MAX; ++i) {
+        if (left[i] != right[i]) return 0;
+        if (left[i] == '\0') return 1;
+    }
+    return 0;
+}
 static int valid_utf8(const unsigned char *text, size_t length)
 {
     size_t i = 0u;
@@ -141,7 +152,7 @@ cdin_frontend_semantic_status cdin_frontend_semantic_store_commit(cdin_frontend_
                 const cdin_frontend_semantic_view *previous=&store->committed.views[j];
                 if(strcmp(next->id,previous->id)==0 &&
                    (next->view_revision<previous->view_revision ||
-                    (strcmp(next->document_id,previous->document_id)==0 &&
+                    (same_semantic_id(next->document_id,previous->document_id) &&
                      next->document_version<previous->document_version))) {
                     return CDIN_FRONTEND_SEMANTIC_STALE;
                 }
