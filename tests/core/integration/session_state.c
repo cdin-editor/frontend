@@ -92,6 +92,11 @@ int main(void)
         0x65u, 'e','p','o','c','h', 0x04u,
         0x66u, 'd','r','i','v','e','r', 0xf4u
     };
+    static const uint8_t mismatched_epoch_role[] = {
+        0xa2u,
+        0x65u, 'e','p','o','c','h', 0x04u,
+        0x66u, 'd','r','i','v','e','r', 0xf5u
+    };
     fake_stream stream;
     cdin_frontend_protocol_io io;
     cdin_frontend_client client;
@@ -114,6 +119,8 @@ int main(void)
                          promoted_role, sizeof(promoted_role));
     (void)append_message(&stream, 4u, CDIN_FRONTEND_PROTOCOL_DRIVER_ROLE_CHANGED,
                          revoked_role, sizeof(revoked_role));
+    (void)append_message(&stream, 5u, CDIN_FRONTEND_PROTOCOL_DRIVER_ROLE_CHANGED,
+                         mismatched_epoch_role, sizeof(mismatched_epoch_role));
 
     assert(cdin_frontend_client_init(&client, &io, frame_buffer, sizeof(frame_buffer), 256u) ==
            CDIN_FRONTEND_PROTOCOL_OK);
@@ -179,6 +186,9 @@ int main(void)
            CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
     assert(cdin_frontend_session_send_paste(&session, paste, sizeof(paste)) ==
            CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
+    assert(cdin_frontend_session_receive(&session, &message) ==
+           CDIN_FRONTEND_PROTOCOL_INVALID_FRAME);
+    assert(session.driver == 0);
     assert(cdin_frontend_session_detach(&session) == CDIN_FRONTEND_PROTOCOL_OK);
     assert(session.state == CDIN_FRONTEND_SESSION_DETACH_SENT);
     return 0;
