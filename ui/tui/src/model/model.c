@@ -216,35 +216,105 @@ static cdin_frontend_tui_model_status apply_lines(cdin_frontend_tui_model *model
     int has_total = 0;
     int was_scanning;
     cdin_frontend_protocol_status status;
-    if (get_text_field(payload, payload_length, "view_id", view_id, sizeof(view_id)) != CDIN_FRONTEND_TUI_MODEL_OK ||
-        strcmp(view_id, data->view_id) != 0) return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
-    if (cdin_frontend_protocol_payload_get_uint(payload, payload_length, "version", &version) != CDIN_FRONTEND_PROTOCOL_OK ||
-        cdin_frontend_protocol_payload_get_uint(payload, payload_length, "first_line", &first_line) != CDIN_FRONTEND_PROTOCOL_OK ||
-        cdin_frontend_protocol_payload_get_raw(payload, payload_length, "lines", &array, &array_length) != CDIN_FRONTEND_PROTOCOL_OK) {
+    cdin_frontend_tui_model_status model_status;
+    model_status = get_text_field(payload, payload_length, "view_id", view_id, sizeof(view_id));
+    if (model_status != CDIN_FRONTEND_TUI_MODEL_OK) {
+        if (model->logger != NULL) {
+            CDIN_FRONTEND_ERROR(model->logger, "MODEL",
+                "view.lines has invalid view_id field (model status=%d)",
+                (int)model_status);
+        }
         return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
     }
-    if (version < data->document_version) return CDIN_FRONTEND_TUI_MODEL_STALE;
+    if (strcmp(view_id, data->view_id) != 0) {
+        if (model->logger != NULL) {
+            CDIN_FRONTEND_ERROR(model->logger, "MODEL",
+                "view.lines view mismatch: received=%s expected=%s",
+                view_id, data->view_id);
+        }
+        return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
+    }
+    status = cdin_frontend_protocol_payload_get_uint(payload, payload_length, "version", &version);
+    if (status != CDIN_FRONTEND_PROTOCOL_OK) {
+        if (model->logger != NULL) CDIN_FRONTEND_ERROR(model->logger, "MODEL",
+            "view.lines has invalid version (protocol status=%s)",
+            cdin_frontend_protocol_status_name(status));
+        return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
+    }
+    status = cdin_frontend_protocol_payload_get_uint(payload, payload_length, "first_line", &first_line);
+    if (status != CDIN_FRONTEND_PROTOCOL_OK) {
+        if (model->logger != NULL) CDIN_FRONTEND_ERROR(model->logger, "MODEL",
+            "view.lines has invalid first_line (protocol status=%s)",
+            cdin_frontend_protocol_status_name(status));
+        return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
+    }
+    status = cdin_frontend_protocol_payload_get_raw(payload, payload_length, "lines", &array, &array_length);
+    if (status != CDIN_FRONTEND_PROTOCOL_OK) {
+        if (model->logger != NULL) CDIN_FRONTEND_ERROR(model->logger, "MODEL",
+            "view.lines has invalid lines array (protocol status=%s)",
+            cdin_frontend_protocol_status_name(status));
+        return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
+    }
+    if (version < data->document_version) {
+        if (model->logger != NULL) CDIN_FRONTEND_WARN(model->logger, "MODEL",
+            "ignored stale view.lines version=%llu committed_document_version=%llu",
+            (unsigned long long)version, (unsigned long long)data->document_version);
+        return CDIN_FRONTEND_TUI_MODEL_STALE;
+    }
     /* FE-005: a line window is usable only for the exact outstanding request.
      * This prevents late responses from replacing a newer viewport request. */
     if (!model->request_pending || version != model->request_version ||
         first_line != model->request_first_line) {
+        if (model->logger != NULL) CDIN_FRONTEND_ERROR(model->logger, "MODEL",
+            "view.lines does not match outstanding request: pending=%d received_version=%llu requested_version=%llu received_first_line=%llu requested_first_line=%llu requested_line_count=%llu",
+            model->request_pending, (unsigned long long)version,
+            (unsigned long long)model->request_version,
+            (unsigned long long)first_line,
+            (unsigned long long)model->request_first_line,
+            (unsigned long long)model->request_line_count);
         return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
     }
     status = cdin_frontend_protocol_array_count(array, array_length, &count);
     if (status != CDIN_FRONTEND_PROTOCOL_OK || count > TUI_MODEL_MAX_LINES || count == 0u) {
+        if (model->logger != NULL) CDIN_FRONTEND_ERROR(model->logger, "MODEL",
+            "view.lines count invalid: protocol_status=%s count=%llu capacity=%llu",
+            cdin_frontend_protocol_status_name(status),
+            (unsigned long long)(status == CDIN_FRONTEND_PROTOCOL_OK ? count : 0u),
+            (unsigned long long)TUI_MODEL_MAX_LINES);
         return CDIN_FRONTEND_TUI_MODEL_LIMIT_EXCEEDED;
     }
     if (first_line > UINT64_MAX - (uint64_t)count ||
-        (uint64_t)count > model->request_line_count) return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
+        (uint64_t)count > model->request_line_count) {
+        if (model->logger != NULL) CDIN_FRONTEND_ERROR(model->logger, "MODEL",
+            "view.lines range exceeds request: first_line=%llu count=%llu requested_count=%llu",
+            (unsigned long long)first_line, (unsigned long long)count,
+            (unsigned long long)model->request_line_count);
+        return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
+    }
     if (cdin_frontend_protocol_payload_get_uint(payload, payload_length, "total_lines", &total_lines) == CDIN_FRONTEND_PROTOCOL_OK) {
         if (total_lines == 0u || first_line >= total_lines || (uint64_t)count > total_lines - first_line) {
+            if (model->logger != NULL) CDIN_FRONTEND_ERROR(model->logger, "MODEL",
+                "view.lines total range invalid: first_line=%llu count=%llu total_lines=%llu",
+                (unsigned long long)first_line, (unsigned long long)count,
+                (unsigned long long)total_lines);
             return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
         }
         has_total = 1;
     }
     was_scanning = data->scan_active;
-    if (was_scanning && first_line != data->scan_next_line) return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
-    if (!was_scanning && first_line != data->first_line) return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
+    if (was_scanning && first_line != data->scan_next_line) {
+        if (model->logger != NULL) CDIN_FRONTEND_ERROR(model->logger, "MODEL",
+            "view.lines scan offset mismatch: received_first_line=%llu scan_next_line=%llu scan_byte_offset=%llu",
+            (unsigned long long)first_line, (unsigned long long)data->scan_next_line,
+            (unsigned long long)data->scan_byte_offset);
+        return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
+    }
+    if (!was_scanning && first_line != data->first_line) {
+        if (model->logger != NULL) CDIN_FRONTEND_ERROR(model->logger, "MODEL",
+            "view.lines window offset mismatch: received_first_line=%llu cached_first_line=%llu",
+            (unsigned long long)first_line, (unsigned long long)data->first_line);
+        return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
+    }
     base_byte_offset = was_scanning ? data->scan_byte_offset : data->cache_start_byte_offset;
 
     free_lines(data);
