@@ -30,6 +30,7 @@ if command -v cygpath >/dev/null 2>&1; then
 fi
 cmake -S tests/package-consumer -B build/package-consumer \
     -DCMAKE_BUILD_TYPE=Release \
+    -DcdinFrontend_DIR="${cmake_install_prefix}/lib/cmake/cdinFrontend" \
     -DCMAKE_PREFIX_PATH="${cmake_install_prefix};${cmake_logger_prefix}"
 cmake --build build/package-consumer --config Release --parallel
 ctest --test-dir build/package-consumer -C Release --output-on-failure
