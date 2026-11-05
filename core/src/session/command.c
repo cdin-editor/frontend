@@ -50,11 +50,11 @@ static int valid_utf8(const uint8_t *bytes, size_t length)
         uint32_t codepoint, minimum;
         if (first < 0x80u) { offset++; continue; }
         if (first >= 0xc2u && first <= 0xdfu) {
-            continuation = 1u; codepoint = first & 0x1fu; minimum = 0x80u;
+            continuation = 1u; codepoint = (uint32_t)(first & 0x1fu); minimum = 0x80u;
         } else if (first >= 0xe0u && first <= 0xefu) {
-            continuation = 2u; codepoint = first & 0x0fu; minimum = 0x800u;
+            continuation = 2u; codepoint = (uint32_t)(first & 0x0fu); minimum = 0x800u;
         } else if (first >= 0xf0u && first <= 0xf4u) {
-            continuation = 3u; codepoint = first & 0x07u; minimum = 0x10000u;
+            continuation = 3u; codepoint = (uint32_t)(first & 0x07u); minimum = 0x10000u;
         } else return 0;
         if (continuation > length - offset - 1u) return 0;
         for (index = 1u; index <= continuation; index++) {
