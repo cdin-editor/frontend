@@ -93,12 +93,17 @@ typedef struct terminal_shutdown_case {
 static int wait_with_pending_shutdown(void *opaque, uint32_t requested,
                                       int timeout_ms, uint32_t *ready)
 {
-    (void)opaque;
+    terminal_shutdown_case *state = (terminal_shutdown_case *)opaque;
     assert(requested == CDIN_FRONTEND_TUI_EVENT_ALL);
     assert(timeout_ms == -1);
-    *ready = CDIN_FRONTEND_TUI_EVENT_TERMINATE |
-             CDIN_FRONTEND_TUI_EVENT_BACKEND_READABLE |
-             CDIN_FRONTEND_TUI_EVENT_TERMINAL_READABLE;
+    state->wait_calls++;
+    if (state->wait_calls <= 2u) {
+        *ready = CDIN_FRONTEND_TUI_EVENT_TERMINATE |
+                 CDIN_FRONTEND_TUI_EVENT_BACKEND_READABLE |
+                 CDIN_FRONTEND_TUI_EVENT_TERMINAL_READABLE;
+    } else {
+        *ready = CDIN_FRONTEND_TUI_EVENT_TERMINATE;
+    }
     return 0;
 }
 
