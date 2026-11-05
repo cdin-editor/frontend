@@ -12,12 +12,24 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 
 /* Compare status flags that applications can set and rely on. Darwin's
  * F_GETFL may also expose kernel-only per-file bookkeeping (FWASWRITTEN)
  * after a PTY write; that bit is not a user-settable status flag and must not
  * be mistaken for the adapter enabling O_NONBLOCK. */
+static int contains_bytes(const uint8_t *haystack, size_t haystack_length,
+                          const uint8_t *needle, size_t needle_length)
+{
+    size_t index;
+    if (needle_length > haystack_length) return 0;
+    for (index = 0u; index <= haystack_length - needle_length; index++) {
+        if (memcmp(haystack + index, needle, needle_length) == 0) return 1;
+    }
+    return 0;
+}
+
 static int public_status_flags(int flags)
 {
     int mask = O_ACCMODE | O_APPEND | O_NONBLOCK;
@@ -98,15 +110,25 @@ static int child_check(const char *slave_name)
 
 int main(void)
 {
+    static const uint8_t restore_cursor[] = "\033[?25h";
+    static const uint8_t restore_paste[] = "\033[?2004l";
+    static const uint8_t restore_screen[] = "\033[?1049l";
     int master = posix_openpt(O_RDWR | O_NOCTTY);
     char *slave_name;
     pid_t child;
     int status = 0;
+    int master_flags;
+    uint8_t captured[4096];
+    size_t captured_length = 0u;
+    struct timespec pause = { 0, 10000000L };
     assert(master >= 0);
     assert(grantpt(master) == 0);
     assert(unlockpt(master) == 0);
     slave_name = ptsname(master);
     assert(slave_name != NULL);
+    master_flags = fcntl(master, F_GETFL, 0);
+    assert(master_flags >= 0);
+    assert(fcntl(master, F_SETFL, master_flags | O_NONBLOCK) == 0);
     child = fork();
     assert(child >= 0);
     if (child == 0) {
@@ -118,11 +140,58 @@ int main(void)
         result = child_check(slave_name);
         _exit(result);
     }
-    assert(waitpid(child, &status, 0) == child);
+    /* The PTY master represents the terminal emulator. Keep consuming its
+     * output while the child restores termios with TCSAFLUSH; waiting without
+     * reading can deadlock a valid terminal teardown on Darwin. */
+    for (;;) {
+        uint8_t chunk[512];
+        ssize_t amount;
+        pid_t waited;
+        do {
+            amount = read(master, chunk, sizeof(chunk));
+            if (amount > 0) {
+                size_t copy = (size_t)amount;
+                if (copy > sizeof(captured) - captured_length) {
+                    copy = sizeof(captured) - captured_length;
+                }
+                if (copy != 0u) {
+                    memcpy(captured + captured_length, chunk, copy);
+                    captured_length += copy;
+                }
+            }
+        } while (amount > 0);
+        assert(amount == 0 || errno == EAGAIN || errno == EWOULDBLOCK ||
+               errno == EINTR || errno == EIO);
+        waited = waitpid(child, &status, WNOHANG);
+        if (waited == child) break;
+        assert(waited == 0 || (waited < 0 && errno == EINTR));
+        (void)nanosleep(&pause, NULL);
+    }
+    for (;;) {
+        uint8_t chunk[512];
+        ssize_t amount = read(master, chunk, sizeof(chunk));
+        if (amount <= 0) break;
+        {
+            size_t copy = (size_t)amount;
+            if (copy > sizeof(captured) - captured_length) {
+                copy = sizeof(captured) - captured_length;
+            }
+            if (copy != 0u) {
+                memcpy(captured + captured_length, chunk, copy);
+                captured_length += copy;
+            }
+        }
+    }
     (void)close(master);
     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-        (void)fprintf(stderr, "POSIX terminal PTY child failed or timed out (status=%d)\n", status);
+        (void)fprintf(stderr, "POSIX terminal PTY child failed or timed out (status=%d)\\n", status);
         return 1;
     }
+    assert(contains_bytes(captured, captured_length,
+                          restore_cursor, sizeof(restore_cursor) - 1u));
+    assert(contains_bytes(captured, captured_length,
+                          restore_paste, sizeof(restore_paste) - 1u));
+    assert(contains_bytes(captured, captured_length,
+                          restore_screen, sizeof(restore_screen) - 1u));
     return 0;
 }
