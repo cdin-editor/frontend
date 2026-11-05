@@ -8,10 +8,16 @@ commands, keymaps, Runtime policy or Kernel state.
 
 - Incremental terminal input parsing and physical key/text distinction.
 - Terminal lifecycle adapter for POSIX and Windows.
+- POSIX input reads use a separately opened nonblocking terminal descriptor;
+  process STDIN/STDOUT flags are not mutated and renderer writes remain
+  blocking. The standalone preview waits for input readiness before reading.
 - Read-only single-view rendering and a version-aware presentation cache.
 - A readiness-driven event-loop coordinator (`event_loop.h`).
 
-The event-loop coordinator is deliberately transport-agnostic. `cdin` supplies
+The event-loop coordinator is deliberately transport-agnostic. When a
+termination and Backend-readiness event arrive together, it gives the already
+ready Backend source one bounded drain turn before calling shutdown; it does
+not accept fresh terminal input after termination has been requested. `cdin` supplies
 the wait callback that multiplexes terminal readiness, Backend transport
 readiness, resize and termination events. Drain callbacks must be nonblocking,
 return `AGAIN` when empty and obey the per-source item budget. The coordinator
