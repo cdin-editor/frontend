@@ -2,12 +2,10 @@
 #include "cdin/frontend/ui/tui/platform/terminal.h"
 
 #include <errno.h>
-#include <fcntl.h>
 #include <poll.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
-#include <sys/stat.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -66,40 +64,20 @@ cdin_frontend_terminal_status cdin_frontend_terminal_open(cdin_frontend_terminal
     static const uint8_t enter[] = "\033[?1049h\033[?2004h\033[?25l\033[0m\033[2J\033[H";
     if (terminal == NULL) return CDIN_FRONTEND_TERMINAL_INVALID_ARGUMENT;
     memset(terminal, 0, sizeof(*terminal));
-    {
-        const char *input_name;
-        struct stat input_device;
-        struct stat output_device;
-        if (!isatty(STDIN_FILENO) || !isatty(STDOUT_FILENO)) {
-            return CDIN_FRONTEND_TERMINAL_NOT_INTERACTIVE;
-        }
-        input_name = ttyname(STDIN_FILENO);
-        if (input_name == NULL) return CDIN_FRONTEND_TERMINAL_NOT_INTERACTIVE;
-        context = (terminal_context *)calloc(1u, sizeof(*context));
-        if (context == NULL) return CDIN_FRONTEND_TERMINAL_IO_ERROR;
-        /* Open a separate descriptor so terminal setup never changes process
-         * stdin/stdout flags. terminal_read performs a zero-timeout poll before
-         * read(), giving drain callbacks nonblocking semantics without relying
-         * on O_NONBLOCK propagation through tty device descriptors. */
-        /* stdin/stdout are already verified terminal descriptors. Do not use
-         * O_NOCTTY here: Darwin exposes that per-open flag through the tty's
-         * shared device state, changing F_GETFL on the process descriptors. */
-        context->input_fd = open(input_name, O_RDONLY);
-        context->output_fd = STDOUT_FILENO;
-        if (context->input_fd < 0 ||
-            fstat(context->input_fd, &input_device) != 0 ||
-            fstat(context->output_fd, &output_device) != 0 ||
-            !S_ISCHR(input_device.st_mode) || !S_ISCHR(output_device.st_mode) ||
-            input_device.st_rdev != output_device.st_rdev) {
-            if (context->input_fd >= 0) (void)close(context->input_fd);
-            free(context);
-            return CDIN_FRONTEND_TERMINAL_NOT_INTERACTIVE;
-        }
-        if (tcgetattr(context->input_fd, &context->original) != 0) {
-            (void)close(context->input_fd);
-            free(context);
-            return CDIN_FRONTEND_TERMINAL_IO_ERROR;
-        }
+    if (!isatty(STDIN_FILENO) || !isatty(STDOUT_FILENO)) {
+        return CDIN_FRONTEND_TERMINAL_NOT_INTERACTIVE;
+    }
+    context = (terminal_context *)calloc(1u, sizeof(*context));
+    if (context == NULL) return CDIN_FRONTEND_TERMINAL_IO_ERROR;
+    /* Keep the process-owned descriptor. A zero-timeout poll in terminal_read
+     * provides nonblocking drain semantics without any open/dup/fcntl side
+     * effects on PTY descriptor flags, including on Darwin. The owner loop is
+     * the only terminal input consumer while this adapter is active. */
+    context->input_fd = STDIN_FILENO;
+    context->output_fd = STDOUT_FILENO;
+    if (tcgetattr(context->input_fd, &context->original) != 0) {
+        free(context);
+        return CDIN_FRONTEND_TERMINAL_IO_ERROR;
     }
     context->have_original = 1;
     raw = context->original;
@@ -111,7 +89,6 @@ cdin_frontend_terminal_status cdin_frontend_terminal_open(cdin_frontend_terminal
     raw.c_cc[VTIME] = 0;
     if (tcsetattr(context->input_fd, TCSAFLUSH, &raw) != 0) {
         (void)tcsetattr(context->input_fd, TCSAFLUSH, &context->original);
-        (void)close(context->input_fd);
         free(context);
         return CDIN_FRONTEND_TERMINAL_IO_ERROR;
     }
@@ -136,7 +113,7 @@ void cdin_frontend_terminal_close(cdin_frontend_terminal *terminal)
     if (context != NULL) {
         if (terminal->active) (void)terminal_write(context, leave, sizeof(leave) - 1u);
         if (context->have_original) (void)tcsetattr(context->input_fd, TCSAFLUSH, &context->original);
-        if (context->input_fd >= 0) (void)close(context->input_fd);
+        /* STDIN_FILENO is process-owned and must never be closed here. */
         free(context);
     }
     memset(terminal, 0, sizeof(*terminal));
