@@ -36,7 +36,13 @@ int main(void)
     size_t arguments_length, text_length;
     char name[64], path[128];
     uint8_t frame[1024];
+    const char malformed_overlong[] = { (char)0xc0, (char)0xaf, '\0' };
+    const char malformed_surrogate[] = { (char)0xed, (char)0xa0, (char)0x80, '\0' };
+    const char malformed_truncated[] = { (char)0xf0, (char)0x9f, '\0' };
+    char oversized_path[514];
 
+    memset(oversized_path, 'x', sizeof(oversized_path) - 1u);
+    oversized_path[sizeof(oversized_path) - 1u] = '\0';
     memset(&stream, 0, sizeof(stream));
     memset(&io, 0, sizeof(io));
     io.context = &stream;
@@ -77,7 +83,16 @@ int main(void)
     session.driver = 0;
     assert(cdin_frontend_session_request_command(&session, "document.new", NULL) ==
            CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
+    session.driver = 1;
     assert(cdin_frontend_session_request_command(&session, "document.open", "") ==
+           CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
+    assert(cdin_frontend_session_request_command(&session, malformed_overlong, NULL) ==
+           CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
+    assert(cdin_frontend_session_request_command(&session, "document.open", malformed_surrogate) ==
+           CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
+    assert(cdin_frontend_session_request_command(&session, "document.open", malformed_truncated) ==
+           CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
+    assert(cdin_frontend_session_request_command(&session, "document.open", oversized_path) ==
            CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
     return 0;
 }
