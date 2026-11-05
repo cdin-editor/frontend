@@ -34,7 +34,7 @@ int main(void)
     assert(parsed == (CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_MOUSE) |
                       CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_CLIPBOARD) |
                       CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_DRIVER_ROLE_EVENTS)));
-    assert(cdin_frontend_capability_count(parsed) == 2u);
+    assert(cdin_frontend_capability_count(parsed) == 3u);
     assert(cdin_frontend_capabilities_parse_cbor_array(valid_array, sizeof(valid_array),
                                                         &parsed) == CDIN_FRONTEND_CAPABILITY_OK);
     assert(parsed == (CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_MOUSE) |
