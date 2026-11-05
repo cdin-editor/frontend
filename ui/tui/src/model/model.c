@@ -647,8 +647,15 @@ cdin_frontend_tui_model_status cdin_frontend_tui_model_apply_message(
     *out_committed = 0;
     if (message->type == CDIN_FRONTEND_PROTOCOL_UI_FLUSH) {
         status = commit_group(model, message);
-        if (status == CDIN_FRONTEND_TUI_MODEL_OK) *out_committed = 1;
-        else model->request_pending = 0;
+        if (status == CDIN_FRONTEND_TUI_MODEL_OK) {
+            *out_committed = 1;
+        } else if (status != CDIN_FRONTEND_TUI_MODEL_STALE) {
+            /* A stale snapshot is a no-op: it must not invalidate a pending
+             * version-pinned view.lines request. That response may already
+             * be queued behind this older snapshot flush. Invalid groups
+             * still clear the request so the adapter can recover explicitly. */
+            model->request_pending = 0;
+        }
         discard_pending(model);
         return status;
     }
