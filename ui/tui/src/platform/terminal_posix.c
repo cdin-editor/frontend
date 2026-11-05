@@ -12,7 +12,9 @@ typedef struct terminal_context {
     struct termios original;
     int input_fd;
     int output_fd;
+    int original_input_flags;
     int have_original;
+    int have_input_flags;
 } terminal_context;
 
 static ptrdiff_t terminal_read(void *opaque, uint8_t *buffer, size_t capacity)
@@ -57,7 +59,25 @@ cdin_frontend_terminal_status cdin_frontend_terminal_open(cdin_frontend_terminal
     if (context == NULL) return CDIN_FRONTEND_TERMINAL_IO_ERROR;
     context->input_fd = STDIN_FILENO;
     context->output_fd = STDOUT_FILENO;
-    if (tcgetattr(context->input_fd, &context->original) != 0) { free(context); return CDIN_FRONTEND_TERMINAL_IO_ERROR; }
+    context->original_input_flags = fcntl(context->input_fd, F_GETFL, 0);
+    if (context->original_input_flags < 0) {
+        free(context);
+        return CDIN_FRONTEND_TERMINAL_IO_ERROR;
+    }
+    context->have_input_flags = 1;
+    /* The owner loop drains until AGAIN. A blocking read here can hang it
+     * after the first ready byte, so the Frontend adapter owns O_NONBLOCK. */
+    if (fcntl(context->input_fd, F_SETFL,
+              context->original_input_flags | O_NONBLOCK) != 0) {
+        (void)fcntl(context->input_fd, F_SETFL, context->original_input_flags);
+        free(context);
+        return CDIN_FRONTEND_TERMINAL_IO_ERROR;
+    }
+    if (tcgetattr(context->input_fd, &context->original) != 0) {
+        (void)fcntl(context->input_fd, F_SETFL, context->original_input_flags);
+        free(context);
+        return CDIN_FRONTEND_TERMINAL_IO_ERROR;
+    }
     context->have_original = 1;
     raw = context->original;
     raw.c_iflag &= (tcflag_t)~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
@@ -66,7 +86,12 @@ cdin_frontend_terminal_status cdin_frontend_terminal_open(cdin_frontend_terminal
     raw.c_lflag &= (tcflag_t)~(ECHO | ICANON | IEXTEN | ISIG);
     raw.c_cc[VMIN] = 1;
     raw.c_cc[VTIME] = 0;
-    if (tcsetattr(context->input_fd, TCSAFLUSH, &raw) != 0) { free(context); return CDIN_FRONTEND_TERMINAL_IO_ERROR; }
+    if (tcsetattr(context->input_fd, TCSAFLUSH, &raw) != 0) {
+        (void)tcsetattr(context->input_fd, TCSAFLUSH, &context->original);
+        (void)fcntl(context->input_fd, F_SETFL, context->original_input_flags);
+        free(context);
+        return CDIN_FRONTEND_TERMINAL_IO_ERROR;
+    }
     terminal->context = context;
     terminal->read = terminal_read;
     terminal->write = terminal_write;
@@ -88,6 +113,9 @@ void cdin_frontend_terminal_close(cdin_frontend_terminal *terminal)
     if (context != NULL) {
         if (terminal->active) (void)terminal_write(context, leave, sizeof(leave) - 1u);
         if (context->have_original) (void)tcsetattr(context->input_fd, TCSAFLUSH, &context->original);
+        if (context->have_input_flags) {
+            (void)fcntl(context->input_fd, F_SETFL, context->original_input_flags);
+        }
         free(context);
     }
     memset(terminal, 0, sizeof(*terminal));
