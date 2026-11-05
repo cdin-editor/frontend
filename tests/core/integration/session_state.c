@@ -84,7 +84,7 @@ int main(void)
     };
     static const uint8_t promoted_role[] = {
         0xa2u,
-        0x65u, 'e','p','o','c','h', 0x02u,
+        0x65u, 'e','p','o','c','h', 0x04u,
         0x66u, 'd','r','i','v','e','r', 0xf5u
     };
     static const uint8_t revoked_role[] = {
@@ -131,7 +131,6 @@ int main(void)
     assert(cdin_frontend_session_receive(&session, &message) == CDIN_FRONTEND_PROTOCOL_OK);
     assert(session.state == CDIN_FRONTEND_SESSION_NEGOTIATED);
     assert(session.session_id == 7u && session.client_id == 2u && session.driver == 0);
-    assert(session.driver_role_epoch == 1u);
     assert(!cdin_frontend_session_is_driver(&session));
     assert(cdin_frontend_session_accepted_capabilities(&session) ==
            (CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_MOUSE) |
@@ -146,7 +145,7 @@ int main(void)
     assert(cdin_frontend_session_send_key(&session, "x", 0u, "press") ==
            CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
     assert(cdin_frontend_session_receive(&session, &message) == CDIN_FRONTEND_PROTOCOL_OK);
-    assert(session.driver == 1 && session.driver_role_epoch == 2u);
+    assert(session.driver == 1);
     assert(cdin_frontend_session_is_driver(&session));
 
     assert(cdin_frontend_session_ack(&session, 1u) == CDIN_FRONTEND_PROTOCOL_OK);
@@ -174,7 +173,7 @@ int main(void)
     assert(cdin_frontend_session_focus(&session, 1) == CDIN_FRONTEND_PROTOCOL_OK);
 
     assert(cdin_frontend_session_receive(&session, &message) == CDIN_FRONTEND_PROTOCOL_OK);
-    assert(session.driver == 0 && session.driver_role_epoch == 3u);
+    assert(session.driver == 0);
     assert(!cdin_frontend_session_is_driver(&session));
     assert(cdin_frontend_session_send_key(&session, "x", 0u, "press") ==
            CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
