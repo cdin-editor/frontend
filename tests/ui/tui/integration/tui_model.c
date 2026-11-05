@@ -38,6 +38,33 @@ static const uint8_t lines_payload[] = {
     0x6au, 'f','i','r','s','t','_','l','i','n','e', 0x00u
 };
 
+static const uint8_t layout_payload[] = {
+    0xa2u,
+    0x66u, 'l','a','y','o','u','t',
+    0xa2u,
+      0x64u, 'r','o','o','t',
+      0xa6u,
+        0x62u, 'i','d', 0x6au, 's','p','l','i','t','-','r','o','o','t',
+        0x64u, 'a','x','i','s', 0x68u, 'v','e','r','t','i','c','a','l',
+        0x64u, 'k','i','n','d', 0x65u, 's','p','l','i','t',
+        0x65u, 'f','i','r','s','t',
+        0xa4u,
+          0x62u, 'i','d', 0x69u, 'l','e','a','f','-','m','a','i','n',
+          0x64u, 'k','i','n','d', 0x64u, 'l','e','a','f',
+          0x65u, 'v','i','e','w','s', 0x81u, 0x66u, 'v','i','e','w','-','1',
+          0x6bu, 'a','c','t','i','v','e','_','v','i','e','w', 0x66u, 'v','i','e','w','-','1',
+        0x66u, 's','e','c','o','n','d',
+        0xa4u,
+          0x62u, 'i','d', 0x69u, 'l','e','a','f','-','s','i','d','e',
+          0x64u, 'k','i','n','d', 0x64u, 'l','e','a','f',
+          0x65u, 'v','i','e','w','s', 0x80u,
+          0x6bu, 'a','c','t','i','v','e','_','v','i','e','w', 0xf6u,
+        0x68u, 'r','a','t','i','o','_','b','p', 0x19u, 0x13u, 0x88u,
+      0x6bu, 'a','c','t','i','v','e','_','l','e','a','f',
+      0x69u, 'l','e','a','f','-','m','a','i','n',
+    0x68u, 'r','e','v','i','s','i','o','n', 0x01u
+};
+
 static const uint8_t snapshot_flush[] = {
     0xa3u,
     0x65u, 's','c','o','p','e', 0x68u, 's','n','a','p','s','h','o','t',
@@ -140,6 +167,10 @@ int main(void)
                  cursor_payload, sizeof(cursor_payload), 0) == CDIN_FRONTEND_TUI_MODEL_OK);
     assert(apply(model, CDIN_FRONTEND_PROTOCOL_UI_SELECTION,
                  selection_payload, sizeof(selection_payload), 0) == CDIN_FRONTEND_TUI_MODEL_OK);
+    assert(cdin_frontend_tui_model_get_layout(model) == NULL);
+    assert(apply(model, CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
+                 layout_payload, sizeof(layout_payload), 0) == CDIN_FRONTEND_TUI_MODEL_OK);
+    assert(cdin_frontend_tui_model_get_layout(model) == NULL);
     assert(apply(model, CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
                  snapshot_flush, sizeof(snapshot_flush), 1) == CDIN_FRONTEND_TUI_MODEL_OK);
     assert(cdin_frontend_tui_model_needs_lines(model));
@@ -153,6 +184,15 @@ int main(void)
                  response_flush_2, sizeof(response_flush_2), 1) == CDIN_FRONTEND_TUI_MODEL_OK);
 
     assert(cdin_frontend_tui_model_revision(model) == 1u);
+    {
+        const cdin_frontend_tui_layout *layout =
+            cdin_frontend_tui_model_get_layout(model);
+        assert(layout != NULL && layout->revision == 1u);
+        assert(layout->node_count == 3u && layout->has_root && layout->has_active_leaf);
+        assert(layout->nodes[layout->root].kind == CDIN_FRONTEND_TUI_LAYOUT_SPLIT);
+        assert(layout->nodes[layout->active_leaf].kind == CDIN_FRONTEND_TUI_LAYOUT_LEAF);
+        assert(strcmp(layout->view_ids[0], "view-1") == 0);
+    }
     assert(cdin_frontend_tui_model_last_flush(model) == 2u);
     assert(!cdin_frontend_tui_model_needs_lines(model));
     assert(cdin_frontend_tui_model_get_frame(model, &frame) == CDIN_FRONTEND_TUI_MODEL_OK);

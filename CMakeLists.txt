@@ -77,6 +77,7 @@ if(CDIN_FRONTEND_BUILD_UI_TUI)
     endif()
     add_library(cdin_frontend_ui_tui STATIC
         ui/tui/src/render/tui.c
+        ui/tui/src/layout/layout.c
         ui/tui/src/model/model.c
         ui/tui/src/session/session.c
         ui/tui/src/session/event_loop.c
@@ -171,6 +172,7 @@ if(BUILD_TESTING)
             add_test(NAME ${target} COMMAND ${target})
         endfunction()
         cdin_frontend_tui_test(cdin_frontend_tui_render_tests tests/ui/tui/integration/tui_render.c)
+        cdin_frontend_tui_test(cdin_frontend_tui_layout_tests tests/ui/tui/integration/layout.c)
         cdin_frontend_tui_test(cdin_frontend_tui_model_tests tests/ui/tui/integration/tui_model.c)
         cdin_frontend_tui_test(cdin_frontend_input_parser_tests tests/ui/tui/integration/input_parser.c)
         cdin_frontend_tui_test(cdin_frontend_tui_session_tests tests/ui/tui/integration/tui_session.c)

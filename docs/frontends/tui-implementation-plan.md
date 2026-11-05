@@ -14,8 +14,9 @@ conformance corpus remain open.**
 - Core capability registry distinguishes requested and accepted sets.
 - Envelope sequence, flush sequence, model revision and document version are
   represented independently.
-- Full PaneTree/panel semantic-model retention and exhaustive shared vectors
-  are still required; codec validation alone does not make the TUI complete.
+- The TUI retains a validated bounded PaneTree inside the atomic model
+  transaction. Panel retention/rendering and exhaustive shared vectors remain;
+  codec validation alone does not make the TUI complete.
 
 ## T1 — Readiness-driven application loop
 
@@ -60,7 +61,12 @@ save through Runtime without Frontend-owned editor policy.
 
 ## T3 — Layout and declarative panels
 
-- Parse and validate the complete logical pane tree.
+- [PARTIAL] Parse and retain the bounded Protocol PaneTree in the committed
+  TUI model. The parser validates nullable root/active leaf, unique node/view
+  IDs, leaf active-view membership, split axis and `ratio_bp` bounds; standalone
+  and atomic-model integration tests cover the semantic tree.
+- Still required: use the committed tree in the TUI owner/render path and
+  calculate pane geometry.
 - Map split ratios to cell rectangles using a deterministic resize policy.
 - Support empty panes and nullable active view.
 - Render semantic style roles and declarative panel/widget state.
