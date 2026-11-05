@@ -376,6 +376,7 @@ const char *cdin_frontend_protocol_message_name(cdin_frontend_protocol_message_t
         case CDIN_FRONTEND_PROTOCOL_UI_FLUSH: return "ui.flush";
         case CDIN_FRONTEND_PROTOCOL_HELLO_ACK: return "hello_ack";
         case CDIN_FRONTEND_PROTOCOL_DETACH_ACK: return "detach_ack";
+        case CDIN_FRONTEND_PROTOCOL_DRIVER_ROLE_CHANGED: return "driver.role_changed";
         case CDIN_FRONTEND_PROTOCOL_HELLO: return "hello";
         case CDIN_FRONTEND_PROTOCOL_ATTACH: return "attach";
         case CDIN_FRONTEND_PROTOCOL_DETACH: return "detach";
@@ -398,7 +399,7 @@ const char *cdin_frontend_protocol_message_name(cdin_frontend_protocol_message_t
 static cdin_frontend_protocol_message_type message_from_name(const uint8_t *name, size_t length)
 {
     int value;
-    for (value = 1; value <= 18; value++) {
+    for (value = 1; value <= 19; value++) {
         const char *candidate = cdin_frontend_protocol_message_name(
             (cdin_frontend_protocol_message_type)value);
         if (strlen(candidate) == length && memcmp(candidate, name, length) == 0) {
@@ -684,7 +685,11 @@ cdin_frontend_protocol_status cdin_frontend_protocol_validate_payload(
     static const payload_field_rule hello_ack[] = {
         RULE_REQUIRED("major", FIELD_UINT), RULE_REQUIRED("minor", FIELD_UINT),
         RULE_REQUIRED("session_id", FIELD_UINT), RULE_REQUIRED("client_id", FIELD_UINT),
-        RULE_REQUIRED("driver", FIELD_BOOL), RULE_REQUIRED("accepted_capabilities", FIELD_ARRAY)
+        RULE_REQUIRED("driver", FIELD_BOOL), RULE_REQUIRED("accepted_capabilities", FIELD_ARRAY),
+        RULE_OPTIONAL("driver_role_epoch", FIELD_UINT)
+    };
+    static const payload_field_rule driver_role_changed[] = {
+        RULE_REQUIRED("epoch", FIELD_UINT), RULE_REQUIRED("driver", FIELD_BOOL)
     };
     static const payload_field_rule revision_theme[] = {
         RULE_REQUIRED("revision", FIELD_UINT), RULE_REQUIRED("theme", FIELD_TEXT),
@@ -753,6 +758,7 @@ cdin_frontend_protocol_status cdin_frontend_protocol_validate_payload(
         case CDIN_FRONTEND_PROTOCOL_RESPONSE_DIALOG: USE_RULES(response_dialog); break;
         case CDIN_FRONTEND_PROTOCOL_ACK: USE_RULES(ack); break;
         case CDIN_FRONTEND_PROTOCOL_HELLO_ACK: USE_RULES(hello_ack); break;
+        case CDIN_FRONTEND_PROTOCOL_DRIVER_ROLE_CHANGED: USE_RULES(driver_role_changed); break;
         case CDIN_FRONTEND_PROTOCOL_UI_OPTIONS: USE_RULES(revision_theme); break;
         case CDIN_FRONTEND_PROTOCOL_UI_STYLE_TABLE: USE_RULES(style_table); break;
         case CDIN_FRONTEND_PROTOCOL_UI_LAYOUT: USE_RULES(layout); break;
