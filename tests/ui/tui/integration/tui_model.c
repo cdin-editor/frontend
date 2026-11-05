@@ -304,14 +304,14 @@ int main(void)
                  stale_lines_payload, sizeof(stale_lines_payload), 0) == CDIN_FRONTEND_TUI_MODEL_OK);
     assert(apply(model, CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
                  response_flush_4, sizeof(response_flush_4), 1) == CDIN_FRONTEND_TUI_MODEL_OK);
+    /* A stale response is a no-op and leaves the current pull pending. */
+    assert(!cdin_frontend_tui_model_needs_lines(model));
+    assert(cdin_frontend_tui_model_request_range(model, &first_line, &line_count, &version) ==
+           CDIN_FRONTEND_TUI_MODEL_STALE);
+    cdin_frontend_tui_model_request_failed(model);
     assert(cdin_frontend_tui_model_needs_lines(model));
     assert(cdin_frontend_tui_model_get_frame(model, &frame) == CDIN_FRONTEND_TUI_MODEL_OK);
     assert(frame.document_version == 2u && frame.line_count == 0u);
-    assert(cdin_frontend_tui_model_request_range(model, &first_line, &line_count, &version) ==
-           CDIN_FRONTEND_TUI_MODEL_OK);
-    cdin_frontend_tui_model_mark_request_pending(model);
-    cdin_frontend_tui_model_request_failed(model);
-    assert(cdin_frontend_tui_model_needs_lines(model));
 
     /* A duplicate snapshot must not cancel the outstanding version-pinned
      * line request. Its response can already be queued behind the snapshot. */
