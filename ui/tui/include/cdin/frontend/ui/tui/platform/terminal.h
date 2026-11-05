@@ -29,8 +29,10 @@ typedef struct cdin_frontend_terminal {
 } cdin_frontend_terminal;
 
 /* Opens the process terminal in raw mode and enters its alternate screen.
- * On POSIX, read() is nonblocking: -1 with errno EAGAIN/EWOULDBLOCK means the
- * current input batch is drained. close() restores original file flags,
+ * On POSIX, read() uses a dedicated nonblocking input descriptor:
+ * -1 with errno EAGAIN/EWOULDBLOCK means the current input batch is drained.
+ * It never changes STDIN_FILENO/STDOUT_FILENO file status flags, even when
+ * those descriptors share one open-file description. close() restores the
  * terminal mode, cursor and screen. */
 cdin_frontend_terminal_status cdin_frontend_terminal_open(cdin_frontend_terminal *terminal);
 void cdin_frontend_terminal_close(cdin_frontend_terminal *terminal);
