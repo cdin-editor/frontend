@@ -87,7 +87,10 @@ ctest --test-dir build-test --output-on-failure
 ```
 
 The shim is not a production dependency and must never be used for a release
-artifact. See [Build and test](docs/development/build-and-test.md).
+artifact. Production installation exports `cdin::frontend_core` and, when TUI
+is enabled, `cdin::frontend_ui_tui` with public headers. The TUI library export
+does not mean its preview is a complete connected editor. CI verifies the
+installed targets from a clean prefix. See [Build and test](docs/development/build-and-test.md).
 
 ## Documentation
 
