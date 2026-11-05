@@ -14,6 +14,25 @@
 #include <termios.h>
 #include <unistd.h>
 
+/* Compare status flags that applications can set and rely on. Darwin's
+ * F_GETFL may also expose kernel-only per-file bookkeeping (FWASWRITTEN)
+ * after a PTY write; that bit is not a user-settable status flag and must not
+ * be mistaken for the adapter enabling O_NONBLOCK. */
+static int public_status_flags(int flags)
+{
+    int mask = O_ACCMODE | O_APPEND | O_NONBLOCK;
+#ifdef O_ASYNC
+    mask |= O_ASYNC;
+#endif
+#ifdef O_SYNC
+    mask |= O_SYNC;
+#endif
+#ifdef O_DSYNC
+    mask |= O_DSYNC;
+#endif
+    return flags & mask;
+}
+
 static int child_check(const char *slave_name)
 {
     struct termios before;
@@ -41,8 +60,8 @@ static int child_check(const char *slave_name)
     {
         int current_input_flags = fcntl(STDIN_FILENO, F_GETFL, 0);
         int current_output_flags = fcntl(STDOUT_FILENO, F_GETFL, 0);
-        if (current_input_flags != original_flags ||
-            current_output_flags != original_output_flags) {
+        if (public_status_flags(current_input_flags) != public_status_flags(original_flags) ||
+            public_status_flags(current_output_flags) != public_status_flags(original_output_flags)) {
             (void)fprintf(stderr,
                 "terminal_open changed descriptor flags: stdin %d -> %d, stdout %d -> %d\\n",
                 original_flags, current_input_flags,
@@ -62,8 +81,10 @@ static int child_check(const char *slave_name)
     assert(errno == EAGAIN || errno == EWOULDBLOCK);
     cdin_frontend_terminal_close(&terminal);
     assert(terminal.active == 0);
-    assert(fcntl(STDIN_FILENO, F_GETFL, 0) == original_flags);
-    assert(fcntl(STDOUT_FILENO, F_GETFL, 0) == original_output_flags);
+    assert(public_status_flags(fcntl(STDIN_FILENO, F_GETFL, 0)) ==
+           public_status_flags(original_flags));
+    assert(public_status_flags(fcntl(STDOUT_FILENO, F_GETFL, 0)) ==
+           public_status_flags(original_output_flags));
     assert(tcgetattr(STDIN_FILENO, &after) == 0);
     assert(before.c_iflag == after.c_iflag);
     assert(before.c_oflag == after.c_oflag);
