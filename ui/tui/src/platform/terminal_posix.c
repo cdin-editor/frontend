@@ -81,7 +81,10 @@ cdin_frontend_terminal_status cdin_frontend_terminal_open(cdin_frontend_terminal
          * stdin/stdout flags. terminal_read performs a zero-timeout poll before
          * read(), giving drain callbacks nonblocking semantics without relying
          * on O_NONBLOCK propagation through tty device descriptors. */
-        context->input_fd = open(input_name, O_RDONLY | O_NOCTTY);
+        /* stdin/stdout are already verified terminal descriptors. Do not use
+         * O_NOCTTY here: Darwin exposes that per-open flag through the tty's
+         * shared device state, changing F_GETFL on the process descriptors. */
+        context->input_fd = open(input_name, O_RDONLY);
         context->output_fd = STDOUT_FILENO;
         if (context->input_fd < 0 ||
             fstat(context->input_fd, &input_device) != 0 ||
