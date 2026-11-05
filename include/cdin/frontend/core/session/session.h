@@ -28,6 +28,7 @@ typedef struct cdin_frontend_session {
     uint64_t session_id;
     uint64_t client_id;
     uint64_t last_flush_sequence;
+    uint64_t driver_role_epoch;
     cdin_frontend_capability_mask requested_capabilities;
     cdin_frontend_capability_mask accepted_capabilities;
     int driver;
@@ -48,6 +49,7 @@ cdin_frontend_protocol_status cdin_frontend_session_set_capabilities(
     cdin_frontend_session *session, cdin_frontend_capability_mask supported);
 cdin_frontend_capability_mask cdin_frontend_session_accepted_capabilities(
     const cdin_frontend_session *session);
+int cdin_frontend_session_is_driver(const cdin_frontend_session *session);
 cdin_frontend_protocol_status cdin_frontend_session_hello(cdin_frontend_session *session);
 cdin_frontend_protocol_status cdin_frontend_session_receive(
     cdin_frontend_session *session,
