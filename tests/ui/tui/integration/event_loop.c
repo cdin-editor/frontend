@@ -82,36 +82,6 @@ static void fake_shutdown(void *opaque, cdin_frontend_tui_loop_status reason)
     state->shutdown_reason = reason;
 }
 
-int main(void)
-{
-    fake_loop state;
-    cdin_frontend_tui_event_loop loop;
-    memset(&state, 0, sizeof(state));
-    memset(&loop, 0, sizeof(loop));
-    loop.context = &state;
-    loop.wait = fake_wait;
-    loop.drain_terminal = fake_terminal;
-    loop.drain_backend = fake_backend;
-    loop.on_resize = fake_resize;
-    loop.render = fake_render;
-    loop.shutdown = fake_shutdown;
-    loop.max_items_per_source = 2u;
-    loop.render_initial_frame = 1;
-
-    assert(cdin_frontend_tui_event_loop_run(&loop) == CDIN_FRONTEND_TUI_LOOP_OK);
-    assert(state.waits == 4u);
-    assert(state.backend_items == 5u);
-    assert(state.terminal_items == 1u);
-    assert(state.resizes == 1u);
-    assert(state.renders == 4u);
-    assert(state.shutdowns == 1u);
-    assert(state.shutdown_reason == CDIN_FRONTEND_TUI_LOOP_OK);
-
-    loop.wait = NULL;
-    assert(cdin_frontend_tui_event_loop_run(&loop) ==
-           CDIN_FRONTEND_TUI_LOOP_INVALID_ARGUMENT);
-    assert(state.shutdowns == 2u);
-
 typedef struct terminal_shutdown_case {
     size_t backend_drained;
     size_t terminal_drained;
@@ -136,9 +106,13 @@ static cdin_frontend_tui_io_result drain_shutdown_backend(
 {
     terminal_shutdown_case *state = (terminal_shutdown_case *)opaque;
     assert(budget > 0u && out_processed != NULL);
-    state->backend_drained++;
-    *out_processed = 1u;
-    return CDIN_FRONTEND_TUI_IO_PROGRESS;
+    if (state->backend_drained == 0u) {
+        state->backend_drained++;
+        *out_processed = 1u;
+        return CDIN_FRONTEND_TUI_IO_PROGRESS;
+    }
+    *out_processed = 0u;
+    return CDIN_FRONTEND_TUI_IO_AGAIN;
 }
 
 static cdin_frontend_tui_io_result drain_shutdown_terminal(
@@ -212,6 +186,37 @@ static void shutdown_drains_ready_backend_only(void)
     assert(state.shutdowns == 1u);
     assert(state.reason == CDIN_FRONTEND_TUI_LOOP_OK);
 }
+
+
+int main(void)
+{
+    fake_loop state;
+    cdin_frontend_tui_event_loop loop;
+    memset(&state, 0, sizeof(state));
+    memset(&loop, 0, sizeof(loop));
+    loop.context = &state;
+    loop.wait = fake_wait;
+    loop.drain_terminal = fake_terminal;
+    loop.drain_backend = fake_backend;
+    loop.on_resize = fake_resize;
+    loop.render = fake_render;
+    loop.shutdown = fake_shutdown;
+    loop.max_items_per_source = 2u;
+    loop.render_initial_frame = 1;
+
+    assert(cdin_frontend_tui_event_loop_run(&loop) == CDIN_FRONTEND_TUI_LOOP_OK);
+    assert(state.waits == 4u);
+    assert(state.backend_items == 5u);
+    assert(state.terminal_items == 1u);
+    assert(state.resizes == 1u);
+    assert(state.renders == 4u);
+    assert(state.shutdowns == 1u);
+    assert(state.shutdown_reason == CDIN_FRONTEND_TUI_LOOP_OK);
+
+    loop.wait = NULL;
+    assert(cdin_frontend_tui_event_loop_run(&loop) ==
+           CDIN_FRONTEND_TUI_LOOP_INVALID_ARGUMENT);
+    assert(state.shutdowns == 2u);
 
     assert(state.shutdown_reason == CDIN_FRONTEND_TUI_LOOP_INVALID_ARGUMENT);
     shutdown_drains_ready_backend_only();
