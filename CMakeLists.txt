@@ -179,6 +179,7 @@ if(BUILD_TESTING)
         if(UNIX)
             cdin_frontend_tui_test(cdin_frontend_terminal_nonblocking_tests
                 tests/ui/tui/integration/terminal_nonblocking_posix.c)
+            set_tests_properties(cdin_frontend_terminal_nonblocking_tests PROPERTIES TIMEOUT 10)
         endif()
     endif()
 endif()
