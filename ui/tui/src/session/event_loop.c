@@ -84,7 +84,19 @@ cdin_frontend_tui_loop_status cdin_frontend_tui_event_loop_run(
             notify_shutdown(loop, CDIN_FRONTEND_TUI_LOOP_OK);
             return CDIN_FRONTEND_TUI_LOOP_OK;
         }
-        /* Always service both ready sources in the same turn. */
+        /* In the normal running state, service both ready sources in the
+         * same turn. Backend work marks the frame dirty; terminal input may
+         * synchronously enqueue more Backend work for the next wakeup. */
+        if ((ready & CDIN_FRONTEND_TUI_EVENT_BACKEND_READABLE) != 0u) {
+            status = drain_source(loop->drain_backend, loop->context,
+                                  loop->max_items_per_source,
+                                  CDIN_FRONTEND_TUI_LOOP_BACKEND_CLOSED, NULL);
+            if (status != CDIN_FRONTEND_TUI_LOOP_OK) {
+                notify_shutdown(loop, status);
+                return status;
+            }
+            dirty = 1;
+        }
         if ((ready & CDIN_FRONTEND_TUI_EVENT_TERMINAL_READABLE) != 0u) {
             status = drain_source(loop->drain_terminal, loop->context,
                                   loop->max_items_per_source,
