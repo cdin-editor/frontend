@@ -18,7 +18,7 @@ static cdin_frontend_tui_loop_status drain_source(
         if (result == CDIN_FRONTEND_TUI_IO_EOF) {
             return amount == 0u ? closed_status : CDIN_FRONTEND_TUI_LOOP_IO_ERROR;
         }
-        if (result == CDIN_FRONTEND_TUI_IO_ERROR) {
+        if (result == CDIN_FRONTEND_TUI_IO_FAILURE) {
             return CDIN_FRONTEND_TUI_LOOP_IO_ERROR;
         }
         if (result != CDIN_FRONTEND_TUI_IO_PROGRESS || amount == 0u ||
