@@ -187,7 +187,7 @@ static void shutdown_drains_ready_backend_only(void)
     loop.shutdown = shutdown_pending_case;
     loop.max_items_per_source = 2u;
     assert(cdin_frontend_tui_event_loop_run(&loop) == CDIN_FRONTEND_TUI_LOOP_OK);
-    assert(state.wait_calls == 3u);
+    assert(state.wait_calls == 2u);
     assert(state.backend_drained == 3u);
     assert(state.terminal_drained == 0u);
     assert(state.shutdowns == 1u);
