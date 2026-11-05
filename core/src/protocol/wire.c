@@ -783,6 +783,12 @@ cdin_frontend_protocol_status cdin_frontend_protocol_validate_payload(
         status = validate_payload_rules(payload, payload_length, rules, count);
         if (status != CDIN_FRONTEND_PROTOCOL_OK) return status;
     }
+    if (type == CDIN_FRONTEND_PROTOCOL_DRIVER_ROLE_CHANGED) {
+        uint64_t epoch = 0u;
+        if (cdin_frontend_protocol_payload_get_uint(payload, payload_length,
+                                                    "epoch", &epoch) != CDIN_FRONTEND_PROTOCOL_OK ||
+            epoch == 0u) return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
+    }
     if (type == CDIN_FRONTEND_PROTOCOL_UI_OPTIONS) {
         const uint8_t *options = NULL;
         size_t options_length = 0u;
