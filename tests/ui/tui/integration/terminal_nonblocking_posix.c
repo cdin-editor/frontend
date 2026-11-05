@@ -38,8 +38,18 @@ static int child_check(const char *slave_name)
     assert(terminal.active == 1);
     /* The adapter must not alter process descriptor flags. In PTY launches,
      * stdin/stdout may refer to one open-file description. */
-    assert(fcntl(STDIN_FILENO, F_GETFL, 0) == original_flags);
-    assert(fcntl(STDOUT_FILENO, F_GETFL, 0) == original_output_flags);
+    {
+        int current_input_flags = fcntl(STDIN_FILENO, F_GETFL, 0);
+        int current_output_flags = fcntl(STDOUT_FILENO, F_GETFL, 0);
+        if (current_input_flags != original_flags ||
+            current_output_flags != original_output_flags) {
+            (void)fprintf(stderr,
+                "terminal_open changed descriptor flags: stdin %d -> %d, stdout %d -> %d\\n",
+                original_flags, current_input_flags,
+                original_output_flags, current_output_flags);
+            return -1;
+        }
+    }
     {
         static const uint8_t marker[] = "blocking-output";
         assert(terminal.write(terminal.context, marker, sizeof(marker) - 1u) ==
