@@ -19,10 +19,10 @@ extern "C" {
      CDIN_FRONTEND_TUI_EVENT_TERMINATE)
 
 typedef enum cdin_frontend_tui_io_result {
-    CDIN_FRONTEND_TUI_IO_PROGRESS = 0,
-    CDIN_FRONTEND_TUI_IO_AGAIN,
-    CDIN_FRONTEND_TUI_IO_EOF,
-    CDIN_FRONTEND_TUI_IO_ERROR
+    CDIN_FRONTEND_TUI_DRAIN_PROGRESS = 0,
+    CDIN_FRONTEND_TUI_DRAIN_AGAIN,
+    CDIN_FRONTEND_TUI_DRAIN_EOF,
+    CDIN_FRONTEND_TUI_DRAIN_ERROR
 } cdin_frontend_tui_io_result;
 
 typedef enum cdin_frontend_tui_loop_status {
