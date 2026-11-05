@@ -216,12 +216,13 @@ static cdin_frontend_tui_model_status apply_lines(cdin_frontend_tui_model *model
     int has_total = 0;
     int was_scanning;
     cdin_frontend_protocol_status status;
-    status = get_text_field(payload, payload_length, "view_id", view_id, sizeof(view_id));
-    if (status != CDIN_FRONTEND_PROTOCOL_OK) {
+    cdin_frontend_tui_model_status model_status;
+    model_status = get_text_field(payload, payload_length, "view_id", view_id, sizeof(view_id));
+    if (model_status != CDIN_FRONTEND_TUI_MODEL_OK) {
         if (model->logger != NULL) {
             CDIN_FRONTEND_ERROR(model->logger, "MODEL",
                 "view.lines has invalid view_id field (protocol status=%s)",
-                cdin_frontend_protocol_status_name(status));
+                (int)model_status);
         }
         return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
     }
