@@ -42,9 +42,9 @@ static cdin_frontend_tui_io_result fake_backend(
     if (state->backend_items < 5u) {
         state->backend_items++;
         *out_processed = 1u;
-        return CDIN_FRONTEND_TUI_IO_PROGRESS;
+        return CDIN_FRONTEND_TUI_DRAIN_PROGRESS;
     }
-    return CDIN_FRONTEND_TUI_IO_AGAIN;
+    return CDIN_FRONTEND_TUI_DRAIN_AGAIN;
 }
 
 static cdin_frontend_tui_io_result fake_terminal(
@@ -56,9 +56,9 @@ static cdin_frontend_tui_io_result fake_terminal(
     if (state->terminal_items < 1u) {
         state->terminal_items++;
         *out_processed = 1u;
-        return CDIN_FRONTEND_TUI_IO_PROGRESS;
+        return CDIN_FRONTEND_TUI_DRAIN_PROGRESS;
     }
-    return CDIN_FRONTEND_TUI_IO_AGAIN;
+    return CDIN_FRONTEND_TUI_DRAIN_AGAIN;
 }
 
 static int fake_resize(void *opaque)
