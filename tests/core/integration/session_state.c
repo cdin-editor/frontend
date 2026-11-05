@@ -65,19 +65,32 @@ static size_t append_message(fake_stream *stream, uint64_t sequence,
 int main(void)
 {
     static const uint8_t hello_ack[] = {
-        0xa6u,
+        0xa7u,
         0x65u, 'm','a','j','o','r', 0x01u,
         0x65u, 'm','i','n','o','r', 0x00u,
-        0x66u, 'd','r','i','v','e','r', 0xf5u,
-        0x69u, 'c','l','i','e','n','t','_','i','d', 0x01u,
+        0x66u, 'd','r','i','v','e','r', 0xf4u,
+        0x69u, 'c','l','i','e','n','t','_','i','d', 0x02u,
         0x6au, 's','e','s','s','i','o','n','_','i','d', 0x07u,
-        0x75u, 'a','c','c','e','p','t','e','d','_','c','a','p','a','b','i','l','i','t','i','e','s', 0x81u, 0x65u, 'm','o','u','s','e'
+        0x71u, 'd','r','i','v','e','r','_','r','o','l','e','_','e','p','o','c','h', 0x01u,
+        0x75u, 'a','c','c','e','p','t','e','d','_','c','a','p','a','b','i','l','i','t','i','e','s',
+        0x82u, 0x65u, 'm','o','u','s','e',
+        0x74u, 'd','r','i','v','e','r','-','r','o','l','e','-','e','v','e','n','t','s','/','1'
     };
     static const uint8_t snapshot_flush[] = {
         0xa3u,
         0x65u, 's','c','o','p','e', 0x68u, 's','n','a','p','s','h','o','t',
         0x68u, 'r','e','v','i','s','i','o','n', 0x01u,
         0x68u, 's','e','q','u','e','n','c','e', 0x01u
+    };
+    static const uint8_t promoted_role[] = {
+        0xa2u,
+        0x65u, 'e','p','o','c','h', 0x02u,
+        0x66u, 'd','r','i','v','e','r', 0xf5u
+    };
+    static const uint8_t revoked_role[] = {
+        0xa2u,
+        0x65u, 'e','p','o','c','h', 0x03u,
+        0x66u, 'd','r','i','v','e','r', 0xf4u
     };
     fake_stream stream;
     cdin_frontend_protocol_io io;
@@ -97,12 +110,18 @@ int main(void)
     io.write = fake_write;
     (void)append_message(&stream, 1u, CDIN_FRONTEND_PROTOCOL_HELLO_ACK, hello_ack, sizeof(hello_ack));
     (void)append_message(&stream, 2u, CDIN_FRONTEND_PROTOCOL_UI_FLUSH, snapshot_flush, sizeof(snapshot_flush));
+    (void)append_message(&stream, 3u, CDIN_FRONTEND_PROTOCOL_DRIVER_ROLE_CHANGED,
+                         promoted_role, sizeof(promoted_role));
+    (void)append_message(&stream, 4u, CDIN_FRONTEND_PROTOCOL_DRIVER_ROLE_CHANGED,
+                         revoked_role, sizeof(revoked_role));
 
     assert(cdin_frontend_client_init(&client, &io, frame_buffer, sizeof(frame_buffer), 256u) ==
            CDIN_FRONTEND_PROTOCOL_OK);
     cdin_frontend_session_init(&session, &client, NULL, "tui");
     assert(cdin_frontend_session_set_capabilities(
-        &session, CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_MOUSE)) == CDIN_FRONTEND_PROTOCOL_OK);
+        &session, CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_MOUSE) |
+                  CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_DRIVER_ROLE_EVENTS)) ==
+        CDIN_FRONTEND_PROTOCOL_OK);
     assert(cdin_frontend_session_hello(&session) == CDIN_FRONTEND_PROTOCOL_OK);
     assert(cdin_frontend_session_set_capabilities(&session, 0u) == CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
     assert(session.state == CDIN_FRONTEND_SESSION_HELLO_SENT);
@@ -111,15 +130,24 @@ int main(void)
 
     assert(cdin_frontend_session_receive(&session, &message) == CDIN_FRONTEND_PROTOCOL_OK);
     assert(session.state == CDIN_FRONTEND_SESSION_NEGOTIATED);
-    assert(session.session_id == 7u && session.client_id == 1u && session.driver == 1);
+    assert(session.session_id == 7u && session.client_id == 2u && session.driver == 0);
+    assert(session.driver_role_epoch == 1u);
+    assert(!cdin_frontend_session_is_driver(&session));
     assert(cdin_frontend_session_accepted_capabilities(&session) ==
-           CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_MOUSE));
+           (CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_MOUSE) |
+            CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_DRIVER_ROLE_EVENTS)));
     assert(cdin_frontend_session_attach(&session, "view-1", "cells", 80u, 24u) ==
            CDIN_FRONTEND_PROTOCOL_OK);
     assert(session.state == CDIN_FRONTEND_SESSION_ATTACH_SENT);
     assert(cdin_frontend_session_receive(&session, &message) == CDIN_FRONTEND_PROTOCOL_OK);
     assert(session.state == CDIN_FRONTEND_SESSION_ATTACHED);
     assert(session.last_flush_sequence == 1u);
+    assert(!cdin_frontend_session_is_driver(&session));
+    assert(cdin_frontend_session_send_key(&session, "x", 0u, "press") ==
+           CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
+    assert(cdin_frontend_session_receive(&session, &message) == CDIN_FRONTEND_PROTOCOL_OK);
+    assert(session.driver == 1 && session.driver_role_epoch == 2u);
+    assert(cdin_frontend_session_is_driver(&session));
 
     assert(cdin_frontend_session_ack(&session, 1u) == CDIN_FRONTEND_PROTOCOL_OK);
     assert(cdin_frontend_session_request_lines(&session, "view-1", 0u, 40u, 0u) ==
@@ -145,12 +173,13 @@ int main(void)
     assert(cdin_frontend_session_resize(&session, 100u, 30u) == CDIN_FRONTEND_PROTOCOL_OK);
     assert(cdin_frontend_session_focus(&session, 1) == CDIN_FRONTEND_PROTOCOL_OK);
 
-    session.driver = 0;
+    assert(cdin_frontend_session_receive(&session, &message) == CDIN_FRONTEND_PROTOCOL_OK);
+    assert(session.driver == 0 && session.driver_role_epoch == 3u);
+    assert(!cdin_frontend_session_is_driver(&session));
     assert(cdin_frontend_session_send_key(&session, "x", 0u, "press") ==
            CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
     assert(cdin_frontend_session_send_paste(&session, paste, sizeof(paste)) ==
            CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
-    session.driver = 1;
     assert(cdin_frontend_session_detach(&session) == CDIN_FRONTEND_PROTOCOL_OK);
     assert(session.state == CDIN_FRONTEND_SESSION_DETACH_SENT);
     return 0;
