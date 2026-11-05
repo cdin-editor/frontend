@@ -8,9 +8,11 @@ commands, keymaps, Runtime policy or Kernel state.
 
 - Incremental terminal input parsing and physical key/text distinction.
 - Terminal lifecycle adapter for POSIX and Windows.
-- POSIX input reads use a separately opened nonblocking terminal descriptor;
-  process STDIN/STDOUT flags are not mutated and renderer writes remain
-  blocking. The standalone preview waits for input readiness before reading.
+- POSIX input reads use a separately opened terminal descriptor with a
+  zero-timeout readiness probe before each read. The drain callback is
+  nonblocking without changing process STDIN/STDOUT flags; renderer writes
+  remain blocking. The standalone preview waits for input readiness before
+  reading.
 - Read-only single-view rendering and a version-aware presentation cache.
 - A readiness-driven event-loop coordinator (`event_loop.h`).
 
