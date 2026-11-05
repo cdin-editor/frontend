@@ -263,15 +263,37 @@ static cdin_frontend_tui_model_status apply_lines(cdin_frontend_tui_model *model
     }
     /* FE-005: a line window is usable only for the exact outstanding request.
      * This prevents late responses from replacing a newer viewport request. */
-    if (!model->request_pending || version != model->request_version ||
-        first_line != model->request_first_line) {
+    if (!model->request_pending) {
+        /* A response can arrive after its matching window was already
+         * committed (for example, when an earlier request was duplicated
+         * while a snapshot was pending). It is obsolete, not a protocol
+         * violation, provided it does not claim a future document version. */
+        if (version <= data->document_version) {
+            if (model->logger != NULL) CDIN_FRONTEND_WARN(model->logger, "MODEL",
+                "ignored duplicate view.lines response version=%llu first_line=%llu without a pending request",
+                (unsigned long long)version, (unsigned long long)first_line);
+            return CDIN_FRONTEND_TUI_MODEL_STALE;
+        }
         if (model->logger != NULL) CDIN_FRONTEND_ERROR(model->logger, "MODEL",
-            "view.lines does not match outstanding request: pending=%d received_version=%llu requested_version=%llu received_first_line=%llu requested_first_line=%llu requested_line_count=%llu",
-            model->request_pending, (unsigned long long)version,
+            "view.lines response has future version=%llu without a pending request (committed=%llu)",
+            (unsigned long long)version, (unsigned long long)data->document_version);
+        return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
+    }
+    if (version < model->request_version || first_line != model->request_first_line) {
+        if (model->logger != NULL) CDIN_FRONTEND_WARN(model->logger, "MODEL",
+            "ignored obsolete view.lines response: received_version=%llu requested_version=%llu received_first_line=%llu requested_first_line=%llu pending=%d",
+            (unsigned long long)version,
             (unsigned long long)model->request_version,
             (unsigned long long)first_line,
             (unsigned long long)model->request_first_line,
-            (unsigned long long)model->request_line_count);
+            model->request_pending);
+        return CDIN_FRONTEND_TUI_MODEL_STALE;
+    }
+    if (version > model->request_version) {
+        if (model->logger != NULL) CDIN_FRONTEND_ERROR(model->logger, "MODEL",
+            "view.lines response has future version=%llu requested_version=%llu",
+            (unsigned long long)version,
+            (unsigned long long)model->request_version);
         return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
     }
     status = cdin_frontend_protocol_array_count(array, array_length, &count);
@@ -666,7 +688,20 @@ static cdin_frontend_tui_model_status commit_group(cdin_frontend_tui_model *mode
         model->staging = old;
     }
     model->last_flush_sequence = sequence;
-    if (lines_applied || model->committed.lines_invalidated) model->request_pending = 0;
+    if (lines_applied) {
+        model->request_pending = 0;
+    } else if (snapshot && model->request_pending) {
+        const uint64_t current_first_line = model->committed.scan_active
+            ? model->committed.scan_next_line : model->committed.first_line;
+        /* A new snapshot only cancels an outstanding read when it changes
+         * the exact document/window identity that the read was pinned to.
+         * Merely retaining lines_invalidated while unrelated UI metadata is
+         * committed must not clear the request and allow duplicate reads. */
+        if (model->committed.document_version != model->request_version ||
+            current_first_line != model->request_first_line) {
+            model->request_pending = 0;
+        }
+    }
     if (model->logger != NULL) {
         CDIN_FRONTEND_DEBUG(model->logger, "MODEL", "committed %s flush sequence=%llu revision=%llu",
                             snapshot ? "snapshot" : "response",
