@@ -19,9 +19,18 @@ ctest --test-dir build -C Release --output-on-failure
 install_prefix="${repo_root}/build/install-prefix"
 rm -rf "${install_prefix}" "${repo_root}/build/package-consumer"
 cmake --install build --prefix "${install_prefix}"
+# MSYS2 may pass POSIX /d/... paths through -D variables unchanged. CMake's
+# native Windows package search expects D:/... paths, so normalize both
+# prefixes explicitly before passing the semicolon-delimited CMake list.
+cmake_install_prefix="${install_prefix}"
+cmake_logger_prefix="${repo_root}/.deps/log"
+if command -v cygpath >/dev/null 2>&1; then
+    cmake_install_prefix="$(cygpath -m "${install_prefix}")"
+    cmake_logger_prefix="$(cygpath -m "${repo_root}/.deps/log")"
+fi
 cmake -S tests/package-consumer -B build/package-consumer \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_PREFIX_PATH="${install_prefix};${repo_root}/.deps/log"
+    -DCMAKE_PREFIX_PATH="${cmake_install_prefix};${cmake_logger_prefix}"
 cmake --build build/package-consumer --config Release --parallel
 ctest --test-dir build/package-consumer -C Release --output-on-failure
 
