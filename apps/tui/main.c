@@ -16,6 +16,13 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <errno.h>
+#if defined(_WIN32)
+#include <windows.h>
+#else
+#include <poll.h>
+#include <unistd.h>
+#endif
 #include <stdio.h>
 #include <string.h>
 
@@ -44,6 +51,28 @@ static int is_quit(const cdin_frontend_input_event *event)
            (event->kind == CDIN_FRONTEND_INPUT_KEY &&
             strcmp(event->key, "c") == 0 &&
             (event->modifiers & CDIN_FRONTEND_MOD_CTRL) != 0u);
+}
+
+static int wait_for_terminal_input(void)
+{
+#if defined(_WIN32)
+    HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
+    DWORD result;
+    if (input == INVALID_HANDLE_VALUE) return -1;
+    result = WaitForSingleObject(input, INFINITE);
+    return result == WAIT_OBJECT_0 ? 0 : -1;
+#else
+    struct pollfd descriptor;
+    int result;
+    descriptor.fd = STDIN_FILENO;
+    descriptor.events = POLLIN;
+    descriptor.revents = 0;
+    do {
+        result = poll(&descriptor, 1u, -1);
+    } while (result < 0 && errno == EINTR);
+    if (result <= 0) return -1;
+    return (descriptor.revents & (POLLIN | POLLHUP)) != 0 ? 0 : -1;
+#endif
 }
 
 static void draw(cdin_frontend_terminal *terminal, size_t cursor_line)
@@ -83,9 +112,12 @@ int main(void)
     draw(&terminal, cursor_line);
 
     while (running) {
-        ptrdiff_t amount = terminal.read(terminal.context, input, sizeof(input));
+        ptrdiff_t amount;
         size_t index;
-        if (amount <= 0 || (size_t)amount > sizeof(input)) break;
+        if (wait_for_terminal_input() != 0) break;
+        amount = terminal.read(terminal.context, input, sizeof(input));
+        if (amount < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) continue;
+        if (amount == 0 || amount < 0 || (size_t)amount > sizeof(input)) break;
         if (cdin_frontend_input_parser_feed(&parser, input, (size_t)amount) !=
             CDIN_FRONTEND_INPUT_PARSER_EVENT && parser.length == 0u) {
             continue;
