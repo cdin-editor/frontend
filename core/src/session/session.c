@@ -226,13 +226,10 @@ cdin_frontend_protocol_status cdin_frontend_session_receive(
         epoch_status = cdin_frontend_protocol_payload_get_uint(
             out_message->payload, out_message->payload_length, "driver_role_epoch", &value);
         if (epoch_status == CDIN_FRONTEND_PROTOCOL_OK) {
-            session->driver_role_epoch = value;
-        } else if (epoch_status != CDIN_FRONTEND_PROTOCOL_UNSUPPORTED) {
-            return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
-        }
-        if (cdin_frontend_capability_has(session->accepted_capabilities,
-                                         CDIN_FRONTEND_CAP_DRIVER_ROLE_EVENTS) &&
-            session->driver_role_epoch == 0u) {
+            if (value != out_message->sequence) return CDIN_FRONTEND_PROTOCOL_INVALID_FRAME;
+        } else if (epoch_status != CDIN_FRONTEND_PROTOCOL_UNSUPPORTED ||
+                   cdin_frontend_capability_has(session->accepted_capabilities,
+                                                CDIN_FRONTEND_CAP_DRIVER_ROLE_EVENTS)) {
             return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
         }
         session->state = CDIN_FRONTEND_SESSION_NEGOTIATED;
@@ -246,11 +243,10 @@ cdin_frontend_protocol_status cdin_frontend_session_receive(
                                                      "driver", &driver) != CDIN_FRONTEND_PROTOCOL_OK ||
             cdin_frontend_protocol_payload_get_uint(out_message->payload, out_message->payload_length,
                                                      "epoch", &epoch) != CDIN_FRONTEND_PROTOCOL_OK ||
-            epoch == 0u || epoch <= session->driver_role_epoch) {
+            epoch != out_message->sequence) {
             return CDIN_FRONTEND_PROTOCOL_INVALID_FRAME;
         }
         session->driver = driver;
-        session->driver_role_epoch = epoch;
     } else if (out_message->type == CDIN_FRONTEND_PROTOCOL_UI_FLUSH) {
         char scope[16];
         size_t length = 0u;
