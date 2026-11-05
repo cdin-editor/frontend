@@ -11,17 +11,17 @@ static cdin_frontend_tui_loop_status drain_source(
         size_t amount = 0u;
         size_t remaining = budget - processed;
         cdin_frontend_tui_io_result result = drain(context, remaining, &amount);
-        if (result == CDIN_FRONTEND_TUI_IO_AGAIN) {
+        if (result == CDIN_FRONTEND_TUI_DRAIN_AGAIN) {
             return amount == 0u ? CDIN_FRONTEND_TUI_LOOP_OK :
                                  CDIN_FRONTEND_TUI_LOOP_IO_ERROR;
         }
-        if (result == CDIN_FRONTEND_TUI_IO_EOF) {
+        if (result == CDIN_FRONTEND_TUI_DRAIN_EOF) {
             return amount == 0u ? closed_status : CDIN_FRONTEND_TUI_LOOP_IO_ERROR;
         }
-        if (result == CDIN_FRONTEND_TUI_IO_ERROR) {
+        if (result == CDIN_FRONTEND_TUI_DRAIN_ERROR) {
             return CDIN_FRONTEND_TUI_LOOP_IO_ERROR;
         }
-        if (result != CDIN_FRONTEND_TUI_IO_PROGRESS || amount == 0u ||
+        if (result != CDIN_FRONTEND_TUI_DRAIN_PROGRESS || amount == 0u ||
             amount > remaining) return CDIN_FRONTEND_TUI_LOOP_IO_ERROR;
         processed += amount;
     }
