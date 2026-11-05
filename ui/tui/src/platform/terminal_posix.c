@@ -87,7 +87,6 @@ cdin_frontend_terminal_status cdin_frontend_terminal_open(cdin_frontend_terminal
         }
     }
     context->have_original = 1;
-    context->have_original = 1;
     raw = context->original;
     raw.c_iflag &= (tcflag_t)~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
     raw.c_oflag &= (tcflag_t)~OPOST;
