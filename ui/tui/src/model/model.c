@@ -25,6 +25,8 @@ typedef struct tui_data {
     char mode[32];
     char prompt[TUI_MODEL_TEXT_CAPACITY];
     char notification[TUI_MODEL_TEXT_CAPACITY];
+    cdin_frontend_tui_layout layout;
+    int layout_present;
     uint64_t revision;
     uint64_t document_version;
     uint64_t first_line;
@@ -93,6 +95,8 @@ static int clone_data(tui_data *destination, const tui_data *source)
 {
     size_t index;
     clear_data(destination, source->view_id);
+    destination->layout = source->layout;
+    destination->layout_present = source->layout_present;
     destination->revision = source->revision;
     destination->document_version = source->document_version;
     destination->first_line = source->first_line;
@@ -462,11 +466,26 @@ static cdin_frontend_tui_model_status apply_one(cdin_frontend_tui_model *model,
             data->document_version = version;
             data->selection_known = 1;
             return CDIN_FRONTEND_TUI_MODEL_OK;
+        case CDIN_FRONTEND_PROTOCOL_UI_LAYOUT: {
+            cdin_frontend_tui_layout parsed;
+            cdin_frontend_tui_layout_status layout_status =
+                cdin_frontend_tui_layout_parse(&parsed, payload, payload_length);
+            if (layout_status != CDIN_FRONTEND_TUI_LAYOUT_OK) {
+                return layout_status == CDIN_FRONTEND_TUI_LAYOUT_LIMIT_EXCEEDED
+                    ? CDIN_FRONTEND_TUI_MODEL_LIMIT_EXCEEDED
+                    : CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
+            }
+            if (data->layout_present && parsed.revision < data->layout.revision) {
+                return CDIN_FRONTEND_TUI_MODEL_STALE;
+            }
+            data->layout = parsed;
+            data->layout_present = 1;
+            return CDIN_FRONTEND_TUI_MODEL_OK;
+        }
         case CDIN_FRONTEND_PROTOCOL_UI_STYLE_TABLE:
-        case CDIN_FRONTEND_PROTOCOL_UI_LAYOUT:
         case CDIN_FRONTEND_PROTOCOL_UI_PANEL:
-            /* Style roles, pane splits and panels are retained by the semantic
-             * layer; this first TUI viewport adapter renders the active text view. */
+            /* Style roles and declarative panel rendering remain separate T3
+             * work. The bounded PaneTree is retained transactionally above. */
             return CDIN_FRONTEND_TUI_MODEL_OK;
         default:
             return CDIN_FRONTEND_TUI_MODEL_OK;
@@ -506,6 +525,10 @@ static cdin_frontend_tui_model_status commit_group(cdin_frontend_tui_model *mode
         if (clone_data(&model->staging, &model->committed) != 0) return CDIN_FRONTEND_TUI_MODEL_NO_MEMORY;
     }
     for (index = 0u; index < model->pending_count; index++) {
+        if (!snapshot && model->pending[index].type == CDIN_FRONTEND_PROTOCOL_UI_LAYOUT) {
+            clear_data(&model->staging, model->committed.view_id);
+            return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
+        }
         cdin_frontend_tui_model_status status = apply_one(model, &model->staging,
             model->pending[index].type, model->pending[index].payload,
             model->pending[index].payload_length);
@@ -695,4 +718,11 @@ uint64_t cdin_frontend_tui_model_revision(const cdin_frontend_tui_model *model)
 uint64_t cdin_frontend_tui_model_last_flush(const cdin_frontend_tui_model *model)
 {
     return model != NULL ? model->last_flush_sequence : 0u;
+}
+
+const cdin_frontend_tui_layout *cdin_frontend_tui_model_get_layout(
+    const cdin_frontend_tui_model *model)
+{
+    return model != NULL && model->committed.layout_present
+        ? &model->committed.layout : NULL;
 }

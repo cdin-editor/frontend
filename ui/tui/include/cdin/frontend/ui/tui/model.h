@@ -3,6 +3,7 @@
 
 #include "cdin/frontend/core/protocol/wire.h"
 #include "cdin/frontend/ui/tui/tui.h"
+#include "cdin/frontend/ui/tui/layout.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -50,6 +51,11 @@ void cdin_frontend_tui_model_mark_request_pending(cdin_frontend_tui_model *model
 void cdin_frontend_tui_model_request_failed(cdin_frontend_tui_model *model);
 uint64_t cdin_frontend_tui_model_revision(const cdin_frontend_tui_model *model);
 uint64_t cdin_frontend_tui_model_last_flush(const cdin_frontend_tui_model *model);
+
+/* Returns the last complete committed PaneTree, or NULL when the current
+ * semantic snapshot has not included ui.layout. The pointer is borrowed. */
+const cdin_frontend_tui_layout *cdin_frontend_tui_model_get_layout(
+    const cdin_frontend_tui_model *model);
 
 #ifdef __cplusplus
 }
