@@ -316,7 +316,14 @@ cdin_frontend_tui_status cdin_frontend_tui_render(
         if (logger != NULL) CDIN_FRONTEND_ERROR(logger, "TUI", "terminal frame write failed");
         return CDIN_FRONTEND_TUI_IO_ERROR;
     }
-    if (logger != NULL) CDIN_FRONTEND_TRACE(logger, "TUI", "rendered %zu lines at version %llu",
-                                             frame->line_count, (unsigned long long)frame->document_version);
+    if (logger != NULL) {
+        CDIN_FRONTEND_TRACE(
+            logger,
+            "TUI",
+            "rendered %llu lines at version %llu",
+            (unsigned long long)frame->line_count,
+            (unsigned long long)frame->document_version
+        );
+    }
     return CDIN_FRONTEND_TUI_OK;
 }

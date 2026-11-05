@@ -25,7 +25,7 @@ if command -v sha256sum >/dev/null 2>&1; then
 else
     ACTUAL_SHA256="$(shasum -a 256 "${ARCHIVE}" | awk '{print $1}')"
 fi
-if [[ "${ACTUAL_SHA256,,}" != "${EXPECTED_SHA256}" ]]; then
+if [[ "${ACTUAL_SHA256}" != "${EXPECTED_SHA256}" ]]; then
     echo "error: m-mdy-m/log.c source archive checksum mismatch" >&2
     exit 1
 fi
