@@ -83,6 +83,7 @@ static void fake_shutdown(void *opaque, cdin_frontend_tui_loop_status reason)
 }
 
 typedef struct terminal_shutdown_case {
+    size_t wait_calls;
     size_t backend_drained;
     size_t terminal_drained;
     size_t shutdowns;
@@ -106,7 +107,7 @@ static cdin_frontend_tui_io_result drain_shutdown_backend(
 {
     terminal_shutdown_case *state = (terminal_shutdown_case *)opaque;
     assert(budget > 0u && out_processed != NULL);
-    if (state->backend_drained == 0u) {
+    if (state->backend_drained < 3u) {
         state->backend_drained++;
         *out_processed = 1u;
         return CDIN_FRONTEND_TUI_IO_PROGRESS;
@@ -181,7 +182,8 @@ static void shutdown_drains_ready_backend_only(void)
     loop.shutdown = shutdown_pending_case;
     loop.max_items_per_source = 2u;
     assert(cdin_frontend_tui_event_loop_run(&loop) == CDIN_FRONTEND_TUI_LOOP_OK);
-    assert(state.backend_drained == 1u);
+    assert(state.wait_calls == 3u);
+    assert(state.backend_drained == 3u);
     assert(state.terminal_drained == 0u);
     assert(state.shutdowns == 1u);
     assert(state.reason == CDIN_FRONTEND_TUI_LOOP_OK);
