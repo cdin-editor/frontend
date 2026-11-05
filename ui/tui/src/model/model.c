@@ -221,7 +221,7 @@ static cdin_frontend_tui_model_status apply_lines(cdin_frontend_tui_model *model
     if (model_status != CDIN_FRONTEND_TUI_MODEL_OK) {
         if (model->logger != NULL) {
             CDIN_FRONTEND_ERROR(model->logger, "MODEL",
-                "view.lines has invalid view_id field (protocol status=%s)",
+                "view.lines has invalid view_id field (model status=%d)",
                 (int)model_status);
         }
         return CDIN_FRONTEND_TUI_MODEL_INVALID_MESSAGE;
