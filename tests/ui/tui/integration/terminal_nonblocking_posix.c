@@ -73,7 +73,9 @@ static int child_check(const char *slave_name)
         static const uint8_t marker[] = "blocking-output";
         assert(terminal.write(terminal.context, marker, sizeof(marker) - 1u) ==
                (ptrdiff_t)(sizeof(marker) - 1u));
-        assert(tcdrain(STDOUT_FILENO) == 0);
+        /* Do not tcdrain() a PTY whose master is intentionally not consumed
+         * by the parent: Darwin may wait for the peer to read queued output. */
+
     }
     errno = 0;
     amount = terminal.read(terminal.context, &byte, 1u);
