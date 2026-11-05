@@ -61,11 +61,9 @@ cdin_frontend_tui_loop_status cdin_frontend_tui_event_loop_run(
             notify_shutdown(loop, CDIN_FRONTEND_TUI_LOOP_WAIT_ERROR);
             return CDIN_FRONTEND_TUI_LOOP_WAIT_ERROR;
         }
-        if ((ready & CDIN_FRONTEND_TUI_EVENT_TERMINATE) != 0u) {
-            notify_shutdown(loop, CDIN_FRONTEND_TUI_LOOP_OK);
-            return CDIN_FRONTEND_TUI_LOOP_OK;
-        }
-        /* Always service both ready sources in the same turn. */
+        /* A termination request suppresses new user input, but does not
+         * discard Backend work already reported ready in the same wait turn.
+         * The Backend drain gets one bounded fair turn before teardown. */
         if ((ready & CDIN_FRONTEND_TUI_EVENT_BACKEND_READABLE) != 0u) {
             status = drain_source(loop->drain_backend, loop->context,
                                   loop->max_items_per_source,
@@ -76,6 +74,11 @@ cdin_frontend_tui_loop_status cdin_frontend_tui_event_loop_run(
             }
             dirty = 1;
         }
+        if ((ready & CDIN_FRONTEND_TUI_EVENT_TERMINATE) != 0u) {
+            notify_shutdown(loop, CDIN_FRONTEND_TUI_LOOP_OK);
+            return CDIN_FRONTEND_TUI_LOOP_OK;
+        }
+        /* Always service both ready sources in the same turn. */
         if ((ready & CDIN_FRONTEND_TUI_EVENT_TERMINAL_READABLE) != 0u) {
             status = drain_source(loop->drain_terminal, loop->context,
                                   loop->max_items_per_source,
