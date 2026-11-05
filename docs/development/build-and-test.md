@@ -8,9 +8,10 @@
 - Bash, Git and network access for first logger dependency installation.
 - Pinned `m-mdy-m/log.c` source package from `deps.lock`.
 
-Core/TUI source tests do not require a Backend, Kernel, Runtime, Lua or SDL
+Core/TUI source tests do not require a Backend, Kernel, Runtime or SDL
 checkout. The production composition root supplies transport at runtime. The
-stable installed package is Core-only; TUI is a preview build target.
+installed package exports Core and, when enabled, the reusable TUI adapter;
+the TUI preview application is still not a connected editor.
 
 ## 2. First build
 
@@ -26,7 +27,7 @@ make check
 | Target | Purpose | Current status |
 | --- | --- | --- |
 | `cdin::frontend_core` | Stable Foundation API 1.0.0: Protocol 1.0.0 codec/client, session, capability registry, model metadata and diagnostics | Implemented and installed/exported |
-| `cdin::frontend_ui_tui` | Experimental terminal adapter preview | Build/test target only; not installed/exported; no production event loop/app |
+| `cdin::frontend_ui_tui` | Reusable terminal peer adapter library | Installed/exported when `CDIN_FRONTEND_BUILD_UI_TUI=ON`; application and FE-019 remain partial |
 | `cdin::frontend_ui_headless` | Recorder/replayer reference frontend | Planned; no target source yet |
 | `cdin::frontend_ui_gui_sdl` | SDL3 desktop adapter | Planned; no target source yet |
 
@@ -65,11 +66,16 @@ corpus; local unit tests do not replace them.
 
 ## 6. Package consumption
 
-Foundation 1.0.0 exports `cdinFrontend` and the stable target
-`cdin::frontend_core` only. Its public headers are installed under
-`cdin/frontend/core/`. The TUI preview can be built from this source tree but
-is intentionally not exported or installed; it has no 1.0.0 API guarantee.
-Consumers must not rely on TUI headers from the installed Foundation package.
+The `cdinFrontend` CMake package always exports `cdin::frontend_core`. When
+`CDIN_FRONTEND_BUILD_UI_TUI=ON`, it also installs and exports
+`cdin::frontend_ui_tui` plus headers under `cdin/frontend/ui/tui/`. The preview
+executable is not installed. This package surface is intentionally limited to
+the reusable TUI library; it does not claim a production-ready event loop,
+terminal signal handling or live Backend transport.
+
+CI installs into a clean prefix and builds an external consumer against both
+exported targets. CDIN must use these exported targets and public headers; it
+must not copy Frontend source or private headers.
 
 ## 7. Repository workflow
 
