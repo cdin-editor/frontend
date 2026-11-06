@@ -37,6 +37,33 @@ static ptrdiff_t fake_write(void *opaque, const uint8_t *bytes, size_t length)
     return (ptrdiff_t)length;
 }
 
+static int output_contains_type(
+    const fake_stream *stream,
+    cdin_frontend_protocol_message_type expected_type)
+{
+    size_t offset = 0u;
+    if (stream == NULL) return 0;
+    while (offset <= stream->output_length &&
+           stream->output_length - offset >= CDIN_FRONTEND_PROTOCOL_FRAME_PREFIX_BYTES) {
+        const uint8_t *frame = stream->output + offset;
+        uint32_t body_length = ((uint32_t)frame[0] << 24u) |
+                               ((uint32_t)frame[1] << 16u) |
+                               ((uint32_t)frame[2] << 8u) |
+                               (uint32_t)frame[3];
+        size_t frame_length;
+        cdin_frontend_protocol_message_view message;
+        if (body_length == 0u ||
+            (size_t)body_length > stream->output_length - offset -
+                                  CDIN_FRONTEND_PROTOCOL_FRAME_PREFIX_BYTES) return 0;
+        frame_length = CDIN_FRONTEND_PROTOCOL_FRAME_PREFIX_BYTES + (size_t)body_length;
+        if (cdin_frontend_protocol_decode_frame(
+                frame, frame_length, &message, 4096u) != CDIN_FRONTEND_PROTOCOL_OK) return 0;
+        if (message.type == expected_type) return 1;
+        offset += frame_length;
+    }
+    return 0;
+}
+
 static int output_contains_expected_mouse(const fake_stream *stream)
 {
     size_t offset = 0u;
@@ -173,6 +200,30 @@ int main(void)
     assert(stream.output_length != 0u);
     assert(output_contains_expected_mouse(&stream));
     trace_step("mouse protocol frame verified");
+
+    /* Exercise the same SDL queue path used by the CDIN composition smoke.
+     * A committed text event and a Ctrl+S key-down must become separate
+     * Protocol messages; the adapter never resolves the Runtime keymap. */
+    memset(&event, 0, sizeof(event));
+    event.type = SDL_EVENT_TEXT_INPUT;
+    event.text.type = SDL_EVENT_TEXT_INPUT;
+    event.text.text = "GUI_SDL_E2E";
+    trace_step("push text input");
+    assert(SDL_PushEvent(&event));
+    memset(&event, 0, sizeof(event));
+    event.type = SDL_EVENT_KEY_DOWN;
+    event.key.type = SDL_EVENT_KEY_DOWN;
+    event.key.key = SDLK_S;
+    event.key.mod = SDL_KMOD_CTRL;
+    event.key.down = true;
+    trace_step("push Ctrl+S key-down");
+    assert(SDL_PushEvent(&event));
+    trace_step("pump text and key input");
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    assert(output_contains_type(&stream, CDIN_FRONTEND_PROTOCOL_INPUT_TEXT));
+    assert(output_contains_type(&stream, CDIN_FRONTEND_PROTOCOL_INPUT_KEY));
+    trace_step("text and key Protocol frames verified");
 
     trace_step("destroy adapter");
     cdin_frontend_gui_sdl_destroy(gui);
