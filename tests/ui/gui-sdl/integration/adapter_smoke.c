@@ -31,6 +31,61 @@ static ptrdiff_t fake_write(void *opaque, const uint8_t *bytes, size_t length)
     return (ptrdiff_t)length;
 }
 
+static int output_contains_expected_mouse(const fake_stream *stream)
+{
+    size_t offset = 0u;
+    if (stream == NULL) return 0;
+    while (offset <= stream->output_length &&
+           stream->output_length - offset >= CDIN_FRONTEND_PROTOCOL_FRAME_PREFIX_BYTES) {
+        const uint8_t *frame = stream->output + offset;
+        uint32_t body_length = ((uint32_t)frame[0] << 24u) |
+                               ((uint32_t)frame[1] << 16u) |
+                               ((uint32_t)frame[2] << 8u) |
+                               (uint32_t)frame[3];
+        size_t frame_length;
+        cdin_frontend_protocol_message_view message;
+        if (body_length == 0u ||
+            (size_t)body_length > stream->output_length - offset -
+                                  CDIN_FRONTEND_PROTOCOL_FRAME_PREFIX_BYTES) {
+            return 0;
+        }
+        frame_length = CDIN_FRONTEND_PROTOCOL_FRAME_PREFIX_BYTES + (size_t)body_length;
+        if (cdin_frontend_protocol_decode_frame(
+                frame, frame_length, &message, 4096u) != CDIN_FRONTEND_PROTOCOL_OK) {
+            return 0;
+        }
+        if (message.type == CDIN_FRONTEND_PROTOCOL_INPUT_MOUSE) {
+            char action[16];
+            char button[16];
+            size_t action_length = 0u;
+            size_t button_length = 0u;
+            const uint8_t *position = NULL;
+            size_t position_length = 0u;
+            uint64_t x = 0u;
+            uint64_t y = 0u;
+            if (cdin_frontend_protocol_payload_get_text(
+                    message.payload, message.payload_length, "action",
+                    action, sizeof(action), &action_length) == CDIN_FRONTEND_PROTOCOL_OK &&
+                cdin_frontend_protocol_payload_get_text(
+                    message.payload, message.payload_length, "button",
+                    button, sizeof(button), &button_length) == CDIN_FRONTEND_PROTOCOL_OK &&
+                cdin_frontend_protocol_payload_get_raw(
+                    message.payload, message.payload_length, "position",
+                    &position, &position_length) == CDIN_FRONTEND_PROTOCOL_OK &&
+                cdin_frontend_protocol_payload_get_uint(
+                    position, position_length, "x", &x) == CDIN_FRONTEND_PROTOCOL_OK &&
+                cdin_frontend_protocol_payload_get_uint(
+                    position, position_length, "y", &y) == CDIN_FRONTEND_PROTOCOL_OK) {
+                return action_length == 5u && strcmp(action, "press") == 0 &&
+                       button_length == 4u && strcmp(button, "left") == 0 &&
+                       x == 12u && y == 21u;
+            }
+        }
+        offset += frame_length;
+    }
+    return 0;
+}
+
 int main(void)
 {
     fake_stream stream;
@@ -40,7 +95,6 @@ int main(void)
     cdin_frontend_gui_sdl_config config;
     cdin_frontend_gui_sdl *gui = NULL;
     uint8_t client_buffer[4096];
-    cdin_frontend_protocol_message_view sent;
     SDL_Event event;
     int quit_requested = 0;
 
@@ -96,10 +150,7 @@ int main(void)
            CDIN_FRONTEND_GUI_SDL_OK);
     assert(quit_requested == 0);
     assert(stream.output_length != 0u);
-    assert(cdin_frontend_protocol_decode_frame(
-        stream.output, stream.output_length, &sent, 4096u) ==
-        CDIN_FRONTEND_PROTOCOL_OK);
-    assert(sent.type == CDIN_FRONTEND_PROTOCOL_INPUT_MOUSE);
+    assert(output_contains_expected_mouse(&stream));
 
     cdin_frontend_gui_sdl_destroy(gui);
     assert((SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO) == 0u);
