@@ -6,8 +6,8 @@ remains a separate development app.
 
 The Composition Root owns the transport and Core Session. It negotiates and
 attaches the Session, then passes the attached Session to the GUI adapter.
-The GUI peer owns SDL window/renderer lifetime, native keyboard and committed
-text input, pixel resize/focus forwarding, a view-specific semantic model and
+The GUI peer owns SDL window/renderer lifetime, native keyboard, committed
+text and negotiated pointer/wheel input, pixel resize/focus forwarding, a view-specific semantic model and
 a bounded version-pinned visible-line cache. It does not link Backend,
 Runtime, Kernel or the TUI adapter.
 
@@ -18,6 +18,9 @@ The GUI does not advertise those capabilities. Further implementation and
 native SDL CI remain release gates.
 
 Build the preview (which also builds the production adapter library) with
-`make build-gui`; SDL3 3.2+ is required. Applications consuming the library
+`make build-gui`; SDL3 3.2+ is required. Applications must include `cdin_frontend_gui_sdl_supported_capabilities()` in
+the Core Session capability mask before HELLO to enable pointer input. The SDL
+adapter smoke runs with the dummy video driver and verifies partial-startup
+rollback plus `input.mouse` forwarding. Applications consuming the library
 enable `CDIN_FRONTEND_BUILD_UI_SDL=ON` and link
 `cdin::frontend_ui_gui_sdl`. See [GUI-SDL architecture](../../docs/frontends/gui-sdl.md).
