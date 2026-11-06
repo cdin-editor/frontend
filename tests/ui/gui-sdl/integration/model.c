@@ -25,6 +25,12 @@ int main(void)
         0x67u, 'v','e','r','s','i','o','n', 0x01u,
         0x67u, 'v','i','e','w','_','i','d', 0x66u, 'v','i','e','w','-','1'
     };
+    static const uint8_t cursor[] = {
+        0xa3u,
+        0x67u, 'v','e','r','s','i','o','n', 0x01u,
+        0x67u, 'v','i','e','w','_','i','d', 0x66u, 'v','i','e','w','-','1',
+        0x68u, 'p','o','s','i','t','i','o','n', 0x05u
+    };
     static const uint8_t snapshot_flush[] = {
         0xa2u,
         0x65u, 's','c','o','p','e', 0x68u, 's','n','a','p','s','h','o','t',
@@ -53,11 +59,24 @@ int main(void)
                    invalidate, sizeof(invalidate));
     assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
            CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    /* Snapshot messages are staged; none of their state is visible before
+     * the matching ui.flush commits the whole group. */
+    assert(model.version == 0u);
+    assert(model.snapshot_pending_valid != 0);
+    view = message(CDIN_FRONTEND_PROTOCOL_UI_CURSOR, cursor, sizeof(cursor));
+    assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    assert(model.cursor_position == 0u);
+    assert(model.has_cursor == 0);
     view = message(CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
                    snapshot_flush, sizeof(snapshot_flush));
     assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
            CDIN_FRONTEND_GUI_SDL_MODEL_OK);
     assert(action.acknowledge_sequence == 1u);
+    assert(model.version == 1u);
+    assert(model.has_cursor != 0);
+    assert(model.cursor_position == 5u);
+    assert(model.snapshot_pending_valid == 0);
     assert(action.request_lines != 0);
     assert(action.version == 1u);
 
