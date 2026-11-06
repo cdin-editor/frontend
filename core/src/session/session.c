@@ -392,7 +392,7 @@ cdin_frontend_protocol_status cdin_frontend_session_send_mouse(
         !session->driver || action == NULL || button == NULL ||
         (modifiers & ~(uint32_t)(CDIN_FRONTEND_MOD_CTRL | CDIN_FRONTEND_MOD_ALT |
                                   CDIN_FRONTEND_MOD_SHIFT | CDIN_FRONTEND_MOD_ALTGR)) != 0u ||
-        (target != NULL && (target[0] == '\\0' || strlen(target) > 128u)) ||
+        (target != NULL && (target[0] == '\0' || strlen(target) > 128u)) ||
         (has_position != 0 && (x > 32768u || y > 32768u))) {
         return CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT;
     }
