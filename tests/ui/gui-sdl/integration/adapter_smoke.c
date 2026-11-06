@@ -123,7 +123,9 @@ int main(void)
     /* Force a late startup failure after video initialization and window
      * creation. The adapter must destroy partial resources and release the
      * video subsystem before a subsequent successful create. */
-    assert(SDL_SetHint("SDL_RENDER_DRIVER", "cdin_nonexistent_renderer"));
+    assert(SDL_SetHintWithPriority("SDL_RENDER_DRIVER",
+                                    "cdin_nonexistent_renderer",
+                                    SDL_HINT_OVERRIDE));
     assert(cdin_frontend_gui_sdl_create(&config, &gui) ==
            CDIN_FRONTEND_GUI_SDL_SDL_ERROR);
     assert(gui == NULL);
