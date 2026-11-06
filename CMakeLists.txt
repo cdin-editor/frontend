@@ -196,6 +196,20 @@ if(BUILD_TESTING)
     add_test(NAME cdin_frontend_gui_sdl_model_tests
         COMMAND cdin_frontend_gui_sdl_model_tests)
 
+    if(CDIN_FRONTEND_BUILD_UI_SDL)
+        add_executable(cdin_frontend_gui_sdl_adapter_smoke
+            tests/ui/gui-sdl/integration/adapter_smoke.c)
+        target_link_libraries(cdin_frontend_gui_sdl_adapter_smoke PRIVATE
+            cdin::frontend_ui_gui_sdl SDL3::SDL3)
+        target_compile_features(cdin_frontend_gui_sdl_adapter_smoke PRIVATE c_std_11)
+        cdin_frontend_enable_test_strict(cdin_frontend_gui_sdl_adapter_smoke)
+        add_test(NAME cdin_frontend_gui_sdl_adapter_smoke
+            COMMAND cdin_frontend_gui_sdl_adapter_smoke)
+        set_tests_properties(cdin_frontend_gui_sdl_adapter_smoke PROPERTIES
+            ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software"
+            TIMEOUT 20)
+    endif()
+
     if(CDIN_FRONTEND_BUILD_UI_TUI)
         function(cdin_frontend_tui_test target source)
             add_executable(${target} ${source})
