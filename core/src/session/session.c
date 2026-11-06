@@ -135,7 +135,12 @@ cdin_frontend_capability_mask cdin_frontend_session_accepted_capabilities(
 
 int cdin_frontend_session_is_driver(const cdin_frontend_session *session)
 {
-    return session != NULL && session->state == CDIN_FRONTEND_SESSION_ATTACHED &&
+    /* A negotiated role event may arrive after attach is sent but before the
+     * initial snapshot flush commits the session as ATTACHED. Report the
+     * lease state as soon as it is known; mutating APIs remain ATTACHED-only. */
+    return session != NULL &&
+           (session->state == CDIN_FRONTEND_SESSION_ATTACH_SENT ||
+            session->state == CDIN_FRONTEND_SESSION_ATTACHED) &&
            session->driver != 0;
 }
 
