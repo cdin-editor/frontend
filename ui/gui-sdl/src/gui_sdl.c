@@ -65,7 +65,6 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_create(
     gui->height = config->height;
     gui->owns_video = (SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO) == 0u;
     if (config->window_title == NULL) {
-        config = config; /* keep the caller's immutable configuration untouched */
         gui->title[0] = '\0';
     } else {
         title_length = strlen(config->window_title);
@@ -119,7 +118,7 @@ static uint32_t input_modifiers(SDL_Keymod modifiers)
     if ((modifiers & SDL_KMOD_CTRL) != 0) value |= CDIN_FRONTEND_MOD_CTRL;
     if ((modifiers & SDL_KMOD_ALT) != 0) value |= CDIN_FRONTEND_MOD_ALT;
     if ((modifiers & SDL_KMOD_SHIFT) != 0) value |= CDIN_FRONTEND_MOD_SHIFT;
-    if ((modifiers & SDL_KMOD_ALTGR) != 0) value |= CDIN_FRONTEND_MOD_ALTGR;
+    if ((modifiers & SDL_KMOD_MODE) != 0) value |= CDIN_FRONTEND_MOD_ALTGR;
     return value;
 }
 
