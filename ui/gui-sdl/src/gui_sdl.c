@@ -285,6 +285,7 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
             case SDL_EVENT_MOUSE_BUTTON_UP: {
                 const char *button = mouse_button_name(event.button.button);
+                if (event.button.windowID != SDL_GetWindowID(gui->window)) break;
                 if (button != NULL &&
                     send_mouse_event(gui, event.button.down ? "press" : "release",
                                      button, SDL_GetModState(),
@@ -295,6 +296,7 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
                 break;
             }
             case SDL_EVENT_MOUSE_MOTION:
+                if (event.motion.windowID != SDL_GetWindowID(gui->window)) break;
                 if (send_mouse_event(gui, "move", "none", SDL_GetModState(),
                                      event.motion.x, event.motion.y) !=
                     CDIN_FRONTEND_GUI_SDL_OK) {
@@ -302,6 +304,7 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
                 }
                 break;
             case SDL_EVENT_MOUSE_WHEEL: {
+                if (event.wheel.windowID != SDL_GetWindowID(gui->window)) break;
                 float vertical = event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED
                     ? -event.wheel.y : event.wheel.y;
                 const char *button = vertical > 0.0f ? "wheel_up" :
