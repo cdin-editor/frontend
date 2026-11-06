@@ -116,6 +116,11 @@ int main(void)
     cdin_frontend_session_init(&session, &client, NULL, "gui-sdl-smoke");
     session.state = CDIN_FRONTEND_SESSION_ATTACHED;
     session.driver = 1;
+    /* This smoke bypasses the negotiated ATTACH handshake. Populate the
+     * public state that session_attach() normally establishes. */
+    session.units = "pixels";
+    session.width = 800u;
+    session.height = 600u;
     session.accepted_capabilities =
         cdin_frontend_gui_sdl_supported_capabilities();
     (void)snprintf(session.view_id, sizeof(session.view_id), "%s", "smoke-view");
