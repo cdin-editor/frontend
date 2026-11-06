@@ -49,6 +49,13 @@ static int renderer_event_matches_window(
            (window_id == 0u || window_id == SDL_GetWindowID(gui->window));
 }
 
+static int event_matches_window(
+    const cdin_frontend_gui_sdl *gui, SDL_WindowID window_id)
+{
+    return gui != NULL && gui->window != NULL &&
+           (window_id == 0u || window_id == SDL_GetWindowID(gui->window));
+}
+
 static cdin_frontend_gui_sdl_status recreate_renderer(cdin_frontend_gui_sdl *gui)
 {
     if (gui == NULL || gui->window == NULL) {
@@ -290,10 +297,15 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
     while (SDL_PollEvent(&event)) {
         switch (event.type) {
             case SDL_EVENT_QUIT:
-            case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
                 gui->quit_requested = 1;
                 break;
+            case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+                if (event_matches_window(gui, event.window.windowID)) {
+                    gui->quit_requested = 1;
+                }
+                break;
             case SDL_EVENT_KEY_DOWN:
+                if (!event_matches_window(gui, event.key.windowID)) break;
                 if (send_key_event(gui, &event.key,
                                    event.key.repeat ? "repeat" : "press") !=
                     CDIN_FRONTEND_GUI_SDL_OK) {
@@ -301,6 +313,7 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
                 }
                 break;
             case SDL_EVENT_KEY_UP:
+                if (!event_matches_window(gui, event.key.windowID)) break;
                 if (send_key_event(gui, &event.key, "release") !=
                     CDIN_FRONTEND_GUI_SDL_OK) {
                     return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
@@ -345,6 +358,7 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
                 break;
             }
             case SDL_EVENT_TEXT_INPUT:
+                if (!event_matches_window(gui, event.text.windowID)) break;
                 if (event.text.text != NULL && event.text.text[0] != '\0') {
                     cdin_frontend_protocol_status status =
                         cdin_frontend_session_send_text(
@@ -378,6 +392,7 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
                 break;
             case SDL_EVENT_WINDOW_FOCUS_GAINED:
             case SDL_EVENT_WINDOW_FOCUS_LOST: {
+                if (!event_matches_window(gui, event.window.windowID)) break;
                 int focused = event.type == SDL_EVENT_WINDOW_FOCUS_GAINED;
                 if (cdin_frontend_session_focus(gui->session, focused) !=
                     CDIN_FRONTEND_PROTOCOL_OK) {
@@ -387,6 +402,7 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
             }
             case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
             case SDL_EVENT_WINDOW_RESIZED: {
+                if (!event_matches_window(gui, event.window.windowID)) break;
                 int width = 0;
                 int height = 0;
                 if (!SDL_GetWindowSizeInPixels(gui->window, &width, &height) ||
@@ -410,18 +426,37 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
     return CDIN_FRONTEND_GUI_SDL_OK;
 }
 
+static cdin_frontend_gui_sdl_status request_line_window(
+    cdin_frontend_gui_sdl *gui, uint64_t first_line,
+    uint64_t line_count, uint64_t version)
+{
+    cdin_frontend_protocol_status status;
+    if (gui == NULL || version == 0u || version != gui->model.version) {
+        return CDIN_FRONTEND_GUI_SDL_INVALID_STATE;
+    }
+    if (cdin_frontend_gui_sdl_model_expect_lines(
+            &gui->model, first_line, line_count, version) !=
+        CDIN_FRONTEND_GUI_SDL_MODEL_OK) {
+        return CDIN_FRONTEND_GUI_SDL_INVALID_ARGUMENT;
+    }
+    status = cdin_frontend_session_request_lines(
+        gui->session, gui->model.view_id, first_line, line_count, version);
+    if (status != CDIN_FRONTEND_PROTOCOL_OK) {
+        gui->model.has_line_request = 0;
+        return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+    }
+    return CDIN_FRONTEND_GUI_SDL_OK;
+}
+
 cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_request_lines(
     cdin_frontend_gui_sdl *gui, uint64_t first_line)
 {
-    cdin_frontend_protocol_status status;
     if (gui == NULL || gui->model.version == 0u) {
         return CDIN_FRONTEND_GUI_SDL_INVALID_STATE;
     }
-    status = cdin_frontend_session_request_lines(
-        gui->session, gui->model.view_id, first_line,
-        (uint64_t)gui->model.visible_line_capacity, gui->model.version);
-    return status == CDIN_FRONTEND_PROTOCOL_OK
-        ? CDIN_FRONTEND_GUI_SDL_OK : CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+    return request_line_window(
+        gui, first_line, (uint64_t)gui->model.visible_line_capacity,
+        gui->model.version);
 }
 
 cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_apply_message(
@@ -462,10 +497,9 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_apply_message(
         }
         *out_committed = 1;
         if (action.request_lines) {
-            protocol_status = cdin_frontend_session_request_lines(
-                gui->session, gui->model.view_id,
-                action.first_line, action.line_count, action.version);
-            if (protocol_status != CDIN_FRONTEND_PROTOCOL_OK) {
+            if (request_line_window(
+                    gui, action.first_line, action.line_count,
+                    action.version) != CDIN_FRONTEND_GUI_SDL_OK) {
                 return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
             }
         }
