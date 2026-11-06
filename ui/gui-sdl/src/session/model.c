@@ -1,5 +1,6 @@
 #include "model.h"
 
+#include <stdio.h>
 #include <string.h>
 
 static cdin_frontend_protocol_status get_text(
