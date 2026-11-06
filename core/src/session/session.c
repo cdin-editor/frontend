@@ -236,7 +236,8 @@ cdin_frontend_protocol_status cdin_frontend_session_receive(
     } else if (out_message->type == CDIN_FRONTEND_PROTOCOL_DRIVER_ROLE_CHANGED) {
         int driver = 0;
         uint64_t epoch = 0u;
-        if (session->state != CDIN_FRONTEND_SESSION_ATTACHED ||
+        if ((session->state != CDIN_FRONTEND_SESSION_ATTACH_SENT &&
+             session->state != CDIN_FRONTEND_SESSION_ATTACHED) ||
             !cdin_frontend_capability_has(session->accepted_capabilities,
                                           CDIN_FRONTEND_CAP_DRIVER_ROLE_EVENTS) ||
             cdin_frontend_protocol_payload_get_bool(out_message->payload, out_message->payload_length,
@@ -262,6 +263,7 @@ cdin_frontend_protocol_status cdin_frontend_session_receive(
         }
     } else if (out_message->type == CDIN_FRONTEND_PROTOCOL_DETACH_ACK) {
         if (session->state != CDIN_FRONTEND_SESSION_DETACH_SENT) return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
+        session->driver = 0;
         session->state = CDIN_FRONTEND_SESSION_DETACHED;
     }
     return CDIN_FRONTEND_PROTOCOL_OK;
@@ -273,7 +275,9 @@ cdin_frontend_protocol_status cdin_frontend_session_attach(
 {
     payload_writer writer;
     cdin_frontend_protocol_status status;
-    if (session == NULL || session->state != CDIN_FRONTEND_SESSION_NEGOTIATED ||
+    if (session == NULL ||
+        (session->state != CDIN_FRONTEND_SESSION_NEGOTIATED &&
+         session->state != CDIN_FRONTEND_SESSION_DETACHED) ||
         session->session_id == 0u || width == 0u || height == 0u ||
         width > 32768u || height > 32768u || units == NULL ||
         (strcmp(units, "cells") != 0 && strcmp(units, "pixels") != 0) ||
