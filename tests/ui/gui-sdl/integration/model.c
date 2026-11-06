@@ -61,6 +61,14 @@ int main(void)
         0x67u, 'v','i','e','w','_','i','d', 0x66u, 'v','i','e','w','-','1',
         0x6au, 'f','i','r','s','t','_','l','i','n','e', 0x00u
     };
+    static const uint8_t lines_wrong_window[] = {
+        0xa4u,
+        0x65u, 'l','i','n','e','s', 0x81u,
+          0xa1u, 0x65u, 'b','y','t','e','s', 0x43u, 'w','r','g',
+        0x67u, 'v','e','r','s','i','o','n', 0x01u,
+        0x67u, 'v','i','e','w','_','i','d', 0x66u, 'v','i','e','w','-','1',
+        0x6au, 'f','i','r','s','t','_','l','i','n','e', 0x01u
+    };
     static const uint8_t response_flush[] = {
         0xa2u,
         0x65u, 's','c','o','p','e', 0x68u, 'r','e','s','p','o','n','s','e',
@@ -78,6 +86,12 @@ int main(void)
         0xa2u,
         0x65u, 's','c','o','p','e', 0x68u, 'r','e','s','p','o','n','s','e',
         0x68u, 's','e','q','u','e','n','c','e', 0x04u
+    };
+    static const uint8_t equal_snapshot_flush[] = {
+        0xa3u,
+        0x65u, 's','c','o','p','e', 0x68u, 's','n','a','p','s','h','o','t',
+        0x68u, 'r','e','v','i','s','i','o','n', 0x01u,
+        0x68u, 's','e','q','u','e','n','c','e', 0x05u
     };
     cdin_frontend_gui_sdl_model model;
     cdin_frontend_gui_sdl_model_action action;
@@ -121,6 +135,13 @@ int main(void)
     assert(model.snapshot_revision == 1u);
     assert(model.has_snapshot_revision != 0);
 
+    assert(cdin_frontend_gui_sdl_model_expect_lines(&model, 0u, 16u, 1u) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    view = message(CDIN_FRONTEND_PROTOCOL_VIEW_LINES,
+                   lines_wrong_window, sizeof(lines_wrong_window));
+    assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_STALE);
+    assert(model.pending_lines_valid == 0);
     view = message(CDIN_FRONTEND_PROTOCOL_VIEW_LINES, lines, sizeof(lines));
     assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
            CDIN_FRONTEND_GUI_SDL_MODEL_OK);
@@ -139,6 +160,8 @@ int main(void)
     /* A version-pinned response may already be staged while a newer
      * snapshot is in flight. If that snapshot is rejected as stale, the
      * response still belongs to the committed v1 model and must survive. */
+    assert(cdin_frontend_gui_sdl_model_expect_lines(&model, 0u, 16u, 1u) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
     view = message(CDIN_FRONTEND_PROTOCOL_VIEW_LINES,
                    lines_v1_replacement, sizeof(lines_v1_replacement));
     assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
@@ -173,6 +196,14 @@ int main(void)
     assert(model.visible.count == 1u);
     assert(model.visible.lines[0].length == 3u);
     assert(memcmp(model.visible.lines[0].bytes, "xyz", 3u) == 0);
+
+    /* Snapshot revision equality is not a new revision and must not commit. */
+    view = message(CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
+                   equal_snapshot_flush, sizeof(equal_snapshot_flush));
+    assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_STALE);
+    assert(action.acknowledge_sequence == 5u);
+    assert(model.snapshot_revision == 1u);
 
     return 0;
 }
