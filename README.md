@@ -92,15 +92,19 @@ is enabled, `cdin::frontend_ui_tui` with public headers. When
 `CDIN_FRONTEND_BUILD_UI_SDL=ON` and SDL3 is available, it also exports
 `cdin::frontend_ui_gui_sdl`; the preview executable remains a separate
 development app. An exported adapter is not a claim that the full desktop
-editor is release-ready. Frontend PR #17 now passes its full native/Pipeline
-matrix and the SDL3 package job: [CI run 42295241142](https://github.com/cdin-editor/frontend/actions/runs/42295241142)
-passed the model and adapter tests under AddressSanitizer, installed the
-public target and built a clean-prefix consumer. CDIN's separate live
-Backend/Runtime composition smoke is not a Frontend-owned test and remains
-pending in CDIN PR #110. The renderer is still an ASCII/debug-text baseline;
-full text shaping, bidi/Persian rendering, IME, complete PaneTree presentation
-and product-ready desktop behavior remain open. See [Build and test](docs/development/build-and-test.md)
-and the [GUI-SDL implementation](docs/frontends/gui-sdl.md).
+editor is release-ready. Frontend PR #17 was merged at
+[`fea9560`](https://github.com/cdin-editor/frontend/commit/fea9560d60085aa4d579efc6a584d90349ee4ac0).
+A follow-up review/fix branch now covers ConPTY console-handle acquisition,
+strict snapshot revisions, request-correlated visible-line responses, GUI
+pixel-session validation, foreign-window SDL event filtering and regression
+coverage; its native/SDL CI is pending before it is integrated. CDIN PR #110's
+GUI-SDL live Backend/Runtime smoke passed on Windows, but its separate
+TUI ConPTY smoke exposed redirected standard handles being treated as console
+handles; the Frontend follow-up addresses that adapter boundary. The renderer
+is still an ASCII/debug-text baseline; full text shaping, bidi/Persian rendering,
+IME, complete PaneTree presentation and product-ready desktop behavior remain
+open. See [Build and test](docs/development/build-and-test.md) and the
+[GUI-SDL implementation](docs/frontends/gui-sdl.md).
 
 ## Documentation
 
