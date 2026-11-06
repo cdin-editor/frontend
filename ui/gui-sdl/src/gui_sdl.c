@@ -110,7 +110,7 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_create(
         (void)snprintf(gui->title, sizeof(gui->title), "CDIN — GUI-SDL");
     }
     if (cdin_frontend_gui_sdl_model_init(
-            &gui->model, gui->session->view_id,
+            &gui->model, "",
             config->visible_line_capacity == 0u ? 32u : config->visible_line_capacity) !=
         CDIN_FRONTEND_GUI_SDL_MODEL_OK) {
         free(gui);

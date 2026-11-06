@@ -17,13 +17,23 @@ static cdin_frontend_protocol_status get_text(
     return status;
 }
 
-static int same_view(const cdin_frontend_gui_sdl_model *model,
+static int same_view(cdin_frontend_gui_sdl_model *model,
                      const cdin_frontend_protocol_message_view *message)
 {
     char view_id[64];
-    return get_text(message, "view_id", view_id, sizeof(view_id)) ==
-               CDIN_FRONTEND_PROTOCOL_OK &&
-           strcmp(view_id, model->view_id) == 0;
+    size_t length;
+    if (get_text(message, "view_id", view_id, sizeof(view_id)) !=
+        CDIN_FRONTEND_PROTOCOL_OK) return 0;
+    if (model->view_id[0] == '\\0') {
+        /* ATTACH identifies the Frontend viewport, not a Runtime document
+         * view. Bind the single-view SDL baseline to the first semantic view
+         * actually published by Runtime instead of assuming both IDs match. */
+        length = strlen(view_id);
+        if (length == 0u || length >= sizeof(model->view_id)) return 0;
+        memcpy(model->view_id, view_id, length + 1u);
+        return 1;
+    }
+    return strcmp(view_id, model->view_id) == 0;
 }
 
 static void snapshot_begin(cdin_frontend_gui_sdl_model *model)
@@ -299,11 +309,11 @@ cdin_frontend_gui_sdl_model_status cdin_frontend_gui_sdl_model_init(
         return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
     }
     length = strlen(view_id);
-    if (length == 0u || length >= sizeof(model->view_id)) {
+    if (length >= sizeof(model->view_id)) {
         return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
     }
     memset(model, 0, sizeof(*model));
-    memcpy(model->view_id, view_id, length + 1u);
+    if (length != 0u) memcpy(model->view_id, view_id, length + 1u);
     model->visible_line_capacity = visible_line_capacity;
     model->needs_lines = 1;
     (void)snprintf(model->theme, sizeof(model->theme), "default");
