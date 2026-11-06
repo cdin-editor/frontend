@@ -27,6 +27,22 @@ typedef struct cdin_frontend_gui_sdl_line_window {
     cdin_frontend_gui_sdl_line lines[CDIN_FRONTEND_GUI_SDL_MAX_VISIBLE_LINES];
 } cdin_frontend_gui_sdl_line_window;
 
+typedef struct cdin_frontend_gui_sdl_snapshot_state {
+    uint64_t version;
+    uint64_t cursor_position;
+    uint64_t selection_anchor;
+    uint64_t selection_caret;
+    uint64_t layout_revision;
+    int has_cursor;
+    int has_selection;
+    int has_layout;
+    int needs_lines;
+    char theme[64];
+    char mode[32];
+    char status[128];
+    char notification[128];
+} cdin_frontend_gui_sdl_snapshot_state;
+
 typedef struct cdin_frontend_gui_sdl_model {
     char view_id[64];
     uint64_t version;
@@ -38,9 +54,8 @@ typedef struct cdin_frontend_gui_sdl_model {
     int has_selection;
     int has_layout;
     int needs_lines;
-    uint64_t pending_version;
-    uint64_t pending_cursor_position;
-    int pending_cursor_valid;
+    cdin_frontend_gui_sdl_snapshot_state staged_snapshot;
+    int snapshot_pending_valid;
     cdin_frontend_gui_sdl_line_window visible;
     cdin_frontend_gui_sdl_line_window pending;
     int pending_lines_valid;
