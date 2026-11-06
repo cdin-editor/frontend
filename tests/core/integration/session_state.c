@@ -113,6 +113,7 @@ int main(void)
     cdin_frontend_protocol_io io;
     cdin_frontend_client client;
     cdin_frontend_session session;
+    cdin_frontend_session incomplete_session;
     cdin_frontend_protocol_message_view message;
     cdin_frontend_input_event input_event;
     uint8_t frame_buffer[512];
@@ -144,6 +145,11 @@ int main(void)
 
     assert(cdin_frontend_client_init(&client, &io, frame_buffer, sizeof(frame_buffer), 256u) ==
            CDIN_FRONTEND_PROTOCOL_OK);
+    cdin_frontend_session_init(&incomplete_session, &client, NULL, "incomplete");
+    incomplete_session.state = CDIN_FRONTEND_SESSION_ATTACHED;
+    incomplete_session.driver = 1;
+    assert(cdin_frontend_session_resize(&incomplete_session, 800u, 600u) ==
+           CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
     cdin_frontend_session_init(&session, &client, NULL, "tui");
     assert(cdin_frontend_session_set_capabilities(
         &session, CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_MOUSE) |

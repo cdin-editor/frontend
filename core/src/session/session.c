@@ -493,7 +493,11 @@ cdin_frontend_protocol_status cdin_frontend_session_resize(
 {
     payload_writer writer;
     if (session == NULL || session->state != CDIN_FRONTEND_SESSION_ATTACHED || !session->driver ||
-        width == 0u || height == 0u || width > 32768u || height > 32768u) return CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT;
+        session->units == NULL ||
+        (strcmp(session->units, "cells") != 0 && strcmp(session->units, "pixels") != 0) ||
+        width == 0u || height == 0u || width > 32768u || height > 32768u) {
+        return CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT;
+    }
     memset(&writer, 0, sizeof(writer));
     write_head(&writer, 5u, 3u);
     write_key(&writer, "units"); write_text(&writer, session->units, strlen(session->units));
