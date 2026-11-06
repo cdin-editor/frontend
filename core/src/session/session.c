@@ -369,6 +369,73 @@ cdin_frontend_protocol_status cdin_frontend_session_send_key(
     return send_payload(session, CDIN_FRONTEND_PROTOCOL_INPUT_KEY, &writer);
 }
 
+cdin_frontend_protocol_status cdin_frontend_session_send_mouse(
+    cdin_frontend_session *session,
+    const char *action,
+    const char *button,
+    uint32_t modifiers,
+    const char *target,
+    uint32_t x,
+    uint32_t y,
+    int has_position)
+{
+    static const char *const actions[] = { "press", "release", "move", "scroll" };
+    static const char *const buttons[] = {
+        "none", "left", "middle", "right", "wheel_up", "wheel_down", "x1", "x2"
+    };
+    payload_writer writer;
+    uint64_t modifier_count = 0u;
+    size_t index;
+    int action_valid = 0;
+    int button_valid = 0;
+    if (session == NULL || session->state != CDIN_FRONTEND_SESSION_ATTACHED ||
+        !session->driver || action == NULL || button == NULL ||
+        (modifiers & ~(uint32_t)(CDIN_FRONTEND_MOD_CTRL | CDIN_FRONTEND_MOD_ALT |
+                                  CDIN_FRONTEND_MOD_SHIFT | CDIN_FRONTEND_MOD_ALTGR)) != 0u ||
+        (target != NULL && (target[0] == '\\0' || strlen(target) > 128u)) ||
+        (has_position != 0 && (x > 32768u || y > 32768u))) {
+        return CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT;
+    }
+    if (!cdin_frontend_capability_has(session->accepted_capabilities,
+                                      CDIN_FRONTEND_CAP_MOUSE)) {
+        return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
+    }
+    for (index = 0u; index < sizeof(actions) / sizeof(actions[0]); ++index) {
+        if (strcmp(action, actions[index]) == 0) action_valid = 1;
+    }
+    for (index = 0u; index < sizeof(buttons) / sizeof(buttons[0]); ++index) {
+        if (strcmp(button, buttons[index]) == 0) button_valid = 1;
+    }
+    if (!action_valid || !button_valid) return CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT;
+
+    if ((modifiers & CDIN_FRONTEND_MOD_CTRL) != 0u) modifier_count++;
+    if ((modifiers & CDIN_FRONTEND_MOD_ALT) != 0u) modifier_count++;
+    if ((modifiers & CDIN_FRONTEND_MOD_ALTGR) != 0u) modifier_count++;
+    if ((modifiers & CDIN_FRONTEND_MOD_SHIFT) != 0u) modifier_count++;
+
+    /* Canonical CBOR key ordering: action, button, target, position, modifiers. */
+    memset(&writer, 0, sizeof(writer));
+    write_head(&writer, 5u, 3u + (target != NULL ? 1u : 0u) +
+                            (has_position != 0 ? 1u : 0u));
+    write_key(&writer, "action"); write_text(&writer, action, strlen(action));
+    write_key(&writer, "button"); write_text(&writer, button, strlen(button));
+    if (target != NULL) {
+        write_key(&writer, "target"); write_text(&writer, target, strlen(target));
+    }
+    if (has_position != 0) {
+        write_key(&writer, "position");
+        write_head(&writer, 5u, 2u);
+        write_key(&writer, "x"); write_uint(&writer, x);
+        write_key(&writer, "y"); write_uint(&writer, y);
+    }
+    write_key(&writer, "modifiers"); write_head(&writer, 4u, modifier_count);
+    if ((modifiers & CDIN_FRONTEND_MOD_CTRL) != 0u) write_text(&writer, "ctrl", 4u);
+    if ((modifiers & CDIN_FRONTEND_MOD_ALT) != 0u) write_text(&writer, "alt", 3u);
+    if ((modifiers & CDIN_FRONTEND_MOD_ALTGR) != 0u) write_text(&writer, "altgr", 5u);
+    if ((modifiers & CDIN_FRONTEND_MOD_SHIFT) != 0u) write_text(&writer, "shift", 5u);
+    return send_payload(session, CDIN_FRONTEND_PROTOCOL_INPUT_MOUSE, &writer);
+}
+
 cdin_frontend_protocol_status cdin_frontend_session_send_text(
     cdin_frontend_session *session, const uint8_t *text, size_t text_length)
 {
