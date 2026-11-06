@@ -118,7 +118,7 @@ int main(void)
     uint8_t frame_buffer[512];
     uint8_t paste[] = { 'a', 0u, 0xffu };
     size_t output_mark;
-    uint8_t mouse_position[64];
+    const uint8_t *mouse_position = NULL;
     size_t mouse_position_length = 0u;
     uint64_t mouse_x = 0u;
     uint64_t mouse_y = 0u;
@@ -195,7 +195,7 @@ int main(void)
         assert(strcmp((char *)frame_buffer, "press") == 0);
         assert(cdin_frontend_protocol_payload_get_raw(
             mouse_message.payload, mouse_message.payload_length,
-            "position", (const uint8_t **)&mouse_position, &mouse_position_length) ==
+            "position", &mouse_position, &mouse_position_length) ==
             CDIN_FRONTEND_PROTOCOL_OK);
         assert(cdin_frontend_protocol_payload_get_uint(
             mouse_position, mouse_position_length, "x", &mouse_x) ==
