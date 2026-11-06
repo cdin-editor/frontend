@@ -307,6 +307,16 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_apply_message(
     model_status = cdin_frontend_gui_sdl_model_apply(
         &gui->model, message, &action);
     if (model_status == CDIN_FRONTEND_GUI_SDL_MODEL_STALE) {
+        /* A stale snapshot still owns an ACK sequence. Release its Backend
+         * queue entry even though none of its semantic state was committed. */
+        if (message->type == CDIN_FRONTEND_PROTOCOL_UI_FLUSH) {
+            protocol_status = cdin_frontend_session_ack(
+                gui->session, action.acknowledge_sequence);
+            if (protocol_status != CDIN_FRONTEND_PROTOCOL_OK) {
+                return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+            }
+            *out_committed = 1;
+        }
         return CDIN_FRONTEND_GUI_SDL_OK;
     }
     if (model_status != CDIN_FRONTEND_GUI_SDL_MODEL_OK) {
