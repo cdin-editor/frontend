@@ -1,12 +1,12 @@
 # Implementation and release status
 
-**Source snapshot:** `cdin-editor/frontend` Foundation 1.0.0 working tree,
-reviewed 2026-11-05. The POSIX terminal-ownership/readiness correction from
-[PR #5](https://github.com/cdin-editor/frontend/pull/5) is merged at
-`82dd7a0ed1f7794a0d76c210c30bf8880b2db967`. The post-merge native matrix is
-tracked separately from the PR merge state. This status describes code present
-in the inspected source tree and does not promote accepted Spec requirements
-into implementation claims.
+**Source snapshot:** Frontend PR #17 head
+`552eedd14e3971e2b39d706804d4af57f8b2dc38`, inspected 2026-11-07.
+[CI run 42295241142](https://github.com/cdin-editor/frontend/actions/runs/42295241142)
+passed Linux/macOS/Windows and Pipeline quality, the GUI-SDL AddressSanitizer
+suite, install/export and clean-prefix consumer. This status describes code
+present in the inspected source tree and does not promote accepted Spec
+requirements into implementation claims.
 
 ## 1. Release scope
 
@@ -19,13 +19,14 @@ Foundation 1.0.0 stabilizes and installs the UI-neutral C Core API:
 - snapshot revision, flush sequence and document-version bookkeeping;
 - input value types and Frontend-owned diagnostics facade.
 
-The installed CMake package always exports `cdin::frontend_core` and, when
-`CDIN_FRONTEND_BUILD_UI_TUI=ON`, also exports the reusable
-`cdin::frontend_ui_tui` adapter library and its public headers. The independent
-wire codec/client/session implement shared Protocol 1.0.0. Exporting the TUI
-library makes it consumable by CDIN; it does not promote the preview app or
-FE-019 loop to product-ready status. Headless remains a build/test-only trace
-primitive; GUI-SDL has a smoke-preview executable but not a production adapter.
+The installed CMake package exports `cdin::frontend_core`; it also exports
+`cdin::frontend_ui_tui` when TUI is enabled and
+`cdin::frontend_ui_gui_sdl` when `CDIN_FRONTEND_BUILD_UI_SDL=ON`. The SDL
+adapter is a reusable static library separate from its preview application.
+The independent wire codec/client/session implement shared Protocol 1.0.0.
+Exporting an adapter makes it consumable by CDIN; it does not make the preview
+or full interactive editor product-ready. Headless remains a build/test-only
+trace primitive.
 
 Foundation 1.0.0 and the Protocol 1.0.0 Core codec/session contract are versioned and tested at source level. This is **not** a claim that the full Frontend product or complete CDIN application is ready.
 
@@ -47,7 +48,7 @@ Foundation 1.0.0 and the Protocol 1.0.0 Core codec/session contract are versione
 | TUI event loop/application | `PARTIAL` | `cdin::frontend_ui_tui` and its public headers are installed/exported. The transport-agnostic coordinator has bounded drains and now keeps servicing already-ready Backend work across multiple turns when termination is latched; it suppresses new terminal input during that drain. PR #5 adds regression coverage, but its native matrix has not yet passed. The preview remains read-only, and CDIN still owns the combined terminal/Backend/resize/signal wait bridge and live Backend pump. Editor commands remain Runtime-owned. |
 | TUI text fidelity | `PARTIAL — GRAPHEME WIDTH FOLLOW-UP` | [Frontend PR #6](https://github.com/cdin-editor/frontend/pull/6) groups combining marks, variation selectors/modifiers, regional-indicator pairs and ZWJ emoji sequences for cell-width/cursor calculation while preserving source bytes. Full UAX #29 segmentation, shaping, bidi/Persian visual ordering and terminal/font matrices remain open. PR #6 is rebased conflict-free on the PR #5 merge commit; current native/quality CI is pending. |
 | Headless reference frontend | `PARTIAL` | Bounded validated trace recorder/replayer builds by default; live peer wiring, scripted input harness and shared-vector runner remain pending. Backend's separate test harness is not this adapter. |
-| SDL desktop frontend | `PARTIAL — preview only` | Isolated SDL3 3.2+ smoke-preview executable and event loop; production text/font/layout/rendering, semantic widgets, capabilities and live Protocol integration remain. |
+| SDL desktop frontend | `PARTIAL — installable adapter foundation` | `cdin::frontend_ui_gui_sdl` exports public headers/library, forwards physical input and focus/resize, and has a bounded semantic line model. Frontend run 42295241142 passed SDL AddressSanitizer tests and clean-prefix package consumer. Renderer/text/pane/IME capabilities are incomplete; live CDIN Backend/Runtime composition is a separate unverified gate. |
 | Concrete transport | `NOT IMPLEMENTED` | `cdin` composition root must supply transport construction, readiness and lifecycle. |
 | Live Backend/Runtime/Kernel E2E through a Frontend adapter | `NOT IMPLEMENTED` | Backend ↔ Runtime ↔ Kernel has a successful in-process smoke path, but no production Frontend adapter/transport E2E. |
 | Diagnostics | `IMPLEMENTED WITH DEPENDENCY GATE` | Facade uses pinned `m-mdy-m/log.c` 0.1.0. Local isolated tests used a test-only ABI shim; production dependency build was not run here. |
@@ -76,7 +77,7 @@ See the detailed [Foundation 1.0.0 validation record](FOUNDATION-1.0.0-VALIDATIO
   model state, wire codec, blocking and async Protocol clients, session lifecycle, Headless trace
   record/replay and TUI rendering/model/input/session/scroll/event loop.
 - Core/UI and dependency boundary checker: PASS, including the SDL-only-in-GUI-SDL rule.
-- TUI read-only preview: the earlier POSIX PTY launch/render/quit/terminal-restore smoke passed before the nonblocking-read follow-up. Post-merge macOS CI later exposed a timeout in the terminal PTY regression and CodeQL review identified shared-stdin/stdout nonblocking and preview-EAGAIN issues. [PR #5](https://github.com/cdin-editor/frontend/pull/5) corrects those paths; its current native Linux/macOS/Windows matrix must pass before this terminal contract is treated as verified. GUI-SDL source is present but could not be compiled because SDL3 3.2+ is unavailable in the inspected environment. See [UI preview validation](validation-ui-preview.md).
+- TUI read-only preview remains separate from the installed reusable TUI adapter and CDIN's experimental TUI process path. Native POSIX and Windows integration acceptance is owned jointly with CDIN and remains release-gated. GUI-SDL source was built with pinned SDL3 3.4.16 in Frontend CI run 42295241142; its model/adapter tests passed under AddressSanitizer and the installed clean-prefix consumer linked successfully. The renderer remains an ASCII/debug-text baseline. See [UI preview validation](validation-ui-preview.md).
 - CMake install/export plus a separate consumer configure/build/run: PASS for
   the Foundation Core package in the earlier validation record using a local
   test-stub logger package. The new clean-prefix consumer additionally checks

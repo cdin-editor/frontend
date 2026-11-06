@@ -92,12 +92,14 @@ is enabled, `cdin::frontend_ui_tui` with public headers. When
 `CDIN_FRONTEND_BUILD_UI_SDL=ON` and SDL3 is available, it also exports
 `cdin::frontend_ui_gui_sdl`; the preview executable remains a separate
 development app. An exported adapter is not a claim that the full desktop
-editor is release-ready. The current GUI-SDL PR adds a bounded semantic model,
-snapshot/response flush handling and initial input forwarding, while the
-renderer remains an ASCII/debug-text baseline. Its SDL3 adapter smoke currently
-fails in CI with a segmentation fault, so clean-prefix consumer verification
-has not run on that head. The PR stays Draft until the crash is diagnosed and
-all package checks pass. See [Build and test](docs/development/build-and-test.md)
+editor is release-ready. Frontend PR #17 now passes its full native/Pipeline
+matrix and the SDL3 package job: [CI run 42295241142](https://github.com/cdin-editor/frontend/actions/runs/42295241142)
+passed the model and adapter tests under AddressSanitizer, installed the
+public target and built a clean-prefix consumer. CDIN's separate live
+Backend/Runtime composition smoke is not a Frontend-owned test and remains
+pending in CDIN PR #110. The renderer is still an ASCII/debug-text baseline;
+full text shaping, bidi/Persian rendering, IME, complete PaneTree presentation
+and product-ready desktop behavior remain open. See [Build and test](docs/development/build-and-test.md)
 and the [GUI-SDL implementation](docs/frontends/gui-sdl.md).
 
 ## Documentation
