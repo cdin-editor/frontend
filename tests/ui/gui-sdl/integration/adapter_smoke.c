@@ -8,6 +8,12 @@
 #include <stdio.h>
 #include <string.h>
 
+static void trace_step(const char *name)
+{
+    (void)fprintf(stderr, "[gui-sdl-smoke] %s\\n", name);
+    (void)fflush(stderr);
+}
+
 typedef struct fake_stream {
     uint8_t output[8192];
     size_t output_length;
@@ -98,6 +104,7 @@ int main(void)
     SDL_Event event;
     int quit_requested = 0;
 
+    trace_step("begin");
     memset(&stream, 0, sizeof(stream));
     memset(&io, 0, sizeof(io));
     io.context = &stream;
@@ -123,18 +130,23 @@ int main(void)
     /* Force a late startup failure after video initialization and window
      * creation. The adapter must destroy partial resources and release the
      * video subsystem before a subsequent successful create. */
+    trace_step("force renderer startup failure");
     assert(SDL_SetHintWithPriority("SDL_RENDER_DRIVER",
                                     "cdin_nonexistent_renderer",
                                     SDL_HINT_OVERRIDE));
     assert(cdin_frontend_gui_sdl_create(&config, &gui) ==
            CDIN_FRONTEND_GUI_SDL_SDL_ERROR);
+    trace_step("renderer startup failure returned");
     assert(gui == NULL);
     assert((SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO) == 0u);
+    trace_step("partial startup resources released");
     SDL_ResetHint("SDL_RENDER_DRIVER");
 
+    trace_step("create normal adapter");
     assert(cdin_frontend_gui_sdl_create(&config, &gui) ==
            CDIN_FRONTEND_GUI_SDL_OK);
     assert(gui != NULL);
+    trace_step("render initial frame");
     assert(cdin_frontend_gui_sdl_render(gui) == CDIN_FRONTEND_GUI_SDL_OK);
 
     /* SDL_PushEvent supplies a real SDL input event through the same adapter
@@ -147,14 +159,19 @@ int main(void)
     event.button.down = true;
     event.button.x = 12.0f;
     event.button.y = 21.0f;
+    trace_step("push mouse event");
     assert(SDL_PushEvent(&event));
+    trace_step("pump mouse event");
     assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
            CDIN_FRONTEND_GUI_SDL_OK);
     assert(quit_requested == 0);
     assert(stream.output_length != 0u);
     assert(output_contains_expected_mouse(&stream));
+    trace_step("mouse protocol frame verified");
 
+    trace_step("destroy adapter");
     cdin_frontend_gui_sdl_destroy(gui);
     assert((SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO) == 0u);
+    trace_step("complete");
     return 0;
 }

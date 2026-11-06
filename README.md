@@ -88,9 +88,17 @@ ctest --test-dir build-test --output-on-failure
 
 The shim is not a production dependency and must never be used for a release
 artifact. Production installation exports `cdin::frontend_core` and, when TUI
-is enabled, `cdin::frontend_ui_tui` with public headers. The TUI library export
-does not mean its preview is a complete connected editor. CI verifies the
-installed targets from a clean prefix. See [Build and test](docs/development/build-and-test.md).
+is enabled, `cdin::frontend_ui_tui` with public headers. When
+`CDIN_FRONTEND_BUILD_UI_SDL=ON` and SDL3 is available, it also exports
+`cdin::frontend_ui_gui_sdl`; the preview executable remains a separate
+development app. An exported adapter is not a claim that the full desktop
+editor is release-ready. The current GUI-SDL PR adds a bounded semantic model,
+snapshot/response flush handling and initial input forwarding, while the
+renderer remains an ASCII/debug-text baseline. Its SDL3 adapter smoke currently
+fails in CI with a segmentation fault, so clean-prefix consumer verification
+has not run on that head. The PR stays Draft until the crash is diagnosed and
+all package checks pass. See [Build and test](docs/development/build-and-test.md)
+and the [GUI-SDL implementation](docs/frontends/gui-sdl.md).
 
 ## Documentation
 

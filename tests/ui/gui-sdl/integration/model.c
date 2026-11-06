@@ -61,6 +61,19 @@ int main(void)
         0x65u, 's','c','o','p','e', 0x68u, 'r','e','s','p','o','n','s','e',
         0x68u, 's','e','q','u','e','n','c','e', 0x02u
     };
+    static const uint8_t lines_v1_replacement[] = {
+        0xa4u,
+        0x65u, 'l','i','n','e','s', 0x81u,
+          0xa1u, 0x65u, 'b','y','t','e','s', 0x43u, 'x','y','z',
+        0x67u, 'v','e','r','s','i','o','n', 0x01u,
+        0x67u, 'v','i','e','w','_','i','d', 0x66u, 'v','i','e','w','-','1',
+        0x6au, 'f','i','r','s','t','_','l','i','n','e', 0x00u
+    };
+    static const uint8_t response_flush_v4[] = {
+        0xa2u,
+        0x65u, 's','c','o','p','e', 0x68u, 'r','e','s','p','o','n','s','e',
+        0x68u, 's','e','q','u','e','n','c','e', 0x04u
+    };
     cdin_frontend_gui_sdl_model model;
     cdin_frontend_gui_sdl_model_action action;
     cdin_frontend_protocol_message_view view;
@@ -109,6 +122,16 @@ int main(void)
     assert(memcmp(model.visible.lines[0].bytes, "abc", 3u) == 0);
     assert(model.needs_lines == 0);
 
+    /* A version-pinned response may already be staged while a newer
+     * snapshot is in flight. If that snapshot is rejected as stale, the
+     * response still belongs to the committed v1 model and must survive. */
+    view = message(CDIN_FRONTEND_PROTOCOL_VIEW_LINES,
+                   lines_v1_replacement, sizeof(lines_v1_replacement));
+    assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    assert(model.pending_lines_valid != 0);
+    assert(memcmp(model.pending.lines[0].bytes, "xyz", 3u) == 0);
+
     /* A newer document version may be staged, but an older snapshot revision
      * must not replace committed data or its line cache. Its flush remains
      * acknowledgeable so the Backend can release the stale queue group. */
@@ -117,7 +140,7 @@ int main(void)
     assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
            CDIN_FRONTEND_GUI_SDL_MODEL_OK);
     assert(model.version == 1u);
-    assert(model.visible.count == 1u);
+    assert(model.pending_lines_valid != 0);
     view = message(CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
                    stale_snapshot_flush, sizeof(stale_snapshot_flush));
     assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
@@ -126,8 +149,16 @@ int main(void)
     assert(model.version == 1u);
     assert(model.snapshot_revision == 1u);
     assert(model.snapshot_pending_valid == 0);
+    assert(model.pending_lines_valid != 0);
+
+    view = message(CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
+                   response_flush_v4, sizeof(response_flush_v4));
+    assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    assert(action.acknowledge_sequence == 4u);
     assert(model.visible.count == 1u);
-    assert(memcmp(model.visible.lines[0].bytes, "abc", 3u) == 0);
+    assert(model.visible.lines[0].length == 3u);
+    assert(memcmp(model.visible.lines[0].bytes, "xyz", 3u) == 0);
 
     return 0;
 }
