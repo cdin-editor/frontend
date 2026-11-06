@@ -77,6 +77,18 @@ cdin_frontend_protocol_status cdin_frontend_session_send_key(
     const char *key,
     uint32_t modifiers,
     const char *action);
+/* Mouse is optional: callers must negotiate CDIN_FRONTEND_CAP_MOUSE first.
+ * Position uses logical window coordinates; omit the position map when
+ * has_position is zero. target is an optional protocol-defined text target. */
+cdin_frontend_protocol_status cdin_frontend_session_send_mouse(
+    cdin_frontend_session *session,
+    const char *action,
+    const char *button,
+    uint32_t modifiers,
+    const char *target,
+    uint32_t x,
+    uint32_t y,
+    int has_position);
 cdin_frontend_protocol_status cdin_frontend_session_send_text(
     cdin_frontend_session *session,
     const uint8_t *text,
