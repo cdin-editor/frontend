@@ -44,11 +44,8 @@ static void snapshot_begin(cdin_frontend_gui_sdl_model *model)
     memset(staged, 0, sizeof(*staged));
     staged->version = model->version;
     staged->cursor_position = model->cursor_position;
-    staged->selection_anchor = model->selection_anchor;
-    staged->selection_caret = model->selection_caret;
     staged->layout_revision = model->layout_revision;
     staged->has_cursor = model->has_cursor;
-    staged->has_selection = model->has_selection;
     staged->has_layout = model->has_layout;
     staged->needs_lines = model->needs_lines;
     memcpy(staged->theme, model->theme, sizeof(staged->theme));
@@ -64,11 +61,8 @@ static void snapshot_commit(cdin_frontend_gui_sdl_model *model)
     int version_changed = staged->version != model->version;
     model->version = staged->version;
     model->cursor_position = staged->cursor_position;
-    model->selection_anchor = staged->selection_anchor;
-    model->selection_caret = staged->selection_caret;
     model->layout_revision = staged->layout_revision;
     model->has_cursor = staged->has_cursor;
-    model->has_selection = staged->has_selection;
     model->has_layout = staged->has_layout;
     model->needs_lines = staged->needs_lines;
     memcpy(model->theme, staged->theme, sizeof(model->theme));
@@ -96,7 +90,6 @@ static cdin_frontend_gui_sdl_model_status apply_invalidate(
     if (version < staged->version) return CDIN_FRONTEND_GUI_SDL_MODEL_STALE;
     if (version != staged->version) {
         staged->has_cursor = 0;
-        staged->has_selection = 0;
     }
     staged->version = version;
     staged->needs_lines = 1;
@@ -127,31 +120,6 @@ static cdin_frontend_gui_sdl_model_status apply_cursor(
     return CDIN_FRONTEND_GUI_SDL_MODEL_OK;
 }
 
-static cdin_frontend_gui_sdl_model_status apply_selection(
-    cdin_frontend_gui_sdl_model *model,
-    const cdin_frontend_protocol_message_view *message)
-{
-    cdin_frontend_gui_sdl_snapshot_state *staged = &model->staged_snapshot;
-    uint64_t version = 0u;
-    uint64_t anchor = 0u;
-    uint64_t caret = 0u;
-    if (!same_view(model, message)) return CDIN_FRONTEND_GUI_SDL_MODEL_STALE;
-    if (cdin_frontend_protocol_payload_get_uint(
-            message->payload, message->payload_length, "version", &version) !=
-            CDIN_FRONTEND_PROTOCOL_OK ||
-        cdin_frontend_protocol_payload_get_uint(
-            message->payload, message->payload_length, "anchor", &anchor) !=
-            CDIN_FRONTEND_PROTOCOL_OK ||
-        cdin_frontend_protocol_payload_get_uint(
-            message->payload, message->payload_length, "caret", &caret) !=
-            CDIN_FRONTEND_PROTOCOL_OK) return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
-    if (version < staged->version) return CDIN_FRONTEND_GUI_SDL_MODEL_STALE;
-    staged->selection_anchor = anchor;
-    staged->selection_caret = caret;
-    staged->has_selection = 1;
-    return CDIN_FRONTEND_GUI_SDL_MODEL_OK;
-}
-
 static cdin_frontend_gui_sdl_model_status apply_lines(
     cdin_frontend_gui_sdl_model *model,
     const cdin_frontend_protocol_message_view *message)
@@ -174,7 +142,11 @@ static cdin_frontend_gui_sdl_model_status apply_lines(
             &array, &array_length) != CDIN_FRONTEND_PROTOCOL_OK ||
         cdin_frontend_protocol_array_count(array, array_length, &count) !=
             CDIN_FRONTEND_PROTOCOL_OK) return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
-    if (version != model->version || version == 0u) {
+    if (version != model->version || version == 0u ||
+        model->has_line_request == 0 ||
+        version != model->requested_version ||
+        first_line != model->requested_first_line ||
+        count > model->requested_line_count) {
         return CDIN_FRONTEND_GUI_SDL_MODEL_STALE;
     }
     if (count > model->visible_line_capacity ||
@@ -265,8 +237,9 @@ static cdin_frontend_gui_sdl_model_status apply_flush(
             CDIN_FRONTEND_PROTOCOL_OK) {
             return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
         }
-        if (model->has_snapshot_revision != 0 &&
-            revision < model->snapshot_revision) {
+        if (revision == 0u ||
+            (model->has_snapshot_revision != 0 &&
+             revision <= model->snapshot_revision)) {
             model->snapshot_pending_valid = 0;
             memset(&model->staged_snapshot, 0, sizeof(model->staged_snapshot));
             return CDIN_FRONTEND_GUI_SDL_MODEL_STALE;
@@ -291,6 +264,7 @@ static cdin_frontend_gui_sdl_model_status apply_flush(
         if (model->pending_lines_valid) {
             model->visible = model->pending;
             model->pending_lines_valid = 0;
+            model->has_line_request = 0;
             model->needs_lines = 0;
         }
         return CDIN_FRONTEND_GUI_SDL_MODEL_OK;
@@ -320,6 +294,26 @@ cdin_frontend_gui_sdl_model_status cdin_frontend_gui_sdl_model_init(
     return CDIN_FRONTEND_GUI_SDL_MODEL_OK;
 }
 
+cdin_frontend_gui_sdl_model_status cdin_frontend_gui_sdl_model_expect_lines(
+    cdin_frontend_gui_sdl_model *model,
+    uint64_t first_line,
+    uint64_t line_count,
+    uint64_t version)
+{
+    if (model == NULL || version == 0u || version != model->version ||
+        line_count == 0u ||
+        line_count > (uint64_t)model->visible_line_capacity ||
+        first_line > UINT64_MAX - line_count) {
+        return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
+    }
+    model->requested_first_line = first_line;
+    model->requested_line_count = line_count;
+    model->requested_version = version;
+    model->has_line_request = 1;
+    model->pending_lines_valid = 0;
+    return CDIN_FRONTEND_GUI_SDL_MODEL_OK;
+}
+
 cdin_frontend_gui_sdl_model_status cdin_frontend_gui_sdl_model_apply(
     cdin_frontend_gui_sdl_model *model,
     const cdin_frontend_protocol_message_view *message,
@@ -346,7 +340,8 @@ cdin_frontend_gui_sdl_model_status cdin_frontend_gui_sdl_model_apply(
             status = apply_cursor(model, message);
             break;
         case CDIN_FRONTEND_PROTOCOL_UI_SELECTION:
-            status = apply_selection(model, message);
+            /* Selection is Runtime-owned state. The current GUI baseline does
+             * not render it, so it deliberately keeps no selection cache. */
             break;
         case CDIN_FRONTEND_PROTOCOL_UI_STATUSLINE:
             status = apply_status(model, message);
