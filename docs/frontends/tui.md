@@ -80,7 +80,7 @@ recognize bracketed paste only when the terminal mode was enabled.
 Mapping rules:
 
 - key identity, action and modifiers become `input.key`;
-- committed text becomes `input.text`;
+- contiguous valid UTF-8 terminal text is coalesced into one bounded `input.text` event; control bytes and escape sequences remain separate;
 - bracketed paste bytes become `input.paste`;
 - pointer events become `input.mouse` only when `mouse` was accepted;
 - resize and focus are separate Protocol messages.
