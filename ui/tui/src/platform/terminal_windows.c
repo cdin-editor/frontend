@@ -101,10 +101,9 @@ static int terminal_open_conpty_handles(terminal_context *context)
     output_type = GetFileType(standard_output);
     if (input_type != FILE_TYPE_PIPE || output_type != FILE_TYPE_PIPE) return -1;
 
-    /* The ConPTY host delivers the VT input stream through the redirected
-     * standard-input pipe. Keep that pipe as the read source; CONIN$ is used
-     * only for changing/querying the attached console's input mode. */
-    context->input = context->original_standard_input;
+    /* ConPTY keyboard input is delivered to the attached virtual console's
+     * input buffer. The child's redirected STDIN pipe is a transport detail
+     * and may have no writer; read and wait on CONIN$ instead. */
     context->console_input = CreateFileW(L"CONIN$", GENERIC_READ | GENERIC_WRITE,
         FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0u, NULL);
     if (context->console_input == INVALID_HANDLE_VALUE) {
@@ -112,6 +111,7 @@ static int terminal_open_conpty_handles(terminal_context *context)
         return -1;
     }
     context->owns_console_input = 1;
+    context->input = context->console_input;
 
     context->output = CreateFileW(L"CONOUT$", GENERIC_READ | GENERIC_WRITE,
         FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0u, NULL);
