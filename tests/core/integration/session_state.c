@@ -97,6 +97,18 @@ int main(void)
         0x65u, 'e','p','o','c','h', 0x04u,
         0x66u, 'd','r','i','v','e','r', 0xf5u
     };
+    static const uint8_t detach_ack[] = { 0xa0u };
+    static const uint8_t reattach_promoted_role[] = {
+        0xa2u,
+        0x65u, 'e','p','o','c','h', 0x07u,
+        0x66u, 'd','r','i','v','e','r', 0xf5u
+    };
+    static const uint8_t reattach_snapshot_flush[] = {
+        0xa3u,
+        0x65u, 's','c','o','p','e', 0x68u, 's','n','a','p','s','h','o','t',
+        0x68u, 'r','e','v','i','s','i','o','n', 0x02u,
+        0x68u, 's','e','q','u','e','n','c','e', 0x02u
+    };
     fake_stream stream;
     cdin_frontend_protocol_io io;
     cdin_frontend_client client;
@@ -191,5 +203,27 @@ int main(void)
     assert(session.driver == 0);
     assert(cdin_frontend_session_detach(&session) == CDIN_FRONTEND_PROTOCOL_OK);
     assert(session.state == CDIN_FRONTEND_SESSION_DETACH_SENT);
+    (void)append_message(&stream, 6u, CDIN_FRONTEND_PROTOCOL_DETACH_ACK, detach_ack, sizeof(detach_ack));
+    (void)append_message(&stream, 7u, CDIN_FRONTEND_PROTOCOL_DRIVER_ROLE_CHANGED,
+                         reattach_promoted_role, sizeof(reattach_promoted_role));
+    (void)append_message(&stream, 8u, CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
+                         reattach_snapshot_flush, sizeof(reattach_snapshot_flush));
+    assert(cdin_frontend_session_receive(&session, &message) == CDIN_FRONTEND_PROTOCOL_OK);
+    assert(message.type == CDIN_FRONTEND_PROTOCOL_DETACH_ACK);
+    assert(session.state == CDIN_FRONTEND_SESSION_DETACHED);
+    assert(!cdin_frontend_session_is_driver(&session));
+    assert(cdin_frontend_session_attach(&session, "view-1", "cells", 100u, 30u) ==
+           CDIN_FRONTEND_PROTOCOL_OK);
+    assert(session.state == CDIN_FRONTEND_SESSION_ATTACH_SENT);
+    assert(cdin_frontend_session_receive(&session, &message) == CDIN_FRONTEND_PROTOCOL_OK);
+    assert(message.type == CDIN_FRONTEND_PROTOCOL_DRIVER_ROLE_CHANGED);
+    assert(session.state == CDIN_FRONTEND_SESSION_ATTACH_SENT);
+    assert(cdin_frontend_session_is_driver(&session));
+    assert(cdin_frontend_session_receive(&session, &message) == CDIN_FRONTEND_PROTOCOL_OK);
+    assert(message.type == CDIN_FRONTEND_PROTOCOL_UI_FLUSH);
+    assert(session.state == CDIN_FRONTEND_SESSION_ATTACHED);
+    assert(session.last_flush_sequence == 2u);
+    assert(cdin_frontend_session_send_key(&session, "x", 0u, "press") ==
+           CDIN_FRONTEND_PROTOCOL_OK);
     return 0;
 }
