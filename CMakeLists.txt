@@ -102,13 +102,35 @@ if(CDIN_FRONTEND_BUILD_UI_TUI)
 endif()
 
 # GUI-SDL is a peer adapter: SDL is intentionally confined to this target.
-# The current executable is a presentation smoke preview, not a live editor.
+# GUI-SDL is a peer adapter. Its reusable library owns desktop presentation
+# and depends only on Frontend Core plus SDL3. The preview remains separate.
 if(CDIN_FRONTEND_BUILD_UI_SDL)
     find_package(SDL3 3.2 CONFIG REQUIRED)
-    add_executable(cdin_frontend_gui_sdl_preview ui/gui-sdl/app/main.c)
-    target_compile_features(cdin_frontend_gui_sdl_preview PRIVATE c_std_11)
-    target_link_libraries(cdin_frontend_gui_sdl_preview PRIVATE SDL3::SDL3 cdin::frontend_core)
-    cdin_frontend_enable_strict(cdin_frontend_gui_sdl_preview)
+    add_library(cdin_frontend_ui_gui_sdl STATIC
+        ui/gui-sdl/src/gui_sdl.c
+        ui/gui-sdl/src/session/model.c)
+    add_library(cdin::frontend_ui_gui_sdl ALIAS cdin_frontend_ui_gui_sdl)
+    set_target_properties(cdin_frontend_ui_gui_sdl PROPERTIES
+        EXPORT_NAME frontend_ui_gui_sdl)
+    target_compile_features(cdin_frontend_ui_gui_sdl PUBLIC c_std_11)
+    target_include_directories(cdin_frontend_ui_gui_sdl
+        PUBLIC
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/ui/gui-sdl/include>
+            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/ui/gui-sdl/src/session)
+    target_link_libraries(cdin_frontend_ui_gui_sdl
+        PUBLIC cdin::frontend_core
+        PRIVATE SDL3::SDL3)
+    cdin_frontend_enable_strict(cdin_frontend_ui_gui_sdl)
+
+    if(CDIN_FRONTEND_BUILD_APPS)
+        add_executable(cdin_frontend_gui_sdl_preview ui/gui-sdl/app/main.c)
+        target_compile_features(cdin_frontend_gui_sdl_preview PRIVATE c_std_11)
+        target_link_libraries(cdin_frontend_gui_sdl_preview PRIVATE
+            SDL3::SDL3 cdin::frontend_core)
+        cdin_frontend_enable_strict(cdin_frontend_gui_sdl_preview)
+    endif()
 endif()
 if(CDIN_FRONTEND_BUILD_UI_HEADLESS)
     add_library(cdin_frontend_ui_headless STATIC
@@ -163,6 +185,19 @@ if(BUILD_TESTING)
             COMMAND cdin_frontend_headless_recorder_tests)
     endif()
 
+    if(CDIN_FRONTEND_BUILD_UI_SDL)
+        add_executable(cdin_frontend_gui_sdl_model_tests
+            tests/ui/gui-sdl/integration/model.c
+            ui/gui-sdl/src/session/model.c)
+        target_include_directories(cdin_frontend_gui_sdl_model_tests PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/ui/gui-sdl/src/session")
+        target_link_libraries(cdin_frontend_gui_sdl_model_tests PRIVATE cdin::frontend_core)
+        target_compile_features(cdin_frontend_gui_sdl_model_tests PRIVATE c_std_11)
+        cdin_frontend_enable_test_strict(cdin_frontend_gui_sdl_model_tests)
+        add_test(NAME cdin_frontend_gui_sdl_model_tests
+            COMMAND cdin_frontend_gui_sdl_model_tests)
+    endif()
+
     if(CDIN_FRONTEND_BUILD_UI_TUI)
         function(cdin_frontend_tui_test target source)
             add_executable(${target} ${source})
@@ -201,6 +236,9 @@ if(NOT CDIN_FRONTEND_USE_LOG_STUB)
     if(CDIN_FRONTEND_BUILD_UI_TUI)
         list(APPEND CDIN_FRONTEND_INSTALL_TARGETS cdin_frontend_ui_tui)
     endif()
+    if(CDIN_FRONTEND_BUILD_UI_SDL)
+        list(APPEND CDIN_FRONTEND_INSTALL_TARGETS cdin_frontend_ui_gui_sdl)
+    endif()
     install(TARGETS ${CDIN_FRONTEND_INSTALL_TARGETS}
         EXPORT cdinFrontendTargets
         ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
@@ -213,12 +251,16 @@ if(NOT CDIN_FRONTEND_USE_LOG_STUB)
         install(DIRECTORY ui/tui/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
             FILES_MATCHING PATTERN "*.h")
     endif()
+    if(CDIN_FRONTEND_BUILD_UI_SDL)
+        install(DIRECTORY ui/gui-sdl/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+            FILES_MATCHING PATTERN "*.h")
+    endif()
     install(EXPORT cdinFrontendTargets
         FILE cdinFrontendTargets.cmake
         NAMESPACE cdin::
         DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/cdinFrontend")
 
-    set(CDIN_FRONTEND_CONFIG_NEEDS_SDL FALSE)
+    set(CDIN_FRONTEND_CONFIG_NEEDS_SDL ${CDIN_FRONTEND_BUILD_UI_SDL})
     configure_package_config_file(
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake/cdinFrontendConfig.cmake.in"
         "${CMAKE_CURRENT_BINARY_DIR}/cdinFrontendConfig.cmake"
