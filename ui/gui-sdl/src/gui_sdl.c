@@ -42,6 +42,30 @@ static void log_sdl_error(cdin_frontend_gui_sdl *gui, const char *operation)
     }
 }
 
+static int renderer_event_matches_window(
+    const cdin_frontend_gui_sdl *gui, SDL_WindowID window_id)
+{
+    return gui != NULL && gui->window != NULL &&
+           (window_id == 0u || window_id == SDL_GetWindowID(gui->window));
+}
+
+static cdin_frontend_gui_sdl_status recreate_renderer(cdin_frontend_gui_sdl *gui)
+{
+    if (gui == NULL || gui->window == NULL) {
+        return CDIN_FRONTEND_GUI_SDL_INVALID_STATE;
+    }
+    if (gui->renderer != NULL) {
+        SDL_DestroyRenderer(gui->renderer);
+        gui->renderer = NULL;
+    }
+    gui->renderer = SDL_CreateRenderer(gui->window, NULL);
+    if (gui->renderer == NULL) {
+        log_sdl_error(gui, "SDL_CreateRenderer after device reset");
+        return CDIN_FRONTEND_GUI_SDL_SDL_ERROR;
+    }
+    return CDIN_FRONTEND_GUI_SDL_OK;
+}
+
 cdin_frontend_capability_mask cdin_frontend_gui_sdl_supported_capabilities(void)
 {
     return CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_MOUSE);
@@ -332,6 +356,26 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
                     }
                 }
                 break;
+            case SDL_EVENT_RENDER_DEVICE_RESET:
+                if (renderer_event_matches_window(gui, event.render.windowID) &&
+                    recreate_renderer(gui) != CDIN_FRONTEND_GUI_SDL_OK) {
+                    return CDIN_FRONTEND_GUI_SDL_SDL_ERROR;
+                }
+                break;
+            case SDL_EVENT_RENDER_DEVICE_LOST:
+                if (renderer_event_matches_window(gui, event.render.windowID)) {
+                    if (gui->renderer != NULL) {
+                        SDL_DestroyRenderer(gui->renderer);
+                        gui->renderer = NULL;
+                    }
+                    log_sdl_error(gui, "SDL renderer device lost");
+                    return CDIN_FRONTEND_GUI_SDL_SDL_ERROR;
+                }
+                break;
+            case SDL_EVENT_RENDER_TARGETS_RESET:
+                /* The current renderer owns no persistent textures or render
+                 * targets; the next render() rebuilds the complete frame. */
+                break;
             case SDL_EVENT_WINDOW_FOCUS_GAINED:
             case SDL_EVENT_WINDOW_FOCUS_LOST: {
                 int focused = event.type == SDL_EVENT_WINDOW_FOCUS_GAINED;
@@ -487,7 +531,7 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_render(
 void cdin_frontend_gui_sdl_destroy(cdin_frontend_gui_sdl *gui)
 {
     if (gui == NULL) return;
-    SDL_StopTextInput(gui->window);
+    if (gui->window != NULL) SDL_StopTextInput(gui->window);
     if (gui->renderer != NULL) SDL_DestroyRenderer(gui->renderer);
     if (gui->window != NULL) SDL_DestroyWindow(gui->window);
     if (gui->owns_video) SDL_QuitSubSystem(SDL_INIT_VIDEO);
