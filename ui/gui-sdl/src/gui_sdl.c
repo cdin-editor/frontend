@@ -4,7 +4,6 @@
 
 #include <SDL3/SDL.h>
 
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -161,17 +160,21 @@ static const char *key_name(SDL_Keycode key, char output[24])
 }
 
 static cdin_frontend_gui_sdl_status send_key_event(
-    cdin_frontend_gui_sdl *gui, const SDL_KeyboardEvent *event)
+    cdin_frontend_gui_sdl *gui, const SDL_KeyboardEvent *event,
+    const char *action)
 {
     char key_buffer[24];
     const char *name;
     cdin_frontend_protocol_status status;
-    if (event->repeat) return CDIN_FRONTEND_GUI_SDL_OK;
+    uint32_t modifiers = input_modifiers(event->mod);
+    if (action == NULL) return CDIN_FRONTEND_GUI_SDL_INVALID_ARGUMENT;
     name = key_name(event->key, key_buffer);
     if (name == NULL) return CDIN_FRONTEND_GUI_SDL_OK;
-    if ((event->mod & SDL_KMOD_CTRL) != 0 &&
-        (event->mod & SDL_KMOD_SHIFT) != 0 &&
-        (event->key == SDLK_V)) {
+
+    if (strcmp(action, "press") == 0 &&
+        (modifiers & CDIN_FRONTEND_MOD_CTRL) != 0u &&
+        (modifiers & CDIN_FRONTEND_MOD_SHIFT) != 0u &&
+        event->key == SDLK_V) {
         char *clipboard = SDL_GetClipboardText();
         if (clipboard != NULL) {
             size_t length = strlen(clipboard);
@@ -183,11 +186,19 @@ static cdin_frontend_gui_sdl_status send_key_event(
         }
         return CDIN_FRONTEND_GUI_SDL_OK;
     }
+
+    /* Printable unmodified keys are represented by SDL_TEXT_INPUT. Emitting
+     * both input.key and input.text for them would execute/insert twice. */
+    if ((event->key >= SDLK_A && event->key <= SDLK_Z) ||
+        (event->key >= SDLK_0 && event->key <= SDLK_9)) {
+        if ((modifiers & (CDIN_FRONTEND_MOD_CTRL | CDIN_FRONTEND_MOD_ALT |
+                          CDIN_FRONTEND_MOD_ALTGR)) == 0u) {
+            return CDIN_FRONTEND_GUI_SDL_OK;
+        }
+    }
     status = cdin_frontend_session_send_key(
-        gui->session, name, input_modifiers(event->mod), "press");
+        gui->session, name, modifiers, action);
     if (status == CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT) {
-        /* Unsupported modifier combinations or non-driver input are ignored
-         * by this peer; they do not become Runtime commands. */
         return CDIN_FRONTEND_GUI_SDL_OK;
     }
     return status == CDIN_FRONTEND_PROTOCOL_OK
@@ -209,7 +220,15 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
                 gui->quit_requested = 1;
                 break;
             case SDL_EVENT_KEY_DOWN:
-                if (send_key_event(gui, &event.key) != CDIN_FRONTEND_GUI_SDL_OK) {
+                if (send_key_event(gui, &event.key,
+                                   event.key.repeat ? "repeat" : "press") !=
+                    CDIN_FRONTEND_GUI_SDL_OK) {
+                    return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+                }
+                break;
+            case SDL_EVENT_KEY_UP:
+                if (send_key_event(gui, &event.key, "release") !=
+                    CDIN_FRONTEND_GUI_SDL_OK) {
                     return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
                 }
                 break;
