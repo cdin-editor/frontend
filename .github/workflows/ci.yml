@@ -25,6 +25,78 @@ jobs:
       pipeline-task: check
       pipeline-ref: main
 
+  gui-sdl-package:
+    name: SDL3 production adapter + installed consumer
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build pkg-config curl
+      - name: Install pinned production logger
+        run: bash scripts/install-deps.sh
+      - name: Download and verify pinned SDL3 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/SDL3-3.4.16.tar.gz"
+          curl --fail --location --retry 3 \
+            https://github.com/libsdl-org/SDL/releases/download/release-3.4.16/SDL3-3.4.16.tar.gz \
+            --output "$archive"
+          echo "7322236cd12090c3eb40b9728be4d49c76f66ad17d04369584d4ecad5cf77c68  $archive" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/SDL3-source"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/SDL3-source" --strip-components=1
+      - name: Build and install minimal SDL3
+        run: |
+          cmake -S "$RUNNER_TEMP/SDL3-source" -B "$RUNNER_TEMP/SDL3-build" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/SDL3-install" \
+            -DSDL_SHARED=OFF -DSDL_STATIC=ON \
+            -DSDL_TEST_LIBRARY=OFF -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF \
+            -DSDL_AUDIO=OFF -DSDL_CAMERA=OFF -DSDL_JOYSTICK=OFF \
+            -DSDL_HAPTIC=OFF -DSDL_HIDAPI=OFF -DSDL_POWER=OFF -DSDL_SENSOR=OFF \
+            -DSDL_VIDEO=ON -DSDL_RENDER=ON -DSDL_DUMMYVIDEO=ON \
+            -DSDL_X11=OFF -DSDL_WAYLAND=OFF -DSDL_KMSDRM=OFF \
+            -DSDL_OPENGL=OFF -DSDL_OPENGLES=OFF -DSDL_VULKAN=OFF
+          cmake --build "$RUNNER_TEMP/SDL3-build" --parallel
+          cmake --install "$RUNNER_TEMP/SDL3-build"
+      - name: Build production GUI-SDL adapter and model tests
+        run: |
+          cmake -S . -B build-gui-sdl -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/SDL3-install;$PWD/.deps/log" \
+            -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/frontend-install" \
+            -DCDIN_FRONTEND_USE_LOG_STUB=OFF \
+            -DCDIN_FRONTEND_BUILD_UI_TUI=OFF \
+            -DCDIN_FRONTEND_BUILD_UI_SDL=ON \
+            -DCDIN_FRONTEND_BUILD_UI_HEADLESS=OFF \
+            -DCDIN_FRONTEND_BUILD_APPS=ON \
+            -DCDIN_FRONTEND_BUILD_EXAMPLES=OFF \
+            -DBUILD_TESTING=ON
+          cmake --build build-gui-sdl --parallel
+          ctest --test-dir build-gui-sdl --output-on-failure
+          cmake --install build-gui-sdl
+      - name: Verify clean-prefix GUI-SDL consumer
+        run: |
+          mkdir -p "$RUNNER_TEMP/gui-sdl-consumer"
+          cat > "$RUNNER_TEMP/gui-sdl-consumer/CMakeLists.txt" <<'EOF'
+          cmake_minimum_required(VERSION 3.22)
+          project(gui_sdl_consumer C)
+          find_package(cdinFrontend 1.0 CONFIG REQUIRED)
+          add_executable(gui_sdl_consumer main.c)
+          target_link_libraries(gui_sdl_consumer PRIVATE cdin::frontend_ui_gui_sdl)
+          EOF
+          cat > "$RUNNER_TEMP/gui-sdl-consumer/main.c" <<'EOF'
+          #include <cdin/frontend/ui/gui_sdl/gui_sdl.h>
+          int main(void) {
+              cdin_frontend_gui_sdl_destroy(NULL);
+              return CDIN_FRONTEND_GUI_SDL_OK;
+          }
+          EOF
+          cmake -S "$RUNNER_TEMP/gui-sdl-consumer" -B "$RUNNER_TEMP/gui-sdl-consumer-build" -G Ninja \
+            -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/frontend-install;$RUNNER_TEMP/SDL3-install;$PWD/.deps/log"
+          cmake --build "$RUNNER_TEMP/gui-sdl-consumer-build" --parallel
+
   platform-smoke:
     name: ${{ matrix.os }} native Core + TUI UI peer
     strategy:
