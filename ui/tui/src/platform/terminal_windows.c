@@ -11,7 +11,9 @@ typedef struct terminal_context {
     HANDLE output;
     DWORD original_input_mode;
     DWORD original_output_mode;
+    HANDLE original_standard_input;
     int have_modes;
+    int replaced_standard_input;
     int owns_input;
     int owns_output;
 } terminal_context;
@@ -19,8 +21,17 @@ typedef struct terminal_context {
 static void close_owned_handles(terminal_context *context)
 {
     if (context == NULL) return;
-    if (context->owns_input && context->input != NULL &&
-        context->input != INVALID_HANDLE_VALUE) {
+    /* The owner loop waits on GetStdHandle(STD_INPUT_HANDLE). When ConPTY
+     * exposes redirected stdio, the adapter reads from CONIN$ instead. Keep
+     * the wait source and read source identical, and restore the process-owned
+     * stdio handle before releasing the adapter-owned console handle. */
+    if (context->replaced_standard_input) {
+        if (SetStdHandle(STD_INPUT_HANDLE, context->original_standard_input)) {
+            context->replaced_standard_input = 0;
+        }
+    }
+    if (context->owns_input && !context->replaced_standard_input &&
+        context->input != NULL && context->input != INVALID_HANDLE_VALUE) {
         CloseHandle(context->input);
     }
     if (context->owns_output && context->output != NULL &&
@@ -112,6 +123,18 @@ static int terminal_open_console_handles(terminal_context *context)
         close_owned_handles(context);
         return -1;
     }
+
+    /* In a ConPTY host, STD_INPUT_HANDLE remains the byte-stream pipe supplied
+     * by CreateProcessW, while console input arrives on the pseudoconsole's
+     * CONIN$ buffer. CDIN's readiness bridge waits on GetStdHandle(), so point
+     * that waitable handle at the same console input object used by ReadFile.
+     * The original process-owned pipe is restored by close_owned_handles(). */
+    context->original_standard_input = standard_input;
+    if (!SetStdHandle(STD_INPUT_HANDLE, context->input)) {
+        close_owned_handles(context);
+        return -1;
+    }
+    context->replaced_standard_input = 1;
     context->have_modes = 1;
     return 0;
 }
