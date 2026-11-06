@@ -1,10 +1,14 @@
 # GUI-SDL — native desktop frontend
 
-**Spec status:** accepted peer frontend. **Implementation status:** an
-installable/exported `cdin::frontend_ui_gui_sdl` library now exists, with
-Core Session event forwarding and an independent bounded, version-pinned
-visible-line cache. The current renderer is an ASCII/debug-text baseline;
-it is not a complete desktop editor.
+**Spec status:** accepted peer frontend. **Implementation status:** the
+installable/exported `cdin::frontend_ui_gui_sdl` foundation, bounded semantic
+model and Core Session input adapter pass the latest native and SDL-specific
+CI matrix. [Run 42295241142](https://github.com/cdin-editor/frontend/actions/runs/42295241142)
+passed Linux/macOS/Windows and Pipeline quality, the GUI model/adapter tests
+under AddressSanitizer, installation and a clean-prefix consumer. CDIN's live
+Backend/Runtime composition smoke remains a separate gate tracked in
+[CDIN PR #110](https://github.com/cdin-editor/cdin/pull/110). The renderer is
+still an ASCII/debug-text baseline; this is not a complete desktop editor.
 
 ## Ownership and boundary
 
@@ -47,3 +51,20 @@ Persian/Arabic rendering remain open.
 The proposed FreeType/HarfBuzz/FriBidi stack is not a finalized contract and
 is not silently added as a dependency. SDL3 itself remains an optional build
 dependency selected with `CDIN_FRONTEND_BUILD_UI_SDL=ON`.
+
+
+## Current verification record
+
+The SDL3-specific workflow uses SDL3 3.4.16 built from a checksum-pinned
+archive and the production logger. It validates partial-startup rollback,
+adapter creation/render, SDL event delivery and Protocol mouse forwarding under
+AddressSanitizer, then installs the static library and verifies an independent
+CMake consumer can find and link `cdin::frontend_ui_gui_sdl`. The complete
+Frontend CI run 42295241142 passed these checks together with the Linux,
+macOS, Windows and Pipeline matrix.
+
+This is component-level verification. It does not validate CDIN's transport,
+Backend/Runtime startup, a complete editing session, reconnect, installer
+behavior or release-grade Unicode text rendering. Keep the GUI-SDL adapter
+opt-in until the CDIN live-session smoke and the remaining rendering/recovery
+gates pass.
