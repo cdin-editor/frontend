@@ -50,7 +50,24 @@ static ptrdiff_t terminal_read(void *opaque, uint8_t *buffer, size_t capacity)
     if (context == NULL || buffer == NULL || capacity == 0u ||
         capacity > (size_t)UINT32_MAX) return -1;
     requested = (DWORD)capacity;
+    {
+        DWORD available = 0u;
+        if (!GetNumberOfConsoleInputEvents(context->console_input, &available)) {
+            return -1;
+        }
+        if (available == 0u) {
+            /* The TUI coordinator drains each ready source until it reports
+             * AGAIN. Never block a second ReadFile after the current ConPTY
+             * input burst has been consumed, or Backend readiness starves. */
+            SetLastError(ERROR_NO_DATA);
+            return -1;
+        }
+    }
     if (!ReadFile(context->input, buffer, requested, &read_count, NULL)) return -1;
+    if (read_count == 0u) {
+        SetLastError(ERROR_NO_DATA);
+        return -1;
+    }
     return (ptrdiff_t)read_count;
 }
 
