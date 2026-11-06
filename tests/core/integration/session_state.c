@@ -219,6 +219,14 @@ int main(void)
     assert(cdin_frontend_session_send_mouse(
         &session, "drag", "left", 0u, NULL, 1u, 1u, 1) ==
         CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
+    {
+        cdin_frontend_capability_mask accepted = session.accepted_capabilities;
+        session.accepted_capabilities &= ~CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_MOUSE);
+        assert(cdin_frontend_session_send_mouse(
+            &session, "press", "left", 0u, NULL, 1u, 1u, 1) ==
+            CDIN_FRONTEND_PROTOCOL_UNSUPPORTED);
+        session.accepted_capabilities = accepted;
+    }
     memset(&input_event, 0, sizeof(input_event));
     input_event.kind = CDIN_FRONTEND_INPUT_KEY;
     (void)snprintf(input_event.key, sizeof(input_event.key), "%s", "up");
