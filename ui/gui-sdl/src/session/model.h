@@ -30,11 +30,8 @@ typedef struct cdin_frontend_gui_sdl_line_window {
 typedef struct cdin_frontend_gui_sdl_snapshot_state {
     uint64_t version;
     uint64_t cursor_position;
-    uint64_t selection_anchor;
-    uint64_t selection_caret;
     uint64_t layout_revision;
     int has_cursor;
-    int has_selection;
     int has_layout;
     int needs_lines;
     char theme[64];
@@ -49,11 +46,8 @@ typedef struct cdin_frontend_gui_sdl_model {
     uint64_t snapshot_revision;
     int has_snapshot_revision;
     uint64_t cursor_position;
-    uint64_t selection_anchor;
-    uint64_t selection_caret;
     uint64_t layout_revision;
     int has_cursor;
-    int has_selection;
     int has_layout;
     int needs_lines;
     cdin_frontend_gui_sdl_snapshot_state staged_snapshot;
@@ -61,6 +55,10 @@ typedef struct cdin_frontend_gui_sdl_model {
     cdin_frontend_gui_sdl_line_window visible;
     cdin_frontend_gui_sdl_line_window pending;
     int pending_lines_valid;
+    uint64_t requested_first_line;
+    uint64_t requested_line_count;
+    uint64_t requested_version;
+    int has_line_request;
     size_t visible_line_capacity;
     char theme[64];
     char mode[32];
@@ -80,6 +78,12 @@ cdin_frontend_gui_sdl_model_status cdin_frontend_gui_sdl_model_init(
     cdin_frontend_gui_sdl_model *model,
     const char *view_id,
     size_t visible_line_capacity);
+
+cdin_frontend_gui_sdl_model_status cdin_frontend_gui_sdl_model_expect_lines(
+    cdin_frontend_gui_sdl_model *model,
+    uint64_t first_line,
+    uint64_t line_count,
+    uint64_t version);
 
 cdin_frontend_gui_sdl_model_status cdin_frontend_gui_sdl_model_apply(
     cdin_frontend_gui_sdl_model *model,
