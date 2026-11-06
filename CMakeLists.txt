@@ -7,7 +7,7 @@ include(CTest)
 
 option(CDIN_FRONTEND_USE_LOG_STUB "Use the test-only logger ABI shim (never for release)" OFF)
 option(CDIN_FRONTEND_BUILD_UI_TUI "Build the interactive terminal UI adapter" ON)
-option(CDIN_FRONTEND_BUILD_UI_SDL "Build the independent SDL3 desktop UI preview" OFF)
+option(CDIN_FRONTEND_BUILD_UI_SDL "Build the production GUI-SDL adapter and preview" OFF)
 option(CDIN_FRONTEND_BUILD_APPS "Build runnable adapter preview applications" ON)
 option(CDIN_FRONTEND_BUILD_UI_HEADLESS "Build the display-free reference recorder/replayer" ON)
 option(CDIN_FRONTEND_BUILD_EXAMPLES "Build small Frontend examples" ON)
@@ -101,8 +101,8 @@ if(CDIN_FRONTEND_BUILD_UI_TUI)
     endif()
 endif()
 
-# GUI-SDL is a peer adapter: SDL is intentionally confined to this target.
-# GUI-SDL is a peer adapter. Its reusable library owns desktop presentation
+# GUI-SDL is a peer adapter. SDL usage is confined to this target.
+# Its reusable library owns desktop presentation
 # and depends only on Frontend Core plus SDL3. The preview remains separate.
 if(CDIN_FRONTEND_BUILD_UI_SDL)
     find_package(SDL3 3.2 CONFIG REQUIRED)
@@ -185,18 +185,16 @@ if(BUILD_TESTING)
             COMMAND cdin_frontend_headless_recorder_tests)
     endif()
 
-    if(CDIN_FRONTEND_BUILD_UI_SDL)
-        add_executable(cdin_frontend_gui_sdl_model_tests
-            tests/ui/gui-sdl/integration/model.c
-            ui/gui-sdl/src/session/model.c)
-        target_include_directories(cdin_frontend_gui_sdl_model_tests PRIVATE
-            "${CMAKE_CURRENT_SOURCE_DIR}/ui/gui-sdl/src/session")
-        target_link_libraries(cdin_frontend_gui_sdl_model_tests PRIVATE cdin::frontend_core)
-        target_compile_features(cdin_frontend_gui_sdl_model_tests PRIVATE c_std_11)
-        cdin_frontend_enable_test_strict(cdin_frontend_gui_sdl_model_tests)
-        add_test(NAME cdin_frontend_gui_sdl_model_tests
-            COMMAND cdin_frontend_gui_sdl_model_tests)
-    endif()
+    add_executable(cdin_frontend_gui_sdl_model_tests
+        tests/ui/gui-sdl/integration/model.c
+        ui/gui-sdl/src/session/model.c)
+    target_include_directories(cdin_frontend_gui_sdl_model_tests PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui/gui-sdl/src/session")
+    target_link_libraries(cdin_frontend_gui_sdl_model_tests PRIVATE cdin::frontend_core)
+    target_compile_features(cdin_frontend_gui_sdl_model_tests PRIVATE c_std_11)
+    cdin_frontend_enable_test_strict(cdin_frontend_gui_sdl_model_tests)
+    add_test(NAME cdin_frontend_gui_sdl_model_tests
+        COMMAND cdin_frontend_gui_sdl_model_tests)
 
     if(CDIN_FRONTEND_BUILD_UI_TUI)
         function(cdin_frontend_tui_test target source)
