@@ -128,7 +128,7 @@ if(CDIN_FRONTEND_BUILD_UI_SDL)
         add_executable(cdin_frontend_gui_sdl_preview ui/gui-sdl/app/main.c)
         target_compile_features(cdin_frontend_gui_sdl_preview PRIVATE c_std_11)
         target_link_libraries(cdin_frontend_gui_sdl_preview PRIVATE
-            SDL3::SDL3 cdin::frontend_core)
+            cdin::frontend_ui_gui_sdl)
         cdin_frontend_enable_strict(cdin_frontend_gui_sdl_preview)
     endif()
 endif()
