@@ -236,6 +236,7 @@ static cdin_frontend_gui_sdl_model_status apply_flush(
     char scope[16];
     size_t scope_length = 0u;
     uint64_t sequence = 0u;
+    uint64_t revision = 0u;
     if (cdin_frontend_protocol_payload_get_text(
             message->payload, message->payload_length, "scope",
             scope, sizeof(scope), &scope_length) != CDIN_FRONTEND_PROTOCOL_OK ||
@@ -246,7 +247,20 @@ static cdin_frontend_gui_sdl_model_status apply_flush(
     }
     action->acknowledge_sequence = sequence;
     if (scope_length == 8u && memcmp(scope, "snapshot", 8u) == 0) {
+        if (cdin_frontend_protocol_payload_get_uint(
+                message->payload, message->payload_length, "revision", &revision) !=
+            CDIN_FRONTEND_PROTOCOL_OK) {
+            return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
+        }
+        if (model->has_snapshot_revision != 0 &&
+            revision < model->snapshot_revision) {
+            model->snapshot_pending_valid = 0;
+            memset(&model->staged_snapshot, 0, sizeof(model->staged_snapshot));
+            return CDIN_FRONTEND_GUI_SDL_MODEL_STALE;
+        }
         if (model->snapshot_pending_valid) snapshot_commit(model);
+        model->snapshot_revision = revision;
+        model->has_snapshot_revision = 1;
         if (model->needs_lines && model->version != 0u) {
             action->request_lines = 1;
             action->first_line = 0u;
@@ -256,6 +270,11 @@ static cdin_frontend_gui_sdl_model_status apply_flush(
         return CDIN_FRONTEND_GUI_SDL_MODEL_OK;
     }
     if (scope_length == 8u && memcmp(scope, "response", 8u) == 0) {
+        if (cdin_frontend_protocol_payload_get_uint(
+                message->payload, message->payload_length, "revision", &revision) ==
+            CDIN_FRONTEND_PROTOCOL_OK) {
+            return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
+        }
         if (model->pending_lines_valid) {
             model->visible = model->pending;
             model->pending_lines_valid = 0;
