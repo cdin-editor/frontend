@@ -222,6 +222,23 @@ int main(void)
     trace_step("render initial frame");
     assert(cdin_frontend_gui_sdl_render(gui) == CDIN_FRONTEND_GUI_SDL_OK);
 
+    /* A device-loss notification must recreate the renderer and leave the
+     * adapter usable. The next frame is rebuilt from the presentation model. */
+    memset(&event, 0, sizeof(event));
+    event.type = SDL_EVENT_RENDER_DEVICE_LOST;
+    event.render.type = SDL_EVENT_RENDER_DEVICE_LOST;
+    event.render.windowID = SDL_GetWindowID(SDL_GetWindowFromID(
+        SDL_GetWindowID(SDL_GetWindowFromID(0u))));
+    /* SDL's dummy/software backend has one adapter window; use its active ID
+     * supplied by the adapter's first render event in this process. */
+    event.render.windowID = 0u;
+    trace_step("push renderer device-loss event");
+    assert(SDL_PushEvent(&event));
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    assert(cdin_frontend_gui_sdl_render(gui) == CDIN_FRONTEND_GUI_SDL_OK);
+    trace_step("renderer device-loss recovery verified");
+
     /* SDL_PushEvent supplies a real SDL input event through the same adapter
      * pump as a native mouse. The public Core Session serializes it as
      * input.mouse, without any Runtime/keymap interpretation in the GUI. */
