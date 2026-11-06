@@ -87,7 +87,7 @@ int main(void)
      * first view-scoped snapshot message establishes the actual view. */
     assert(cdin_frontend_gui_sdl_model_init(&model, "", 16u) ==
            CDIN_FRONTEND_GUI_SDL_MODEL_OK);
-    assert(model.view_id[0] == '\\0');
+    assert(model.view_id[0] == '\0');
     view = message(CDIN_FRONTEND_PROTOCOL_VIEW_INVALIDATE,
                    invalidate, sizeof(invalidate));
     assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
