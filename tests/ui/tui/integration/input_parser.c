@@ -6,6 +6,8 @@
 
 int main(void)
 {
+    static const uint8_t text_run[] = "WIN_CONPTY_EDIT_8427";
+    static const uint8_t text_then_enter[] = { 'h', 'i', '\r' };
     static const uint8_t escape_prefix[] = { 0x1bu, '[' };
     static const uint8_t arrow_tail[] = { 'A' };
     static const uint8_t ctrl_up[] = { 0x1bu, '[', '1', ';', '5', 'A' };
@@ -27,6 +29,28 @@ int main(void)
     cdin_frontend_input_event event;
 
     cdin_frontend_input_parser_init(&parser);
+    assert(cdin_frontend_input_parser_feed(&parser, text_run, sizeof(text_run) - 1u) ==
+           CDIN_FRONTEND_INPUT_PARSER_NEED_MORE);
+    assert(cdin_frontend_input_parser_next(&parser, 0, &event) ==
+           CDIN_FRONTEND_INPUT_PARSER_EVENT);
+    assert(event.kind == CDIN_FRONTEND_INPUT_TEXT);
+    assert(event.text_length == sizeof(text_run) - 1u);
+    assert(memcmp(event.text, text_run, sizeof(text_run) - 1u) == 0);
+    assert(cdin_frontend_input_parser_next(&parser, 0, &event) ==
+           CDIN_FRONTEND_INPUT_PARSER_NEED_MORE);
+
+    assert(cdin_frontend_input_parser_feed(&parser, text_then_enter,
+                                           sizeof(text_then_enter)) ==
+           CDIN_FRONTEND_INPUT_PARSER_NEED_MORE);
+    assert(cdin_frontend_input_parser_next(&parser, 0, &event) ==
+           CDIN_FRONTEND_INPUT_PARSER_EVENT);
+    assert(event.kind == CDIN_FRONTEND_INPUT_TEXT &&
+           event.text_length == 2u && memcmp(event.text, "hi", 2u) == 0);
+    assert(cdin_frontend_input_parser_next(&parser, 0, &event) ==
+           CDIN_FRONTEND_INPUT_PARSER_EVENT);
+    assert(event.kind == CDIN_FRONTEND_INPUT_KEY &&
+           strcmp(event.key, "enter") == 0);
+
     assert(cdin_frontend_input_parser_feed(&parser, escape_prefix, sizeof(escape_prefix)) ==
            CDIN_FRONTEND_INPUT_PARSER_NEED_MORE);
     assert(cdin_frontend_input_parser_next(&parser, 0, &event) == CDIN_FRONTEND_INPUT_PARSER_NEED_MORE);
