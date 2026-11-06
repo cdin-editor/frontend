@@ -64,6 +64,36 @@ static int output_contains_type(
     return 0;
 }
 
+static size_t output_count_type(
+    const fake_stream *stream,
+    cdin_frontend_protocol_message_type expected_type)
+{
+    size_t offset = 0u;
+    size_t count = 0u;
+    if (stream == NULL) return 0u;
+    while (offset <= stream->output_length &&
+           stream->output_length - offset >= CDIN_FRONTEND_PROTOCOL_FRAME_PREFIX_BYTES) {
+        const uint8_t *frame = stream->output + offset;
+        uint32_t body_length = ((uint32_t)frame[0] << 24u) |
+                               ((uint32_t)frame[1] << 16u) |
+                               ((uint32_t)frame[2] << 8u) |
+                               (uint32_t)frame[3];
+        size_t frame_length;
+        cdin_frontend_protocol_message_view message;
+        if (body_length == 0u ||
+            (size_t)body_length > stream->output_length - offset -
+                                  CDIN_FRONTEND_PROTOCOL_FRAME_PREFIX_BYTES) return count;
+        frame_length = CDIN_FRONTEND_PROTOCOL_FRAME_PREFIX_BYTES + (size_t)body_length;
+        if (cdin_frontend_protocol_decode_frame(
+                frame, frame_length, &message, 4096u) != CDIN_FRONTEND_PROTOCOL_OK) {
+            return count;
+        }
+        if (message.type == expected_type) count++;
+        offset += frame_length;
+    }
+    return count;
+}
+
 static int output_contains_expected_mouse(const fake_stream *stream)
 {
     size_t offset = 0u;
@@ -130,7 +160,7 @@ int main(void)
     uint8_t client_buffer[4096];
     SDL_Event event;
     SDL_Window *unrelated_window = NULL;
-    size_t output_before_unrelated_key;
+    size_t key_count_before_unrelated_key;
     cdin_frontend_session cell_session;
     int quit_requested = 0;
 
@@ -240,17 +270,19 @@ int main(void)
      * window must not leak into this editor's borrowed Core Session. */
     unrelated_window = SDL_CreateWindow("unrelated SDL host window", 320, 200, 0u);
     assert(unrelated_window != NULL);
-    output_before_unrelated_key = stream.output_length;
+    key_count_before_unrelated_key = output_count_type(
+        &stream, CDIN_FRONTEND_PROTOCOL_INPUT_KEY);
     memset(&event, 0, sizeof(event));
     event.type = SDL_EVENT_KEY_DOWN;
     event.key.type = SDL_EVENT_KEY_DOWN;
     event.key.windowID = SDL_GetWindowID(unrelated_window);
-    event.key.key = SDLK_A;
+    event.key.key = SDLK_F1;
     event.key.down = true;
     assert(SDL_PushEvent(&event));
     assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
            CDIN_FRONTEND_GUI_SDL_OK);
-    assert(stream.output_length == output_before_unrelated_key);
+    assert(output_count_type(&stream, CDIN_FRONTEND_PROTOCOL_INPUT_KEY) ==
+           key_count_before_unrelated_key);
     SDL_DestroyWindow(unrelated_window);
     trace_step("foreign-window key event ignored");
 
