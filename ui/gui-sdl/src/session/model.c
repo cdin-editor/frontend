@@ -271,8 +271,8 @@ static cdin_frontend_gui_sdl_model_status apply_flush(
     }
     if (scope_length == 8u && memcmp(scope, "response", 8u) == 0) {
         if (cdin_frontend_protocol_payload_get_uint(
-                message->payload, message->payload_length, "revision", &revision) ==
-            CDIN_FRONTEND_PROTOCOL_OK) {
+                message->payload, message->payload_length, "revision", &revision) !=
+            CDIN_FRONTEND_PROTOCOL_UNSUPPORTED) {
             return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
         }
         if (model->pending_lines_valid) {
