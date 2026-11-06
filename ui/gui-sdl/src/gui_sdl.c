@@ -380,12 +380,13 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
                 break;
             case SDL_EVENT_RENDER_DEVICE_LOST:
                 if (renderer_event_matches_window(gui, event.render.windowID)) {
-                    if (gui->renderer != NULL) {
-                        SDL_DestroyRenderer(gui->renderer);
-                        gui->renderer = NULL;
+                    /* SDL invalidates the renderer on device loss. Recreate
+                     * it immediately; the current renderer owns no persistent
+                     * textures, so the next render() rebuilds the full frame. */
+                    if (recreate_renderer(gui) != CDIN_FRONTEND_GUI_SDL_OK) {
+                        log_sdl_error(gui, "SDL renderer recovery after device loss");
+                        return CDIN_FRONTEND_GUI_SDL_SDL_ERROR;
                     }
-                    log_sdl_error(gui, "SDL renderer device lost");
-                    return CDIN_FRONTEND_GUI_SDL_SDL_ERROR;
                 }
                 break;
             case SDL_EVENT_RENDER_TARGETS_RESET:
