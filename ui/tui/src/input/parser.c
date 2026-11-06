@@ -191,6 +191,35 @@ cdin_frontend_input_parser_status cdin_frontend_input_parser_next(
         return parse_alt_key(parser, out_event);
     }
 
+    /* One terminal read commonly contains a whole burst of committed text.
+     * Keep that burst as one Protocol input.text event instead of creating a
+     * model publication and snapshot for every printable byte. Stop before
+     * control bytes/ESC so keys and terminal sequences retain their identity. */
+    if ((parser->bytes[0] >= 0x20u && parser->bytes[0] != 0x7fu) ||
+        parser->bytes[0] >= 0xc2u) {
+        size_t consumed = 0u;
+        while (consumed < length &&
+               consumed < sizeof(out_event->text)) {
+            uint8_t first = parser->bytes[consumed];
+            size_t sequence;
+            if (first < 0x20u || first == 0x7fu) break;
+            sequence = utf8_length(first);
+            if (sequence == 0u) break;
+            if (length - consumed < sequence) break;
+            if (!valid_utf8(parser->bytes + consumed, sequence)) break;
+            if (sequence > sizeof(out_event->text) - consumed) break;
+            consumed += sequence;
+        }
+        if (consumed != 0u) {
+            memset(out_event, 0, sizeof(*out_event));
+            out_event->kind = CDIN_FRONTEND_INPUT_TEXT;
+            memcpy(out_event->text, parser->bytes, consumed);
+            out_event->text_length = consumed;
+            consume(parser, consumed);
+            return CDIN_FRONTEND_INPUT_PARSER_EVENT;
+        }
+    }
+
     if (parser->bytes[0] < 0x80u) {
         if (cdin_frontend_tui_decode_input(parser->bytes, 1u, out_event) != CDIN_FRONTEND_TUI_OK) {
             consume(parser, 1u);
