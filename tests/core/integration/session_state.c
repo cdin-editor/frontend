@@ -117,6 +117,11 @@ int main(void)
     cdin_frontend_input_event input_event;
     uint8_t frame_buffer[512];
     uint8_t paste[] = { 'a', 0u, 0xffu };
+    size_t output_mark;
+    uint8_t mouse_position[64];
+    size_t mouse_position_length = 0u;
+    uint64_t mouse_x = 0u;
+    uint64_t mouse_y = 0u;
     static const uint8_t persian_text[] = { 0xd8u, 0xb3u, 0xd9u, 0x84u, 0xd8u, 0xa7u, 0xd9u, 0x85u };
 
     memset(&stream, 0, sizeof(stream));
@@ -172,6 +177,37 @@ int main(void)
            CDIN_FRONTEND_PROTOCOL_OK);
     assert(cdin_frontend_session_send_key(&session, "c", CDIN_FRONTEND_MOD_CTRL, "press") ==
            CDIN_FRONTEND_PROTOCOL_OK);
+    output_mark = stream.output_length;
+    assert(cdin_frontend_session_send_mouse(
+        &session, "press", "left", CDIN_FRONTEND_MOD_CTRL | CDIN_FRONTEND_MOD_SHIFT,
+        NULL, 20u, 30u, 1) == CDIN_FRONTEND_PROTOCOL_OK);
+    {
+        cdin_frontend_protocol_message_view mouse_message;
+        size_t frame_length = stream.output_length - output_mark;
+        assert(cdin_frontend_protocol_decode_frame(
+            stream.output + output_mark, frame_length, &mouse_message, 1024u) ==
+            CDIN_FRONTEND_PROTOCOL_OK);
+        assert(mouse_message.type == CDIN_FRONTEND_PROTOCOL_INPUT_MOUSE);
+        assert(cdin_frontend_protocol_payload_get_text(
+            mouse_message.payload, mouse_message.payload_length,
+            "action", (char *)frame_buffer, sizeof(frame_buffer), &mouse_position_length) ==
+            CDIN_FRONTEND_PROTOCOL_OK);
+        assert(strcmp((char *)frame_buffer, "press") == 0);
+        assert(cdin_frontend_protocol_payload_get_raw(
+            mouse_message.payload, mouse_message.payload_length,
+            "position", (const uint8_t **)&mouse_position, &mouse_position_length) ==
+            CDIN_FRONTEND_PROTOCOL_OK);
+        assert(cdin_frontend_protocol_payload_get_uint(
+            mouse_position, mouse_position_length, "x", &mouse_x) ==
+            CDIN_FRONTEND_PROTOCOL_OK);
+        assert(cdin_frontend_protocol_payload_get_uint(
+            mouse_position, mouse_position_length, "y", &mouse_y) ==
+            CDIN_FRONTEND_PROTOCOL_OK);
+        assert(mouse_x == 20u && mouse_y == 30u);
+    }
+    assert(cdin_frontend_session_send_mouse(
+        &session, "drag", "left", 0u, NULL, 1u, 1u, 1) ==
+        CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
     memset(&input_event, 0, sizeof(input_event));
     input_event.kind = CDIN_FRONTEND_INPUT_KEY;
     (void)snprintf(input_event.key, sizeof(input_event.key), "%s", "up");
