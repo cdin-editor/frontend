@@ -129,6 +129,9 @@ int main(void)
     cdin_frontend_gui_sdl *gui = NULL;
     uint8_t client_buffer[4096];
     SDL_Event event;
+    SDL_Window *unrelated_window = NULL;
+    size_t output_before_unrelated_key;
+    cdin_frontend_session cell_session;
     int quit_requested = 0;
 
     trace_step("begin");
@@ -158,6 +161,14 @@ int main(void)
     config.width = 800u;
     config.height = 600u;
     config.visible_line_capacity = 16u;
+
+    cell_session = session;
+    cell_session.units = "cells";
+    config.session = &cell_session;
+    assert(cdin_frontend_gui_sdl_create(&config, &gui) ==
+           CDIN_FRONTEND_GUI_SDL_INVALID_ARGUMENT);
+    assert(gui == NULL);
+    config.session = &session;
 
     /* Force a late startup failure after video initialization and window
      * creation. The adapter must destroy partial resources and release the
@@ -224,6 +235,24 @@ int main(void)
     assert(output_contains_type(&stream, CDIN_FRONTEND_PROTOCOL_INPUT_TEXT));
     assert(output_contains_type(&stream, CDIN_FRONTEND_PROTOCOL_INPUT_KEY));
     trace_step("text and key Protocol frames verified");
+
+    /* SDL's event queue is process-wide. A keystroke addressed to another
+     * window must not leak into this editor's borrowed Core Session. */
+    unrelated_window = SDL_CreateWindow("unrelated SDL host window", 320, 200, 0u);
+    assert(unrelated_window != NULL);
+    output_before_unrelated_key = stream.output_length;
+    memset(&event, 0, sizeof(event));
+    event.type = SDL_EVENT_KEY_DOWN;
+    event.key.type = SDL_EVENT_KEY_DOWN;
+    event.key.windowID = SDL_GetWindowID(unrelated_window);
+    event.key.key = SDLK_A;
+    event.key.down = true;
+    assert(SDL_PushEvent(&event));
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    assert(stream.output_length == output_before_unrelated_key);
+    SDL_DestroyWindow(unrelated_window);
+    trace_step("foreign-window key event ignored");
 
     trace_step("destroy adapter");
     cdin_frontend_gui_sdl_destroy(gui);
