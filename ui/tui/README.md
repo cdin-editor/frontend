@@ -7,7 +7,28 @@ commands, keymaps, Runtime policy or Kernel state.
 ## Current implementation
 
 - Incremental terminal input parsing and physical key/text distinction.
-- Terminal lifecycle adapter for POSIX and Windows.
+- Terminal lifecycle adapter for POSIX and Windows. On Windows, native console
+  handles are used when standard streams are consoles; ConPTY or redirected
+  standard streams fall back to `CONIN# Terminal UI adapter
+
+The TUI is the first interactive Frontend target. It owns terminal input,
+terminal-cell layout and terminal rendering. It does not own documents,
+commands, keymaps, Runtime policy or Kernel state.
+
+## Current implementation
+
+- Incremental terminal input parsing and physical key/text distinction.
+/`CONOUT# Terminal UI adapter
+
+The TUI is the first interactive Frontend target. It owns terminal input,
+terminal-cell layout and terminal rendering. It does not own documents,
+commands, keymaps, Runtime policy or Kernel state.
+
+## Current implementation
+
+- Incremental terminal input parsing and physical key/text distinction.
+ handles and restore their
+  original modes before closing only handles owned by the adapter.
 - POSIX input reads probe process STDIN with a zero-timeout `poll` before
   each read. The drain callback is nonblocking without opening/duplicating the
   terminal or changing STDIN/STDOUT flags; renderer writes remain blocking.
