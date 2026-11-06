@@ -24,7 +24,7 @@ static int same_view(cdin_frontend_gui_sdl_model *model,
     size_t length;
     if (get_text(message, "view_id", view_id, sizeof(view_id)) !=
         CDIN_FRONTEND_PROTOCOL_OK) return 0;
-    if (model->view_id[0] == '\\0') {
+    if (model->view_id[0] == '\0') {
         /* ATTACH identifies the Frontend viewport, not a Runtime document
          * view. Bind the single-view SDL baseline to the first semantic view
          * actually published by Runtime instead of assuming both IDs match. */
