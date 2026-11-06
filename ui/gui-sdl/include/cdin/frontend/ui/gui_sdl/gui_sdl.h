@@ -36,6 +36,10 @@ typedef struct cdin_frontend_gui_sdl_config {
     size_t visible_line_capacity;
 } cdin_frontend_gui_sdl_config;
 
+/* Capabilities this adapter actually implements. Call before HELLO and
+ * pass the result to cdin_frontend_session_set_capabilities(). */
+cdin_frontend_capability_mask cdin_frontend_gui_sdl_supported_capabilities(void);
+
 cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_create(
     const cdin_frontend_gui_sdl_config *config,
     cdin_frontend_gui_sdl **out_gui);
