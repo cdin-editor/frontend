@@ -25,6 +25,11 @@ int main(void)
         0x67u, 'v','e','r','s','i','o','n', 0x01u,
         0x67u, 'v','i','e','w','_','i','d', 0x66u, 'v','i','e','w','-','1'
     };
+    static const uint8_t other_view_invalidate[] = {
+        0xa2u,
+        0x67u, 'v','e','r','s','i','o','n', 0x01u,
+        0x67u, 'v','i','e','w','_','i','d', 0x66u, 'v','i','e','w','-','2'
+    };
     static const uint8_t cursor[] = {
         0xa3u,
         0x67u, 'v','e','r','s','i','o','n', 0x01u,
@@ -78,16 +83,25 @@ int main(void)
     cdin_frontend_gui_sdl_model_action action;
     cdin_frontend_protocol_message_view view;
 
-    assert(cdin_frontend_gui_sdl_model_init(&model, "view-1", 16u) ==
+    /* The attach viewport ID is not a Runtime semantic view ID. The
+     * first view-scoped snapshot message establishes the actual view. */
+    assert(cdin_frontend_gui_sdl_model_init(&model, "", 16u) ==
            CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    assert(model.view_id[0] == '\\0');
     view = message(CDIN_FRONTEND_PROTOCOL_VIEW_INVALIDATE,
                    invalidate, sizeof(invalidate));
     assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
            CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    assert(strcmp(model.view_id, "view-1") == 0);
     /* Snapshot messages are staged; none of their state is visible before
      * the matching ui.flush commits the whole group. */
     assert(model.version == 0u);
     assert(model.snapshot_pending_valid != 0);
+    view = message(CDIN_FRONTEND_PROTOCOL_VIEW_INVALIDATE,
+                   other_view_invalidate, sizeof(other_view_invalidate));
+    assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_STALE);
+    assert(strcmp(model.view_id, "view-1") == 0);
     view = message(CDIN_FRONTEND_PROTOCOL_UI_CURSOR, cursor, sizeof(cursor));
     assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
            CDIN_FRONTEND_GUI_SDL_MODEL_OK);
