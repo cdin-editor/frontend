@@ -29,8 +29,6 @@ typedef struct cdin_frontend_gui_sdl_line_window {
 
 typedef struct cdin_frontend_gui_sdl_snapshot_state {
     uint64_t version;
-    uint64_t snapshot_revision;
-    int has_snapshot_revision;
     uint64_t cursor_position;
     uint64_t selection_anchor;
     uint64_t selection_caret;
@@ -48,6 +46,8 @@ typedef struct cdin_frontend_gui_sdl_snapshot_state {
 typedef struct cdin_frontend_gui_sdl_model {
     char view_id[64];
     uint64_t version;
+    uint64_t snapshot_revision;
+    int has_snapshot_revision;
     uint64_t cursor_position;
     uint64_t selection_anchor;
     uint64_t selection_caret;
