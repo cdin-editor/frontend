@@ -119,7 +119,10 @@ int main(void)
     uint8_t paste[] = { 'a', 0u, 0xffu };
     size_t output_mark;
     const uint8_t *mouse_position = NULL;
+    const uint8_t *mouse_modifiers = NULL;
     size_t mouse_position_length = 0u;
+    size_t mouse_modifiers_length = 0u;
+    size_t mouse_modifier_count = 0u;
     uint64_t mouse_x = 0u;
     uint64_t mouse_y = 0u;
     static const uint8_t persian_text[] = { 0xd8u, 0xb3u, 0xd9u, 0x84u, 0xd8u, 0xa7u, 0xd9u, 0x85u };
@@ -204,6 +207,14 @@ int main(void)
             mouse_position, mouse_position_length, "y", &mouse_y) ==
             CDIN_FRONTEND_PROTOCOL_OK);
         assert(mouse_x == 20u && mouse_y == 30u);
+        assert(cdin_frontend_protocol_payload_get_raw(
+            mouse_message.payload, mouse_message.payload_length,
+            "modifiers", &mouse_modifiers, &mouse_modifiers_length) ==
+            CDIN_FRONTEND_PROTOCOL_OK);
+        assert(cdin_frontend_protocol_array_count(
+            mouse_modifiers, mouse_modifiers_length, &mouse_modifier_count) ==
+            CDIN_FRONTEND_PROTOCOL_OK);
+        assert(mouse_modifier_count == 2u);
     }
     assert(cdin_frontend_session_send_mouse(
         &session, "drag", "left", 0u, NULL, 1u, 1u, 1) ==
