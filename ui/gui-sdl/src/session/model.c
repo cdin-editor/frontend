@@ -72,6 +72,7 @@ static void snapshot_commit(cdin_frontend_gui_sdl_model *model)
     if (version_changed) {
         memset(&model->visible, 0, sizeof(model->visible));
         model->pending_lines_valid = 0;
+        model->has_line_request = 0;
         model->needs_lines = model->version != 0u;
     }
     model->snapshot_pending_valid = 0;
