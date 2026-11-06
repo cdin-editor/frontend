@@ -34,8 +34,8 @@ int main(void)
     static const uint8_t snapshot_flush[] = {
         0xa3u,
         0x65u, 's','c','o','p','e', 0x68u, 's','n','a','p','s','h','o','t',
-        0x68u, 's','e','q','u','e','n','c','e', 0x01u,
-        0x68u, 'r','e','v','i','s','i','o','n', 0x01u
+        0x68u, 'r','e','v','i','s','i','o','n', 0x01u,
+        0x68u, 's','e','q','u','e','n','c','e', 0x01u
     };
     static const uint8_t invalidate_v2[] = {
         0xa2u,
@@ -45,8 +45,8 @@ int main(void)
     static const uint8_t stale_snapshot_flush[] = {
         0xa3u,
         0x65u, 's','c','o','p','e', 0x68u, 's','n','a','p','s','h','o','t',
-        0x68u, 's','e','q','u','e','n','c','e', 0x03u,
-        0x68u, 'r','e','v','i','s','i','o','n', 0x00u
+        0x68u, 'r','e','v','i','s','i','o','n', 0x00u,
+        0x68u, 's','e','q','u','e','n','c','e', 0x03u
     };
     static const uint8_t lines[] = {
         0xa4u,
