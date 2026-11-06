@@ -61,14 +61,31 @@ jobs:
             -DSDL_OPENGL=OFF -DSDL_OPENGLES=OFF -DSDL_VULKAN=OFF
           cmake --build "$RUNNER_TEMP/SDL3-build" --parallel
           cmake --install "$RUNNER_TEMP/SDL3-build"
-      - name: Build production GUI-SDL adapter and model tests
-        env:
-          ASAN_OPTIONS: detect_leaks=0:halt_on_error=1:abort_on_error=1
+      - name: Configure GUI-SDL AddressSanitizer test build
         run: |
-          cmake -S . -B build-gui-sdl -G Ninja \
+          cmake -S . -B build-gui-sdl-asan -G Ninja \
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_C_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g" \
             -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address" \
+            -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/SDL3-install;$PWD/.deps/log" \
+            -DCDIN_FRONTEND_USE_LOG_STUB=OFF \
+            -DCDIN_FRONTEND_BUILD_UI_TUI=OFF \
+            -DCDIN_FRONTEND_BUILD_UI_SDL=ON \
+            -DCDIN_FRONTEND_BUILD_UI_HEADLESS=OFF \
+            -DCDIN_FRONTEND_BUILD_APPS=ON \
+            -DCDIN_FRONTEND_BUILD_EXAMPLES=OFF \
+            -DBUILD_TESTING=ON
+      - name: Build and run GUI-SDL tests under AddressSanitizer
+        env:
+          ASAN_OPTIONS: detect_leaks=0:halt_on_error=1:abort_on_error=1
+        run: |
+          cmake --build build-gui-sdl-asan --parallel
+          ctest --test-dir build-gui-sdl-asan --output-on-failure
+
+      - name: Configure production GUI-SDL package
+        run: |
+          cmake -S . -B build-gui-sdl -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/SDL3-install;$PWD/.deps/log" \
             -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/frontend-install" \
             -DCDIN_FRONTEND_USE_LOG_STUB=OFF \
@@ -78,6 +95,8 @@ jobs:
             -DCDIN_FRONTEND_BUILD_APPS=ON \
             -DCDIN_FRONTEND_BUILD_EXAMPLES=OFF \
             -DBUILD_TESTING=ON
+      - name: Build, test and install production GUI-SDL package
+        run: |
           cmake --build build-gui-sdl --parallel
           ctest --test-dir build-gui-sdl --output-on-failure
           cmake --install build-gui-sdl
