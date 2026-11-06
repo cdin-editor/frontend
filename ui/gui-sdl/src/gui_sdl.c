@@ -90,7 +90,9 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_create(
         config->width == 0u || config->height == 0u ||
         config->width > 32768u || config->height > 32768u ||
         config->session->state != CDIN_FRONTEND_SESSION_ATTACHED ||
-        config->session->view_id[0] == '\0' || !config->session->driver) {
+        config->session->view_id[0] == '\0' || !config->session->driver ||
+        config->session->units == NULL ||
+        strcmp(config->session->units, "pixels") != 0) {
         return CDIN_FRONTEND_GUI_SDL_INVALID_ARGUMENT;
     }
     gui = (cdin_frontend_gui_sdl *)calloc(1u, sizeof(*gui));
