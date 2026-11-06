@@ -7,13 +7,14 @@
 #include <string.h>
 
 typedef struct terminal_context {
-    HANDLE input;
+    HANDLE input; /* Read path: redirected ConPTY pipe or native console input. */
     HANDLE output;
+    HANDLE console_input; /* Console mode control; CONIN$ in ConPTY mode. */
     HANDLE original_standard_input;
     DWORD original_input_mode;
     DWORD original_output_mode;
     int have_modes;
-    int owns_input;
+    int owns_console_input;
     int owns_output;
     int replaced_standard_input;
 } terminal_context;
@@ -26,13 +27,13 @@ static void terminal_context_destroy(terminal_context *context)
         context->replaced_standard_input = 0;
     }
     if (context->have_modes) {
-        (void)SetConsoleMode(context->input, context->original_input_mode);
+        (void)SetConsoleMode(context->console_input, context->original_input_mode);
         (void)SetConsoleMode(context->output, context->original_output_mode);
         context->have_modes = 0;
     }
-    if (context->owns_input && context->input != NULL &&
-        context->input != INVALID_HANDLE_VALUE) {
-        (void)CloseHandle(context->input);
+    if (context->owns_console_input && context->console_input != NULL &&
+        context->console_input != INVALID_HANDLE_VALUE) {
+        (void)CloseHandle(context->console_input);
     }
     if (context->owns_output && context->output != NULL &&
         context->output != INVALID_HANDLE_VALUE) {
@@ -100,13 +101,17 @@ static int terminal_open_conpty_handles(terminal_context *context)
     output_type = GetFileType(standard_output);
     if (input_type != FILE_TYPE_PIPE || output_type != FILE_TYPE_PIPE) return -1;
 
-    context->input = CreateFileW(L"CONIN$", GENERIC_READ | GENERIC_WRITE,
+    /* The ConPTY host delivers the VT input stream through the redirected
+     * standard-input pipe. Keep that pipe as the read source; CONIN$ is used
+     * only for changing/querying the attached console's input mode. */
+    context->input = context->original_standard_input;
+    context->console_input = CreateFileW(L"CONIN$", GENERIC_READ | GENERIC_WRITE,
         FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0u, NULL);
-    if (context->input == INVALID_HANDLE_VALUE) {
-        context->input = NULL;
+    if (context->console_input == INVALID_HANDLE_VALUE) {
+        context->console_input = NULL;
         return -1;
     }
-    context->owns_input = 1;
+    context->owns_console_input = 1;
 
     context->output = CreateFileW(L"CONOUT$", GENERIC_READ | GENERIC_WRITE,
         FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0u, NULL);
@@ -116,7 +121,7 @@ static int terminal_open_conpty_handles(terminal_context *context)
     }
     context->owns_output = 1;
 
-    if (!SetStdHandle(STD_INPUT_HANDLE, context->input)) return -1;
+    if (!SetStdHandle(STD_INPUT_HANDLE, context->console_input)) return -1;
     context->replaced_standard_input = 1;
     return 0;
 }
@@ -133,16 +138,17 @@ cdin_frontend_terminal_status cdin_frontend_terminal_open(cdin_frontend_terminal
     if (context == NULL) return CDIN_FRONTEND_TERMINAL_IO_ERROR;
 
     context->input = GetStdHandle(STD_INPUT_HANDLE);
+    context->console_input = context->input;
     context->output = GetStdHandle(STD_OUTPUT_HANDLE);
     if (context->input == NULL || context->input == INVALID_HANDLE_VALUE ||
         context->output == NULL || context->output == INVALID_HANDLE_VALUE ||
-        !GetConsoleMode(context->input, &context->original_input_mode) ||
+        !GetConsoleMode(context->console_input, &context->original_input_mode) ||
         !GetConsoleMode(context->output, &context->original_output_mode)) {
         if (terminal_open_conpty_handles(context) != 0) {
             terminal_context_destroy(context);
             return CDIN_FRONTEND_TERMINAL_NOT_INTERACTIVE;
         }
-        if (!GetConsoleMode(context->input, &context->original_input_mode) ||
+        if (!GetConsoleMode(context->console_input, &context->original_input_mode) ||
             !GetConsoleMode(context->output, &context->original_output_mode)) {
             terminal_context_destroy(context);
             return CDIN_FRONTEND_TERMINAL_NOT_INTERACTIVE;
@@ -154,7 +160,7 @@ cdin_frontend_terminal_status cdin_frontend_terminal_open(cdin_frontend_terminal
         (DWORD)~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT);
     input_mode |= ENABLE_VIRTUAL_TERMINAL_INPUT;
     output_mode = context->original_output_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-    if (!SetConsoleMode(context->input, input_mode) ||
+    if (!SetConsoleMode(context->console_input, input_mode) ||
         !SetConsoleMode(context->output, output_mode)) {
         terminal_context_destroy(context);
         return CDIN_FRONTEND_TERMINAL_UNSUPPORTED;
