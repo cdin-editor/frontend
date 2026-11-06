@@ -17,6 +17,7 @@ struct cdin_frontend_gui_sdl {
     uint32_t width;
     uint32_t height;
     int owns_video;
+    int mouse_enabled;
     int quit_requested;
     char title[256];
 };
@@ -41,6 +42,11 @@ static void log_sdl_error(cdin_frontend_gui_sdl *gui, const char *operation)
     }
 }
 
+cdin_frontend_capability_mask cdin_frontend_gui_sdl_supported_capabilities(void)
+{
+    return CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_MOUSE);
+}
+
 cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_create(
     const cdin_frontend_gui_sdl_config *config,
     cdin_frontend_gui_sdl **out_gui)
@@ -62,6 +68,9 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_create(
     gui->logger = config->logger;
     gui->width = config->width;
     gui->height = config->height;
+    gui->mouse_enabled = cdin_frontend_capability_has(
+        cdin_frontend_session_accepted_capabilities(config->session),
+        CDIN_FRONTEND_CAP_MOUSE);
     gui->owns_video = (SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO) == 0u;
     if (config->window_title == NULL) {
         gui->title[0] = '\0';
@@ -205,6 +214,47 @@ static cdin_frontend_gui_sdl_status send_key_event(
         ? CDIN_FRONTEND_GUI_SDL_OK : CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
 }
 
+static const char *mouse_button_name(uint8_t button)
+{
+    switch (button) {
+        case SDL_BUTTON_LEFT: return "left";
+        case SDL_BUTTON_MIDDLE: return "middle";
+        case SDL_BUTTON_RIGHT: return "right";
+        case SDL_BUTTON_X1: return "x1";
+        case SDL_BUTTON_X2: return "x2";
+        default: return NULL;
+    }
+}
+
+static cdin_frontend_gui_sdl_status send_mouse_event(
+    cdin_frontend_gui_sdl *gui, const char *action, const char *button,
+    SDL_Keymod modifiers, float x, float y)
+{
+    cdin_frontend_protocol_status status;
+    uint32_t logical_x = 0u;
+    uint32_t logical_y = 0u;
+    int has_position = x >= 0.0f && y >= 0.0f &&
+        x <= 32768.0f && y <= 32768.0f;
+    if (gui == NULL || action == NULL || button == NULL) {
+        return CDIN_FRONTEND_GUI_SDL_INVALID_ARGUMENT;
+    }
+    if (!gui->mouse_enabled) return CDIN_FRONTEND_GUI_SDL_OK;
+    if (has_position) {
+        logical_x = (uint32_t)x;
+        logical_y = (uint32_t)y;
+    }
+    status = cdin_frontend_session_send_mouse(
+        gui->session, action, button, input_modifiers(modifiers),
+        NULL, logical_x, logical_y, has_position);
+    if (status == CDIN_FRONTEND_PROTOCOL_UNSUPPORTED) {
+        /* The Composition Root may choose not to negotiate optional mouse
+         * support. The adapter then remains keyboard/text-only. */
+        return CDIN_FRONTEND_GUI_SDL_OK;
+    }
+    return status == CDIN_FRONTEND_PROTOCOL_OK
+        ? CDIN_FRONTEND_GUI_SDL_OK : CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+}
+
 cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
     cdin_frontend_gui_sdl *gui, int *out_quit_requested)
 {
@@ -232,6 +282,38 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
                     return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
                 }
                 break;
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            case SDL_EVENT_MOUSE_BUTTON_UP: {
+                const char *button = mouse_button_name(event.button.button);
+                if (button != NULL &&
+                    send_mouse_event(gui, event.button.down ? "press" : "release",
+                                     button, SDL_GetModState(),
+                                     event.button.x, event.button.y) !=
+                        CDIN_FRONTEND_GUI_SDL_OK) {
+                    return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+                }
+                break;
+            }
+            case SDL_EVENT_MOUSE_MOTION:
+                if (send_mouse_event(gui, "move", "none", SDL_GetModState(),
+                                     event.motion.x, event.motion.y) !=
+                    CDIN_FRONTEND_GUI_SDL_OK) {
+                    return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+                }
+                break;
+            case SDL_EVENT_MOUSE_WHEEL: {
+                float vertical = event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED
+                    ? -event.wheel.y : event.wheel.y;
+                const char *button = vertical > 0.0f ? "wheel_up" :
+                                     vertical < 0.0f ? "wheel_down" : "none";
+                if (vertical != 0.0f &&
+                    send_mouse_event(gui, "scroll", button, SDL_GetModState(),
+                                     event.wheel.mouse_x, event.wheel.mouse_y) !=
+                    CDIN_FRONTEND_GUI_SDL_OK) {
+                    return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+                }
+                break;
+            }
             case SDL_EVENT_TEXT_INPUT:
                 if (event.text.text != NULL && event.text.text[0] != '\0') {
                     cdin_frontend_protocol_status status =
