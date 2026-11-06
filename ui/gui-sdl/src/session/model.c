@@ -90,7 +90,10 @@ static cdin_frontend_gui_sdl_model_status apply_invalidate(
     }
     staged->version = version;
     staged->needs_lines = 1;
-    model->pending_lines_valid = 0;
+    /* Do not discard an independently staged response here. Invalidation is
+     * not visible until its snapshot ui.flush commits; the response may still
+     * belong to the currently committed document version. snapshot_commit()
+     * invalidates the line cache only after a newer version is committed. */
     return CDIN_FRONTEND_GUI_SDL_MODEL_OK;
 }
 
