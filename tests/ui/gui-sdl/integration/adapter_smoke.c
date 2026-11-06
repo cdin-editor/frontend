@@ -227,10 +227,7 @@ int main(void)
     memset(&event, 0, sizeof(event));
     event.type = SDL_EVENT_RENDER_DEVICE_LOST;
     event.render.type = SDL_EVENT_RENDER_DEVICE_LOST;
-    event.render.windowID = SDL_GetWindowID(SDL_GetWindowFromID(
-        SDL_GetWindowID(SDL_GetWindowFromID(0u))));
-    /* SDL's dummy/software backend has one adapter window; use its active ID
-     * supplied by the adapter's first render event in this process. */
+    /* A zero window ID is accepted by the adapter for renderer-wide events. */
     event.render.windowID = 0u;
     trace_step("push renderer device-loss event");
     assert(SDL_PushEvent(&event));
