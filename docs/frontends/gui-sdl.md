@@ -82,6 +82,29 @@ cache. The renderer is therefore multi-pane, but not yet a production Unicode
 text renderer. Style roles, cursor/selection visualization, panels, widgets
 and per-view scrolling remain later phases.
 
+## Semantic presentation payloads and line spans
+
+The GUI model stages the Protocol `ui.style_table`, `ui.panel` and
+`ui.prompt` payloads with the same atomic snapshot as its PaneTree and views.
+Their CBOR maps are retained byte-for-byte under explicit limits (32 KiB for
+the style table, 16 panels at up to 4 KiB each, and 4 KiB for a prompt). A
+complete replacement snapshot starts with an empty panel/prompt/style state;
+omitted panels disappear, and `prompt:null` clears the prompt. The model does
+not interpret arbitrary attribute/widget fields.
+
+Optional `view.lines` spans are validated against the original line byte
+length and preserved as their encoded CBOR array beside the line bytes. Span
+role IDs and byte offsets are not rewritten. Span payload storage counts
+against the same 4 MiB aggregate LRU cache budget as line content. This gives
+the later text renderer the original byte-to-role data without prematurely
+assigning colors or glyph geometry.
+
+The field-level style attribute and declarative widget schemas remain
+under design in [Spec issue #21](https://github.com/cdin-editor/spec/issues/21).
+Until that contract is accepted, the GUI does not invent rendering semantics
+for opaque panel/prompt maps. Cursor and selection drawing also remains gated
+on the byte-to-visual mapping from the text pipeline phase.
+
 ## Pane hit-testing and pointer routing
 
 The geometry module also provides SDL-independent point hit-testing against the
