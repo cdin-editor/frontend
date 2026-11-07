@@ -541,6 +541,7 @@ static cdin_frontend_gui_sdl_model_status apply_lines(
     cdin_frontend_gui_sdl_view *view;
     cdin_frontend_gui_sdl_line_window pending;
     cdin_frontend_gui_sdl_model_status cache_status;
+    cdin_frontend_gui_sdl_model_status status;
 
     memset(&pending, 0, sizeof(pending));
     memset(span_source, 0, sizeof(span_source));
@@ -741,6 +742,169 @@ static void optional_text(const cdin_frontend_protocol_message_view *message,
     }
 }
 
+static size_t find_panel_index(
+    const cdin_frontend_gui_sdl_presentation *presentation,
+    const char *panel_id)
+{
+    size_t index;
+    if (presentation == NULL || panel_id == NULL) return SIZE_MAX;
+    for (index = 0u; index < presentation->panel_count; ++index) {
+        if (strcmp(presentation->panels[index].panel_id, panel_id) == 0) {
+            return index;
+        }
+    }
+    return SIZE_MAX;
+}
+
+static cdin_frontend_gui_sdl_model_status apply_style_table(
+    cdin_frontend_gui_sdl_model *model,
+    const cdin_frontend_protocol_message_view *message)
+{
+    cdin_frontend_gui_sdl_presentation *presentation =
+        &model->staged_snapshot.presentation;
+    const uint8_t *styles = NULL;
+    size_t styles_length = 0u;
+    uint64_t revision = 0u;
+    size_t base_bytes;
+    if (cdin_frontend_protocol_payload_get_uint(
+            message->payload, message->payload_length,
+            "revision", &revision) != CDIN_FRONTEND_PROTOCOL_OK ||
+        cdin_frontend_protocol_payload_get_raw(
+            message->payload, message->payload_length,
+            "styles", &styles, &styles_length) != CDIN_FRONTEND_PROTOCOL_OK ||
+        !raw_is_map(styles, styles_length)) {
+        return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
+    }
+    if (styles_length > CDIN_FRONTEND_GUI_SDL_MAX_STYLE_TABLE_BYTES) {
+        return CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT;
+    }
+    base_bytes = presentation->encoded_bytes -
+        presentation->style_table_length;
+    if (base_bytes > CDIN_FRONTEND_GUI_SDL_MAX_PRESENTATION_BYTES -
+                     styles_length) {
+        return CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT;
+    }
+    memcpy(presentation->style_table_cbor, styles, styles_length);
+    presentation->style_table_length = styles_length;
+    presentation->style_revision = revision;
+    presentation->encoded_bytes = base_bytes + styles_length;
+    return CDIN_FRONTEND_GUI_SDL_MODEL_OK;
+}
+
+static cdin_frontend_gui_sdl_model_status apply_panel(
+    cdin_frontend_gui_sdl_model *model,
+    const cdin_frontend_protocol_message_view *message)
+{
+    cdin_frontend_gui_sdl_presentation *presentation =
+        &model->staged_snapshot.presentation;
+    const uint8_t *panel = NULL;
+    size_t panel_length = 0u;
+    char panel_id[CDIN_FRONTEND_GUI_SDL_MAX_PANEL_ID_BYTES + 1u];
+    size_t id_length = 0u;
+    uint64_t revision = 0u;
+    size_t index;
+    size_t old_length = 0u;
+    size_t base_bytes;
+
+    if (cdin_frontend_protocol_payload_get_uint(
+            message->payload, message->payload_length,
+            "revision", &revision) != CDIN_FRONTEND_PROTOCOL_OK ||
+        message_text(message, "panel_id", panel_id,
+                     sizeof(panel_id), &id_length) != CDIN_FRONTEND_PROTOCOL_OK ||
+        id_length == 0u ||
+        cdin_frontend_protocol_payload_get_raw(
+            message->payload, message->payload_length,
+            "panel", &panel, &panel_length) != CDIN_FRONTEND_PROTOCOL_OK) {
+        return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
+    }
+    (void)revision;
+    index = find_panel_index(presentation, panel_id);
+    if (index != SIZE_MAX) {
+        old_length = presentation->panels[index].payload_length;
+    }
+    base_bytes = presentation->encoded_bytes - old_length;
+
+    if (raw_is_null(panel, panel_length)) {
+        if (index != SIZE_MAX) {
+            if (index + 1u < presentation->panel_count) {
+                memmove(&presentation->panels[index],
+                        &presentation->panels[index + 1u],
+                        (presentation->panel_count - index - 1u) *
+                            sizeof(presentation->panels[0]));
+            }
+            presentation->panel_count--;
+            memset(&presentation->panels[presentation->panel_count], 0,
+                   sizeof(presentation->panels[0]));
+            presentation->encoded_bytes = base_bytes;
+        }
+        return CDIN_FRONTEND_GUI_SDL_MODEL_OK;
+    }
+    if (!raw_is_map(panel, panel_length)) {
+        return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
+    }
+    if (panel_length > CDIN_FRONTEND_GUI_SDL_MAX_PANEL_BYTES) {
+        return CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT;
+    }
+    if (index == SIZE_MAX &&
+        presentation->panel_count >= CDIN_FRONTEND_GUI_SDL_MAX_PANELS) {
+        return CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT;
+    }
+    if (panel_length > CDIN_FRONTEND_GUI_SDL_MAX_PRESENTATION_BYTES -
+                       base_bytes) {
+        return CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT;
+    }
+    if (index == SIZE_MAX) index = presentation->panel_count++;
+    (void)memcpy(presentation->panels[index].panel_id,
+                 panel_id, id_length + 1u);
+    memcpy(presentation->panels[index].payload_cbor, panel, panel_length);
+    presentation->panels[index].payload_length = panel_length;
+    presentation->encoded_bytes = base_bytes + panel_length;
+    return CDIN_FRONTEND_GUI_SDL_MODEL_OK;
+}
+
+static cdin_frontend_gui_sdl_model_status apply_prompt(
+    cdin_frontend_gui_sdl_model *model,
+    const cdin_frontend_protocol_message_view *message)
+{
+    cdin_frontend_gui_sdl_presentation *presentation =
+        &model->staged_snapshot.presentation;
+    const uint8_t *prompt = NULL;
+    size_t prompt_length = 0u;
+    uint64_t revision = 0u;
+    size_t base_bytes;
+    if (cdin_frontend_protocol_payload_get_uint(
+            message->payload, message->payload_length,
+            "revision", &revision) != CDIN_FRONTEND_PROTOCOL_OK ||
+        cdin_frontend_protocol_payload_get_raw(
+            message->payload, message->payload_length,
+            "prompt", &prompt, &prompt_length) != CDIN_FRONTEND_PROTOCOL_OK) {
+        return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
+    }
+    (void)revision;
+    base_bytes = presentation->encoded_bytes - presentation->prompt_length;
+    if (raw_is_null(prompt, prompt_length)) {
+        presentation->has_prompt = 0;
+        presentation->prompt_length = 0u;
+        presentation->encoded_bytes = base_bytes;
+        return CDIN_FRONTEND_GUI_SDL_MODEL_OK;
+    }
+    if (!raw_is_map(prompt, prompt_length)) {
+        return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
+    }
+    if (prompt_length > CDIN_FRONTEND_GUI_SDL_MAX_PROMPT_BYTES) {
+        return CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT;
+    }
+    if (prompt_length > CDIN_FRONTEND_GUI_SDL_MAX_PRESENTATION_BYTES -
+                        base_bytes) {
+        return CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT;
+    }
+    memcpy(presentation->prompt_cbor, prompt, prompt_length);
+    presentation->prompt_length = prompt_length;
+    presentation->has_prompt = 1;
+    presentation->encoded_bytes = base_bytes + prompt_length;
+    return CDIN_FRONTEND_GUI_SDL_MODEL_OK;
+}
+
 static cdin_frontend_gui_sdl_model_status apply_status(
     cdin_frontend_gui_sdl_model *model,
     const cdin_frontend_protocol_message_view *message)
@@ -864,6 +1028,15 @@ cdin_frontend_gui_sdl_model_status cdin_frontend_gui_sdl_model_apply(
             break;
         case CDIN_FRONTEND_PROTOCOL_UI_STATUSLINE:
             status = apply_status(model, message);
+            break;
+        case CDIN_FRONTEND_PROTOCOL_UI_STYLE_TABLE:
+            status = apply_style_table(model, message);
+            break;
+        case CDIN_FRONTEND_PROTOCOL_UI_PANEL:
+            status = apply_panel(model, message);
+            break;
+        case CDIN_FRONTEND_PROTOCOL_UI_PROMPT:
+            status = apply_prompt(model, message);
             break;
         case CDIN_FRONTEND_PROTOCOL_UI_OPTIONS:
             optional_text(message, "theme", model->staged_snapshot.theme,
