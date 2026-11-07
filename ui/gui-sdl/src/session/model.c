@@ -805,16 +805,22 @@ static cdin_frontend_gui_sdl_model_status apply_panel(
     size_t index;
     size_t old_length = 0u;
     size_t base_bytes;
+    cdin_frontend_protocol_status id_status;
 
     if (cdin_frontend_protocol_payload_get_uint(
             message->payload, message->payload_length,
             "revision", &revision) != CDIN_FRONTEND_PROTOCOL_OK ||
-        message_text(message, "panel_id", panel_id,
-                     sizeof(panel_id), &id_length) != CDIN_FRONTEND_PROTOCOL_OK ||
-        id_length == 0u ||
         cdin_frontend_protocol_payload_get_raw(
             message->payload, message->payload_length,
             "panel", &panel, &panel_length) != CDIN_FRONTEND_PROTOCOL_OK) {
+        return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
+    }
+    id_status = message_text(message, "panel_id", panel_id,
+                             sizeof(panel_id), &id_length);
+    if (id_status == CDIN_FRONTEND_PROTOCOL_BUFFER_TOO_SMALL) {
+        return CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT;
+    }
+    if (id_status != CDIN_FRONTEND_PROTOCOL_OK || id_length == 0u) {
         return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
     }
     (void)revision;
