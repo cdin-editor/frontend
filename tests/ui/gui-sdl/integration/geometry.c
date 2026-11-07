@@ -42,6 +42,7 @@ static void make_nested_layout(cdin_frontend_gui_sdl_layout *layout)
     layout->has_active_leaf = 1;
 
     layout->nodes[0].kind = CDIN_FRONTEND_GUI_SDL_LAYOUT_SPLIT;
+    memcpy(layout->nodes[0].id, "split-root", sizeof("split-root"));
     layout->nodes[0].first_child = 1u;
     layout->nodes[0].second_child = 2u;
     layout->nodes[0].axis = CDIN_FRONTEND_GUI_SDL_LAYOUT_HORIZONTAL;
@@ -50,6 +51,7 @@ static void make_nested_layout(cdin_frontend_gui_sdl_layout *layout)
     set_leaf(layout, 1u, "left", 0u);
 
     layout->nodes[2].kind = CDIN_FRONTEND_GUI_SDL_LAYOUT_SPLIT;
+    memcpy(layout->nodes[2].id, "split-right", sizeof("split-right"));
     layout->nodes[2].first_child = 3u;
     layout->nodes[2].second_child = 4u;
     layout->nodes[2].axis = CDIN_FRONTEND_GUI_SDL_LAYOUT_VERTICAL;
@@ -107,10 +109,12 @@ int main(void)
             &layout, &viewport, 260u, 200u, 4u, &split_index);
         assert(status == CDIN_FRONTEND_GUI_SDL_GEOMETRY_OK);
         assert(split_index == 0u);
+        assert(strcmp(layout.nodes[split_index].id, "split-root") == 0);
         status = cdin_frontend_gui_sdl_geometry_splitter_hit_test(
             &layout, &viewport, 500u, 380u, 4u, &split_index);
         assert(status == CDIN_FRONTEND_GUI_SDL_GEOMETRY_OK);
         assert(split_index == 2u);
+        assert(strcmp(layout.nodes[split_index].id, "split-right") == 0);
         /* At a nested-divider intersection, the deepest split wins. */
         status = cdin_frontend_gui_sdl_geometry_splitter_hit_test(
             &layout, &viewport, 260u, 380u, 4u, &split_index);
