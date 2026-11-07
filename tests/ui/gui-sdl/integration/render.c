@@ -30,7 +30,8 @@ static void set_leaf(
     uint8_t view_index)
 {
     cdin_frontend_gui_sdl_layout_node *node = &layout->nodes[node_index];
-    (void)strncpy(node->id, node_id, sizeof(node->id) - 1u);
+    assert(strlen(node_id) < sizeof(node->id));
+    memcpy(node->id, node_id, strlen(node_id) + 1u);
     node->kind = CDIN_FRONTEND_GUI_SDL_LAYOUT_LEAF;
     node->first_child = SIZE_MAX;
     node->second_child = SIZE_MAX;
