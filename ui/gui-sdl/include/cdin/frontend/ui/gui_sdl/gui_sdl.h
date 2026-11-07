@@ -63,6 +63,13 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_request_lines(
     cdin_frontend_gui_sdl *gui,
     uint64_t first_line);
 
+/* Request a version-pinned line window for a specific Runtime view. This is
+ * useful to prepare independent caches for views before they become focused. */
+cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_request_view_lines(
+    cdin_frontend_gui_sdl *gui,
+    const char *view_id,
+    uint64_t first_line);
+
 cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_render(
     cdin_frontend_gui_sdl *gui);
 
