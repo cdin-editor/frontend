@@ -122,6 +122,8 @@ static void test_nested_layout_renders_every_active_leaf(
     model.layout.nodes[0].second_child = 2u;
     model.layout.nodes[0].ratio_bp = 4000u;
     set_leaf(&model.layout, 1u, "leaf-left", 0u);
+    memset(&model.layout.nodes[2], 0, sizeof(model.layout.nodes[2]));
+    (void)strcpy(model.layout.nodes[2].id, "split-right");
     model.layout.nodes[2].kind = CDIN_FRONTEND_GUI_SDL_LAYOUT_SPLIT;
     model.layout.nodes[2].first_child = 3u;
     model.layout.nodes[2].second_child = 4u;
