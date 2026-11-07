@@ -1,6 +1,7 @@
 #include "cdin/frontend/ui/gui_sdl/gui_sdl.h"
 
 #include "session/model.h"
+#include "render/render.h"
 
 #include <SDL3/SDL.h>
 
@@ -549,32 +550,15 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_apply_message(
     return CDIN_FRONTEND_GUI_SDL_OK;
 }
 
-static void draw_text_ascii(SDL_Renderer *renderer, float x, float y,
-                            const uint8_t *bytes, size_t length,
-                            size_t capacity)
-{
-    char text[512];
-    size_t amount = length < capacity ? length : capacity;
-    size_t index;
-    if (amount >= sizeof(text)) amount = sizeof(text) - 1u;
-    for (index = 0u; index < amount; ++index) {
-        uint8_t value = bytes[index];
-        text[index] = value >= 0x20u && value < 0x7fu ? (char)value : '?';
-    }
-    text[amount] = '\0';
-    (void)SDL_RenderDebugText(renderer, x, y, text);
-}
-
 cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_render(
     cdin_frontend_gui_sdl *gui)
 {
-    size_t index;
-    float y = 56.0f;
-    const cdin_frontend_gui_sdl_view *focused_view;
+    cdin_frontend_gui_sdl_rect content;
+    cdin_frontend_gui_sdl_render_stats stats;
+    cdin_frontend_gui_sdl_render_status render_status;
     if (gui == NULL || gui->renderer == NULL) {
         return CDIN_FRONTEND_GUI_SDL_INVALID_ARGUMENT;
     }
-    focused_view = cdin_frontend_gui_sdl_model_focused_view(&gui->model);
     (void)SDL_SetRenderDrawColor(gui->renderer, 22u, 25u, 31u, 255u);
     (void)SDL_RenderClear(gui->renderer);
     (void)SDL_SetRenderDrawColor(gui->renderer, 43u, 48u, 58u, 255u);
@@ -591,20 +575,28 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_render(
         (float)gui->height - 20.0f,
         gui->model.status[0] != '\0' ? gui->model.status :
         (gui->model.mode[0] != '\0' ? gui->model.mode : "Connected"));
-    if (focused_view != NULL) {
-        for (index = 0u; index < focused_view->visible.count; ++index) {
-            char line_number[24];
-            (void)snprintf(line_number, sizeof(line_number), "%5llu ",
-                (unsigned long long)(focused_view->visible.first_line +
-                                     (uint64_t)index + 1u));
-            (void)SDL_RenderDebugText(gui->renderer, 12.0f, y, line_number);
-            draw_text_ascii(gui->renderer, 72.0f, y,
-                focused_view->visible.lines[index].bytes,
-                focused_view->visible.lines[index].length, 430u);
-            y += 20.0f;
-            if (y > (float)gui->height - 44.0f) break;
-        }
+
+    content.x = 0u;
+    content.y = 42u;
+    content.width = gui->width;
+    content.height = gui->height > 72u ? gui->height - 72u : 1u;
+    render_status = cdin_frontend_gui_sdl_render_panes(
+        gui->renderer, &gui->model, &content, &stats);
+    if (render_status == CDIN_FRONTEND_GUI_SDL_RENDER_SDL_ERROR) {
+        log_sdl_error(gui, "render PaneTree");
+        return CDIN_FRONTEND_GUI_SDL_SDL_ERROR;
     }
+    if (render_status == CDIN_FRONTEND_GUI_SDL_RENDER_INVALID_LAYOUT) {
+        if (gui->logger != NULL) {
+            CDIN_FRONTEND_ERROR(gui->logger, "GUI-SDL",
+                                "committed PaneTree cannot be rendered");
+        }
+        return CDIN_FRONTEND_GUI_SDL_INVALID_STATE;
+    }
+    if (render_status != CDIN_FRONTEND_GUI_SDL_RENDER_OK) {
+        return CDIN_FRONTEND_GUI_SDL_INVALID_ARGUMENT;
+    }
+    (void)stats;
     (void)SDL_RenderPresent(gui->renderer);
     return CDIN_FRONTEND_GUI_SDL_OK;
 }
