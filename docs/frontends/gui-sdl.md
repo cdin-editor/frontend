@@ -79,8 +79,34 @@ degrades to the focused view rather than dividing into zero-sized panes.
 Text is still drawn with SDL's diagnostic debug-text primitive. Non-ASCII
 bytes are shown as placeholders; the original bytes remain unchanged in the
 cache. The renderer is therefore multi-pane, but not yet a production Unicode
-text renderer. Style roles, cursor/selection visualization, panels, widgets,
-per-view scrolling and hit-testing/focus navigation remain later phases.
+text renderer. Style roles, cursor/selection visualization, panels, widgets
+and per-view scrolling remain later phases.
+
+## Pane hit-testing and pointer routing
+
+The geometry module also provides SDL-independent point hit-testing against the
+same computed pixel rectangles used by the renderer. Rectangles are half-open;
+a point exactly on a split boundary belongs to the second child. A successful
+hit returns the deepest leaf and its active Runtime View ID. Empty leaves,
+removed/stale views, points outside the content viewport and empty layouts
+produce no target.
+
+The SDL adapter converts native mouse coordinates with
+`SDL_ConvertEventToRenderCoordinates` before hit-testing, so high-DPI scaling,
+renderer scaling and the viewport use the same drawable-pixel coordinate
+space. On mouse press and wheel events it sends the hit leaf's **active Runtime
+View ID** as `input.mouse.target`; it never sends an internal Split/Leaf node
+ID. Runtime remains the authority that accepts the target and changes
+semantic focus. Mouse motion and button release do not trigger a focus change.
+The renderer viewport and startup dimensions are initialized from drawable
+pixel dimensions, not logical window dimensions.
+
+The current Runtime accepts `input.mouse.target` as a View ID, while the
+Protocol architecture text describes it generically as a region ID. The exact
+splitter/region identity and ratio-drag operation are not yet standardized.
+Split resize is therefore gated by [Spec issue #20](https://github.com/cdin-editor/spec/issues/20);
+Frontend does not invent a new mouse action or mutate Runtime-owned ratios
+locally.
 
 The adapter advertises the mouse capability and forwards negotiated pointer
 and wheel input. It does not advertise IME, dialogs, clipboard-provider,
