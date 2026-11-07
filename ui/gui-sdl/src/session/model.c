@@ -15,23 +15,27 @@ static cdin_frontend_protocol_status message_text(
         output, capacity, out_length);
 }
 
+static void line_window_dispose(cdin_frontend_gui_sdl_line_window *window)
+{
+    size_t index;
+    if (window == NULL) return;
+    for (index = 0u; index < window->count; ++index) {
+        free(window->lines[index].bytes);
+    }
+    memset(window, 0, sizeof(*window));
+}
+
 static void line_window_release(
     cdin_frontend_gui_sdl_model *model,
     cdin_frontend_gui_sdl_line_window *window)
 {
-    size_t index;
     if (model == NULL || window == NULL) return;
-    for (index = 0u; index < window->count; ++index) {
-        free(window->lines[index].bytes);
-        window->lines[index].bytes = NULL;
-        window->lines[index].length = 0u;
-    }
     if (window->bytes <= model->cache_bytes) {
         model->cache_bytes -= window->bytes;
     } else {
         model->cache_bytes = 0u;
     }
-    memset(window, 0, sizeof(*window));
+    line_window_dispose(window);
 }
 
 static void view_release(
@@ -262,12 +266,6 @@ static cdin_frontend_gui_sdl_model_status stage_layout_views(
             if ((size_t)view_index >= layout->view_count) {
                 return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
             }
-            target = find_snapshot_view(
-                &(cdin_frontend_gui_sdl_snapshot_state){
-                    .view_count = layout->view_count,
-                    .views = {0}
-                }, "");
-            (void)target;
             /* The parser's global view index maps directly to the matching
              * layout view id; the replacement array uses that same order. */
             target = (size_t)view_index;
@@ -402,6 +400,10 @@ static cdin_frontend_gui_sdl_model_status apply_cursor(
     status = ensure_staged_view(model, view_id, &view);
     if (status != CDIN_FRONTEND_GUI_SDL_MODEL_OK) return status;
     if (version < view->version) return CDIN_FRONTEND_GUI_SDL_MODEL_STALE;
+    if (version != view->version) {
+        view->has_selection = 0;
+        view->has_scroll_anchor = 0;
+    }
     view->version = version;
     view->cursor_position = position;
     view->has_cursor = 1;
@@ -445,6 +447,10 @@ static cdin_frontend_gui_sdl_model_status apply_selection(
     status = ensure_staged_view(model, view_id, &view);
     if (status != CDIN_FRONTEND_GUI_SDL_MODEL_OK) return status;
     if (version < view->version) return CDIN_FRONTEND_GUI_SDL_MODEL_STALE;
+    if (version != view->version) {
+        view->has_cursor = 0;
+        view->has_scroll_anchor = 0;
+    }
     view->version = version;
     view->selection_anchor = anchor;
     view->selection_caret = caret;
@@ -528,9 +534,7 @@ static cdin_frontend_gui_sdl_model_status apply_lines(
         if (lengths[index] != 0u) {
             pending.lines[index].bytes = (uint8_t *)malloc(lengths[index]);
             if (pending.lines[index].bytes == NULL) {
-                line_window_release(&(cdin_frontend_gui_sdl_model){
-                    .cache_bytes = 0u
-                }, &pending);
+                line_window_dispose(&pending);
                 return CDIN_FRONTEND_GUI_SDL_MODEL_NO_MEMORY;
             }
             memcpy(pending.lines[index].bytes, source[index], lengths[index]);
