@@ -123,6 +123,12 @@ int main(void)
         0x68u, 'r','e','v','i','s','i','o','n', 0x01u,
         0x68u, 's','e','q','u','e','n','c','e', 0x05u
     };
+    static const uint8_t snapshot_flush_v2[] = {
+        0xa3u,
+        0x65u, 's','c','o','p','e', 0x68u, 's','n','a','p','s','h','o','t',
+        0x68u, 'r','e','v','i','s','i','o','n', 0x02u,
+        0x68u, 's','e','q','u','e','n','c','e', 0x06u
+    };
     cdin_frontend_gui_sdl_model model;
     cdin_frontend_gui_sdl_model_action action;
     cdin_frontend_protocol_message_view view;
@@ -156,6 +162,19 @@ int main(void)
            CDIN_FRONTEND_GUI_SDL_MODEL_OK);
     assert(model.cursor_position == 0u);
     assert(model.has_cursor == 0);
+    memcpy(invalid_layout, layout_split, sizeof(invalid_layout));
+    for (byte_index = 0u; byte_index + 2u < sizeof(invalid_layout); ++byte_index) {
+        if (invalid_layout[byte_index] == 0x19u &&
+            invalid_layout[byte_index + 1u] == 0x13u &&
+            invalid_layout[byte_index + 2u] == 0x88u) {
+            ratio_offset = byte_index;
+            break;
+        }
+    }
+    assert(ratio_offset != SIZE_MAX);
+    invalid_layout[ratio_offset + 1u] = 0x23u;
+    invalid_layout[ratio_offset + 2u] = 0x28u; /* 9000, above 8999 */
+
     view = message(CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
                    layout_split, sizeof(layout_split));
     assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
@@ -164,6 +183,15 @@ int main(void)
      * cannot replace the committed layout before the matching ui.flush. */
     assert(model.has_layout == 0);
     assert(model.staged_snapshot.has_layout != 0);
+    assert(model.staged_snapshot.layout.node_count == 3u);
+    view = message(CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
+                   invalid_layout, sizeof(invalid_layout));
+    assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_INVALID);
+    /* A malformed later PaneTree must preserve the last valid tree staged
+     * in the same atomic snapshot. */
+    assert(model.staged_snapshot.has_layout != 0);
+    assert(model.staged_snapshot.layout.revision == 9u);
     assert(model.staged_snapshot.layout.node_count == 3u);
     view = message(CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
                    snapshot_flush, sizeof(snapshot_flush));
@@ -208,18 +236,6 @@ int main(void)
     assert(parsed_layout.node_count == 0u);
 
     /* Out-of-range fixed-point ratios are rejected without modifying output. */
-    memcpy(invalid_layout, layout_split, sizeof(invalid_layout));
-    for (byte_index = 0u; byte_index + 2u < sizeof(invalid_layout); ++byte_index) {
-        if (invalid_layout[byte_index] == 0x19u &&
-            invalid_layout[byte_index + 1u] == 0x13u &&
-            invalid_layout[byte_index + 2u] == 0x88u) {
-            ratio_offset = byte_index;
-            break;
-        }
-    }
-    assert(ratio_offset != SIZE_MAX);
-    invalid_layout[ratio_offset + 1u] = 0x23u;
-    invalid_layout[ratio_offset + 2u] = 0x28u; /* 9000, above 8999 */
     memset(&parsed_layout, 0xa5, sizeof(parsed_layout));
     memcpy(&unchanged_layout, &parsed_layout, sizeof(unchanged_layout));
     view = message(CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
@@ -298,6 +314,27 @@ int main(void)
            CDIN_FRONTEND_GUI_SDL_MODEL_STALE);
     assert(action.acknowledge_sequence == 5u);
     assert(model.snapshot_revision == 1u);
+
+    /* A later snapshot starts from the committed PaneTree. If its only
+     * layout update is malformed, the next flush must retain the last valid
+     * tree rather than commit a partially parsed replacement. */
+    view = message(CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
+                   invalid_layout, sizeof(invalid_layout));
+    assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_INVALID);
+    assert(model.snapshot_pending_valid != 0);
+    assert(model.staged_snapshot.has_layout != 0);
+    assert(model.staged_snapshot.layout.revision == 9u);
+    assert(model.staged_snapshot.layout.node_count == 3u);
+    view = message(CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
+                   snapshot_flush_v2, sizeof(snapshot_flush_v2));
+    assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    assert(action.acknowledge_sequence == 6u);
+    assert(model.snapshot_revision == 2u);
+    assert(model.has_layout != 0);
+    assert(model.layout.revision == 9u);
+    assert(model.layout.node_count == 3u);
 
     return 0;
 }
