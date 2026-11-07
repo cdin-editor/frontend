@@ -302,7 +302,13 @@ static const char *mouse_target_for_position(
         view_index >= gui->model.layout.view_count) {
         return NULL;
     }
-    return gui->model.layout.view_ids[view_index];
+    {
+        const char *view_id = gui->model.layout.view_ids[view_index];
+        const cdin_frontend_gui_sdl_view *view =
+            cdin_frontend_gui_sdl_model_find_view_const(&gui->model, view_id);
+        if (view == NULL || view->semantic.visible == 0) return NULL;
+        return view->semantic.view_id;
+    }
 }
 
 static cdin_frontend_gui_sdl_status convert_mouse_event_to_render_coordinates(
