@@ -15,16 +15,25 @@ static void trace_step(const char *name)
 }
 
 typedef struct fake_stream {
+    uint8_t input[8192];
+    size_t input_length;
+    size_t input_offset;
     uint8_t output[8192];
     size_t output_length;
 } fake_stream;
 
 static ptrdiff_t fake_read(void *opaque, uint8_t *buffer, size_t length)
 {
-    (void)opaque;
-    (void)buffer;
-    (void)length;
-    return 0;
+    fake_stream *stream = (fake_stream *)opaque;
+    size_t available;
+    size_t amount;
+    if (stream == NULL || buffer == NULL) return -1;
+    available = stream->input_length - stream->input_offset;
+    if (available == 0u) return 0;
+    amount = length < available ? length : available;
+    memcpy(buffer, stream->input + stream->input_offset, amount);
+    stream->input_offset += amount;
+    return (ptrdiff_t)amount;
 }
 
 static ptrdiff_t fake_write(void *opaque, const uint8_t *bytes, size_t length)
@@ -218,22 +227,55 @@ static cdin_frontend_protocol_message_view smoke_message(
     return message;
 }
 
-static void smoke_apply_two_view_snapshot(cdin_frontend_gui_sdl *gui)
+static void smoke_queue_inbound(
+    fake_stream *stream,
+    cdin_frontend_protocol_message_view *message)
+{
+    uint8_t frame[1024];
+    size_t frame_length = 0u;
+    assert(stream != NULL && message != NULL);
+    assert(cdin_frontend_protocol_encode_frame(
+        message, frame, sizeof(frame), &frame_length, 4096u) ==
+        CDIN_FRONTEND_PROTOCOL_OK);
+    assert(frame_length <= sizeof(stream->input) - stream->input_length);
+    memcpy(stream->input + stream->input_length, frame, frame_length);
+    stream->input_length += frame_length;
+}
+
+static void smoke_apply_two_view_snapshot(
+    cdin_frontend_gui_sdl *gui,
+    cdin_frontend_session *session,
+    fake_stream *stream)
 {
     uint8_t payload[512];
     size_t payload_length;
     cdin_frontend_protocol_message_view message;
+    cdin_frontend_protocol_message_view received;
     int committed = 0;
+
     payload_length = smoke_two_view_layout(payload, sizeof(payload));
     message = smoke_message(CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
                             payload, payload_length);
-    assert(cdin_frontend_gui_sdl_apply_message(gui, &message, &committed) ==
-           CDIN_FRONTEND_GUI_SDL_OK);
-    assert(committed == 0);
+    message.sequence = 1u;
+    smoke_queue_inbound(stream, &message);
+
     payload_length = smoke_snapshot_flush(payload, sizeof(payload));
     message = smoke_message(CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
                             payload, payload_length);
-    assert(cdin_frontend_gui_sdl_apply_message(gui, &message, &committed) ==
+    message.sequence = 2u;
+    smoke_queue_inbound(stream, &message);
+
+    assert(cdin_frontend_session_receive(session, &received) ==
+           CDIN_FRONTEND_PROTOCOL_OK);
+    assert(received.type == CDIN_FRONTEND_PROTOCOL_UI_LAYOUT);
+    assert(cdin_frontend_gui_sdl_apply_message(gui, &received, &committed) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    assert(committed == 0);
+
+    assert(cdin_frontend_session_receive(session, &received) ==
+           CDIN_FRONTEND_PROTOCOL_OK);
+    assert(received.type == CDIN_FRONTEND_PROTOCOL_UI_FLUSH);
+    assert(cdin_frontend_gui_sdl_apply_message(gui, &received, &committed) ==
            CDIN_FRONTEND_GUI_SDL_OK);
     assert(committed != 0);
 }
@@ -372,7 +414,7 @@ int main(void)
     trace_step("render initial frame");
     assert(cdin_frontend_gui_sdl_render(gui) == CDIN_FRONTEND_GUI_SDL_OK);
     trace_step("apply two-view semantic snapshot");
-    smoke_apply_two_view_snapshot(gui);
+    smoke_apply_two_view_snapshot(gui, &session, &stream);
 
     /* A device-loss notification must recreate the renderer and leave the
      * adapter usable. The next frame is rebuilt from the presentation model. */
