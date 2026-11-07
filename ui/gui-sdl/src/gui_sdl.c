@@ -29,6 +29,7 @@ static cdin_frontend_gui_sdl_status map_model_status(
         case CDIN_FRONTEND_GUI_SDL_MODEL_OK: return CDIN_FRONTEND_GUI_SDL_OK;
         case CDIN_FRONTEND_GUI_SDL_MODEL_STALE: return CDIN_FRONTEND_GUI_SDL_OK;
         case CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT: return CDIN_FRONTEND_GUI_SDL_LIMIT_EXCEEDED;
+        case CDIN_FRONTEND_GUI_SDL_MODEL_NO_MEMORY: return CDIN_FRONTEND_GUI_SDL_NO_MEMORY;
         case CDIN_FRONTEND_GUI_SDL_MODEL_INVALID:
         default: return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
     }
@@ -127,6 +128,7 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_create(
     }
     if (gui->owns_video && !SDL_InitSubSystem(SDL_INIT_VIDEO)) {
         log_sdl_error(gui, "SDL_InitSubSystem(video)");
+        cdin_frontend_gui_sdl_model_destroy(&gui->model);
         free(gui);
         return result;
     }
@@ -149,6 +151,7 @@ fail:
     if (gui->renderer != NULL) SDL_DestroyRenderer(gui->renderer);
     if (gui->window != NULL) SDL_DestroyWindow(gui->window);
     if (gui->owns_video) SDL_QuitSubSystem(SDL_INIT_VIDEO);
+    cdin_frontend_gui_sdl_model_destroy(&gui->model);
     free(gui);
     return result;
 }
@@ -430,36 +433,65 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
 }
 
 static cdin_frontend_gui_sdl_status request_line_window(
-    cdin_frontend_gui_sdl *gui, uint64_t first_line,
-    uint64_t line_count, uint64_t version)
+    cdin_frontend_gui_sdl *gui,
+    const char *view_id,
+    uint64_t first_line,
+    uint64_t line_count,
+    uint64_t version)
 {
     cdin_frontend_protocol_status status;
-    if (gui == NULL || version == 0u || version != gui->model.version) {
-        return CDIN_FRONTEND_GUI_SDL_INVALID_STATE;
-    }
-    if (cdin_frontend_gui_sdl_model_expect_lines(
-            &gui->model, first_line, line_count, version) !=
-        CDIN_FRONTEND_GUI_SDL_MODEL_OK) {
+    cdin_frontend_gui_sdl_model_status model_status;
+    const cdin_frontend_gui_sdl_view *view;
+    if (gui == NULL || view_id == NULL || view_id[0] == '\0' || version == 0u) {
         return CDIN_FRONTEND_GUI_SDL_INVALID_ARGUMENT;
     }
+    view = cdin_frontend_gui_sdl_model_find_view_const(&gui->model, view_id);
+    if (view == NULL || view->semantic.version != version) {
+        return CDIN_FRONTEND_GUI_SDL_INVALID_STATE;
+    }
+    model_status = cdin_frontend_gui_sdl_model_expect_lines(
+        &gui->model, view_id, first_line, line_count, version);
+    if (model_status != CDIN_FRONTEND_GUI_SDL_MODEL_OK) {
+        return map_model_status(model_status);
+    }
     status = cdin_frontend_session_request_lines(
-        gui->session, gui->model.view_id, first_line, line_count, version);
+        gui->session, view_id, first_line, line_count, version);
     if (status != CDIN_FRONTEND_PROTOCOL_OK) {
-        gui->model.has_line_request = 0;
+        cdin_frontend_gui_sdl_model_cancel_line_request(&gui->model, view_id);
         return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
     }
     return CDIN_FRONTEND_GUI_SDL_OK;
 }
 
-cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_request_lines(
-    cdin_frontend_gui_sdl *gui, uint64_t first_line)
+cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_request_view_lines(
+    cdin_frontend_gui_sdl *gui,
+    const char *view_id,
+    uint64_t first_line)
 {
-    if (gui == NULL || gui->model.version == 0u) {
+    const cdin_frontend_gui_sdl_view *view;
+    if (gui == NULL || view_id == NULL) {
+        return CDIN_FRONTEND_GUI_SDL_INVALID_ARGUMENT;
+    }
+    view = cdin_frontend_gui_sdl_model_find_view_const(&gui->model, view_id);
+    if (view == NULL || view->semantic.version == 0u) {
         return CDIN_FRONTEND_GUI_SDL_INVALID_STATE;
     }
     return request_line_window(
-        gui, first_line, (uint64_t)gui->model.visible_line_capacity,
-        gui->model.version);
+        gui, view_id, first_line,
+        (uint64_t)gui->model.visible_line_capacity, view->semantic.version);
+}
+
+cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_request_lines(
+    cdin_frontend_gui_sdl *gui, uint64_t first_line)
+{
+    const cdin_frontend_gui_sdl_view *view;
+    if (gui == NULL) return CDIN_FRONTEND_GUI_SDL_INVALID_ARGUMENT;
+    view = cdin_frontend_gui_sdl_model_focused_view(&gui->model);
+    if (view == NULL || view->semantic.version == 0u) {
+        return CDIN_FRONTEND_GUI_SDL_INVALID_STATE;
+    }
+    return cdin_frontend_gui_sdl_request_view_lines(
+        gui, view->semantic.view_id, first_line);
 }
 
 cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_apply_message(
@@ -499,11 +531,18 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_apply_message(
             return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
         }
         *out_committed = 1;
-        if (action.request_lines) {
-            if (request_line_window(
-                    gui, action.first_line, action.line_count,
-                    action.version) != CDIN_FRONTEND_GUI_SDL_OK) {
-                return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+        {
+            size_t request_index;
+            for (request_index = 0u; request_index < action.request_count;
+                 ++request_index) {
+                const cdin_frontend_gui_sdl_view_request *request =
+                    &action.requests[request_index];
+                if (request_line_window(
+                        gui, request->view_id, request->first_line,
+                        request->line_count, request->version) !=
+                    CDIN_FRONTEND_GUI_SDL_OK) {
+                    return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+                }
             }
         }
     }
@@ -531,9 +570,11 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_render(
 {
     size_t index;
     float y = 56.0f;
+    const cdin_frontend_gui_sdl_view *focused_view;
     if (gui == NULL || gui->renderer == NULL) {
         return CDIN_FRONTEND_GUI_SDL_INVALID_ARGUMENT;
     }
+    focused_view = cdin_frontend_gui_sdl_model_focused_view(&gui->model);
     (void)SDL_SetRenderDrawColor(gui->renderer, 22u, 25u, 31u, 255u);
     (void)SDL_RenderClear(gui->renderer);
     (void)SDL_SetRenderDrawColor(gui->renderer, 43u, 48u, 58u, 255u);
@@ -550,16 +591,19 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_render(
         (float)gui->height - 20.0f,
         gui->model.status[0] != '\0' ? gui->model.status :
         (gui->model.mode[0] != '\0' ? gui->model.mode : "Connected"));
-    for (index = 0u; index < gui->model.visible.count; ++index) {
-        char line_number[24];
-        (void)snprintf(line_number, sizeof(line_number), "%5llu ",
-            (unsigned long long)(gui->model.visible.first_line + (uint64_t)index + 1u));
-        (void)SDL_RenderDebugText(gui->renderer, 12.0f, y, line_number);
-        draw_text_ascii(gui->renderer, 72.0f, y,
-            gui->model.visible.lines[index].bytes,
-            gui->model.visible.lines[index].length, 430u);
-        y += 20.0f;
-        if (y > (float)gui->height - 44.0f) break;
+    if (focused_view != NULL) {
+        for (index = 0u; index < focused_view->visible.count; ++index) {
+            char line_number[24];
+            (void)snprintf(line_number, sizeof(line_number), "%5llu ",
+                (unsigned long long)(focused_view->visible.first_line +
+                                     (uint64_t)index + 1u));
+            (void)SDL_RenderDebugText(gui->renderer, 12.0f, y, line_number);
+            draw_text_ascii(gui->renderer, 72.0f, y,
+                focused_view->visible.lines[index].bytes,
+                focused_view->visible.lines[index].length, 430u);
+            y += 20.0f;
+            if (y > (float)gui->height - 44.0f) break;
+        }
     }
     (void)SDL_RenderPresent(gui->renderer);
     return CDIN_FRONTEND_GUI_SDL_OK;
@@ -572,5 +616,6 @@ void cdin_frontend_gui_sdl_destroy(cdin_frontend_gui_sdl *gui)
     if (gui->renderer != NULL) SDL_DestroyRenderer(gui->renderer);
     if (gui->window != NULL) SDL_DestroyWindow(gui->window);
     if (gui->owns_video) SDL_QuitSubSystem(SDL_INIT_VIDEO);
+    cdin_frontend_gui_sdl_model_destroy(&gui->model);
     free(gui);
 }
