@@ -636,9 +636,10 @@ static cdin_frontend_gui_sdl_model_status apply_flush(
 static void optional_text(const cdin_frontend_protocol_message_view *message,
                           const char *field, char *output, size_t capacity)
 {
+    size_t length = 0u;
     if (cdin_frontend_protocol_payload_get_text(
             message->payload, message->payload_length, field,
-            output, capacity, NULL) != CDIN_FRONTEND_PROTOCOL_OK) {
+            output, capacity, &length) != CDIN_FRONTEND_PROTOCOL_OK) {
         output[0] = '\0';
     }
 }
