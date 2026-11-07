@@ -66,6 +66,8 @@ int main(void)
     cdin_frontend_gui_sdl_rect rects[CDIN_FRONTEND_GUI_SDL_LAYOUT_MAX_NODES];
     cdin_frontend_gui_sdl_rect unchanged[CDIN_FRONTEND_GUI_SDL_LAYOUT_MAX_NODES];
     cdin_frontend_gui_sdl_geometry_status status;
+    size_t hit_leaf = SIZE_MAX;
+    size_t hit_view = SIZE_MAX;
 
     make_nested_layout(&layout);
     memset(rects, 0xa5, sizeof(rects));
@@ -77,6 +79,33 @@ int main(void)
     assert(rect_equals(&rects[2], 260u, 20u, 750u, 600u));
     assert(rect_equals(&rects[3], 260u, 20u, 750u, 360u));
     assert(rect_equals(&rects[4], 260u, 380u, 750u, 240u));
+
+    /* Hit testing maps pixel points to the deepest active view. Rectangles
+     * are half-open, so exact split boundaries belong to the second child. */
+    status = cdin_frontend_gui_sdl_geometry_hit_test(
+        &layout, &viewport, 259u, 300u, &hit_leaf, &hit_view);
+    assert(status == CDIN_FRONTEND_GUI_SDL_GEOMETRY_OK);
+    assert(hit_leaf == 1u && hit_view == 0u);
+    status = cdin_frontend_gui_sdl_geometry_hit_test(
+        &layout, &viewport, 260u, 379u, &hit_leaf, &hit_view);
+    assert(status == CDIN_FRONTEND_GUI_SDL_GEOMETRY_OK);
+    assert(hit_leaf == 3u && hit_view == 1u);
+    status = cdin_frontend_gui_sdl_geometry_hit_test(
+        &layout, &viewport, 260u, 380u, &hit_leaf, &hit_view);
+    assert(status == CDIN_FRONTEND_GUI_SDL_GEOMETRY_OK);
+    assert(hit_leaf == 4u && hit_view == 2u);
+    status = cdin_frontend_gui_sdl_geometry_hit_test(
+        &layout, &viewport, 1010u, 400u, &hit_leaf, &hit_view);
+    assert(status == CDIN_FRONTEND_GUI_SDL_GEOMETRY_OUTSIDE);
+    assert(hit_leaf == SIZE_MAX && hit_view == SIZE_MAX);
+
+    /* An empty active_view is a legitimate leaf state, not a fabricated target. */
+    layout.nodes[3].has_active_view = 0;
+    status = cdin_frontend_gui_sdl_geometry_hit_test(
+        &layout, &viewport, 300u, 100u, &hit_leaf, &hit_view);
+    assert(status == CDIN_FRONTEND_GUI_SDL_GEOMETRY_OK);
+    assert(hit_leaf == 3u && hit_view == SIZE_MAX);
+    layout.nodes[3].has_active_view = 1;
 
     /* Pixel rounding gives the first child floor(extent * ratio / 10000)
      * pixels and assigns every remaining pixel to the second child. */
