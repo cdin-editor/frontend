@@ -139,6 +139,21 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_create(
         log_sdl_error(gui, "SDL_CreateWindow");
         goto fail;
     }
+    {
+        int pixel_width = 0;
+        int pixel_height = 0;
+        if (!SDL_GetWindowSizeInPixels(gui->window, &pixel_width, &pixel_height) ||
+            pixel_width <= 0 || pixel_height <= 0 ||
+            (uint32_t)pixel_width > 32768u ||
+            (uint32_t)pixel_height > 32768u) {
+            log_sdl_error(gui, "SDL_GetWindowSizeInPixels during startup");
+            goto fail;
+        }
+        /* GUI geometry, renderer coordinates and mouse hit-testing all use
+         * drawable pixels, not the possibly lower-DPI window dimensions. */
+        gui->width = (uint32_t)pixel_width;
+        gui->height = (uint32_t)pixel_height;
+    }
     gui->renderer = SDL_CreateRenderer(gui->window, NULL);
     if (gui->renderer == NULL) {
         log_sdl_error(gui, "SDL_CreateRenderer");
