@@ -2,6 +2,7 @@
 #define CDIN_FRONTEND_GUI_SDL_MODEL_H
 
 #include "cdin/frontend/core/protocol/wire.h"
+#include "layout.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -31,6 +32,7 @@ typedef struct cdin_frontend_gui_sdl_snapshot_state {
     uint64_t version;
     uint64_t cursor_position;
     uint64_t layout_revision;
+    cdin_frontend_gui_sdl_layout layout;
     int has_cursor;
     int has_layout;
     int needs_lines;
@@ -47,6 +49,7 @@ typedef struct cdin_frontend_gui_sdl_model {
     int has_snapshot_revision;
     uint64_t cursor_position;
     uint64_t layout_revision;
+    cdin_frontend_gui_sdl_layout layout;
     int has_cursor;
     int has_layout;
     int needs_lines;
