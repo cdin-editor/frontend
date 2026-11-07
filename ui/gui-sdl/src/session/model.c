@@ -262,8 +262,7 @@ static void snapshot_begin(cdin_frontend_gui_sdl_model *model)
     staged->has_cursor = model->has_cursor;
     staged->has_layout = model->has_layout;
     staged->needs_lines = model->needs_lines;
-    memset(&staged->pane_tree, 0, sizeof(staged->pane_tree));
-    staged->pane_tree.root_index = -1;
+    staged->pane_tree = model->pane_tree;
     memcpy(staged->theme, model->theme, sizeof(staged->theme));
     memcpy(staged->mode, model->mode, sizeof(staged->mode));
     memcpy(staged->status, model->status, sizeof(staged->status));
