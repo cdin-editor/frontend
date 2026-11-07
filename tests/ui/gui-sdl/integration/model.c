@@ -539,7 +539,7 @@ static void test_independent_view_state_and_cache(void)
     assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
                          payload, 1u, &action) ==
            CDIN_FRONTEND_GUI_SDL_MODEL_INVALID);
-    length = build_snapshot_flush(payload, sizeof(payload), 5u, 6u);
+    length = build_snapshot_flush(payload, sizeof(payload), 6u, 8u);
     assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
                          payload, length, &action) ==
            CDIN_FRONTEND_GUI_SDL_MODEL_OK);
