@@ -192,8 +192,14 @@ cdin_frontend_gui_sdl_render_status cdin_frontend_gui_sdl_render_panes(
         return CDIN_FRONTEND_GUI_SDL_RENDER_INVALID_ARGUMENT;
     }
     memset(&stats, 0, sizeof(stats));
-    if (model->has_layout != 0 && model->layout.has_root != 0) {
-        status = draw_layout(renderer, model, viewport, &stats);
+    if (model->has_layout != 0) {
+        if (model->layout.has_root != 0) {
+            status = draw_layout(renderer, model, viewport, &stats);
+        } else {
+            /* A committed empty PaneTree has no panes; do not invent a
+             * viewport for a view that Runtime removed from the layout. */
+            status = CDIN_FRONTEND_GUI_SDL_RENDER_OK;
+        }
     } else {
         focused_view = find_focused_view(model);
         status = draw_view_pane(
