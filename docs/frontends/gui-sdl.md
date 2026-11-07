@@ -38,6 +38,21 @@ Snapshot revisions must be strictly increasing. Its fixed cache is bounded to
 64 lines of at most 8192 bytes each. The renderer never mutates cached document
 bytes. A platform-independent model regression runs even when SDL is disabled.
 
+## PaneTree geometry foundation
+
+The internal `ui/gui-sdl/src/layout` module maps the bounded semantic PaneTree
+to per-node pixel rectangles without depending on SDL or changing the
+Protocol/Runtime model. Horizontal splits partition the X axis (first child
+left, second child right); vertical splits partition the Y axis (first child
+top, second child bottom). The first extent uses integer floor arithmetic on
+`ratio_bp`; the second receives the exact remainder, and both children retain
+at least one pixel. Unsplittable viewports fail without publishing partial
+geometry. The pure geometry tests run even when SDL is disabled.
+
+This is a geometry foundation only. It does not yet create per-view caches or
+render multiple panes; those remain separate acceptance gates in Frontend
+Issue #15.
+
 ## Current rendering and input limits
 
 The first renderer uses SDL's diagnostic debug-text primitive and a simple

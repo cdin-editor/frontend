@@ -109,7 +109,8 @@ if(CDIN_FRONTEND_BUILD_UI_SDL)
     add_library(cdin_frontend_ui_gui_sdl STATIC
         ui/gui-sdl/src/gui_sdl.c
         ui/gui-sdl/src/session/model.c
-        ui/gui-sdl/src/session/layout.c)
+        ui/gui-sdl/src/session/layout.c
+        ui/gui-sdl/src/layout/geometry.c)
     add_library(cdin::frontend_ui_gui_sdl ALIAS cdin_frontend_ui_gui_sdl)
     set_target_properties(cdin_frontend_ui_gui_sdl PROPERTIES
         EXPORT_NAME frontend_ui_gui_sdl)
@@ -197,6 +198,17 @@ if(BUILD_TESTING)
     cdin_frontend_enable_test_strict(cdin_frontend_gui_sdl_model_tests)
     add_test(NAME cdin_frontend_gui_sdl_model_tests
         COMMAND cdin_frontend_gui_sdl_model_tests)
+
+    add_executable(cdin_frontend_gui_sdl_geometry_tests
+        tests/ui/gui-sdl/integration/geometry.c
+        ui/gui-sdl/src/layout/geometry.c)
+    target_include_directories(cdin_frontend_gui_sdl_geometry_tests PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui/gui-sdl/src/layout")
+    target_compile_features(cdin_frontend_gui_sdl_geometry_tests PRIVATE c_std_11)
+    cdin_frontend_enable_test_strict(cdin_frontend_gui_sdl_geometry_tests)
+    add_test(NAME cdin_frontend_gui_sdl_geometry_tests
+        COMMAND cdin_frontend_gui_sdl_geometry_tests)
 
     if(CDIN_FRONTEND_BUILD_UI_SDL)
         add_executable(cdin_frontend_gui_sdl_adapter_smoke
