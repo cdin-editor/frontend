@@ -224,7 +224,7 @@ int main(void)
     invalid_layout[ratio_offset + 1u] = 0x23u;
     invalid_layout[ratio_offset + 2u] = 0x28u; /* 9000, above 8999 */
     memset(&parsed_layout, 0xa5, sizeof(parsed_layout));
-    unchanged_layout = parsed_layout;
+    memcpy(&unchanged_layout, &parsed_layout, sizeof(unchanged_layout));
     view = message(CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
                    invalid_layout, sizeof(invalid_layout));
     assert(cdin_frontend_gui_sdl_layout_parse(&view, &parsed_layout) ==
