@@ -65,9 +65,10 @@ geometry. The pure geometry tests run even when SDL is disabled.
 The geometry engine is now consumed by the committed multi-view model and
 multi-pane renderer described above. It is also used by the pure splitter
 hit-test API added in [Frontend PR #29](https://github.com/cdin-editor/frontend/pull/29).
-That API reports stable split-node IDs for a configurable pixel hit radius,
-including nested divider intersections; it does not mutate Runtime state or
-send resize requests. Drag/commit remains gated by [Spec issue #20](https://github.com/cdin-editor/spec/issues/20).
+That API returns a parsed layout-node index for a configurable pixel hit
+radius, including nested divider intersections. Callers resolve the stable
+semantic split ID from `layout.nodes[index].id`; the hit-test itself does not
+mutate Runtime state or send resize requests. Drag/commit remains gated by [Spec issue #20](https://github.com/cdin-editor/spec/issues/20).
 
 ## Current rendering and input limits
 
