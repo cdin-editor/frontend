@@ -120,6 +120,12 @@ int main(void)
         0x68u, 'r','e','v','i','s','i','o','n', 0x01u,
         0x68u, 's','e','q','u','e','n','c','e', 0x05u
     };
+    static const uint8_t snapshot_flush_v2[] = {
+        0xa3u,
+        0x65u, 's','c','o','p','e', 0x68u, 's','n','a','p','s','h','o','t',
+        0x68u, 'r','e','v','i','s','i','o','n', 0x02u,
+        0x68u, 's','e','q','u','e','n','c','e', 0x06u
+    };
     cdin_frontend_gui_sdl_model model;
     cdin_frontend_gui_sdl_model_action action;
     cdin_frontend_protocol_message_view view;
@@ -257,6 +263,25 @@ int main(void)
            CDIN_FRONTEND_GUI_SDL_MODEL_STALE);
     assert(action.acknowledge_sequence == 5u);
     assert(model.snapshot_revision == 1u);
+
+    /* A malformed layout in a later snapshot must not erase the previously
+     * committed PaneTree when that snapshot reaches ui.flush. */
+    view = message(CDIN_FRONTEND_PROTOCOL_VIEW_INVALIDATE,
+                   invalidate_v2, sizeof(invalidate_v2));
+    assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    view = message(CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
+                   invalid_pane_layout, sizeof(invalid_pane_layout));
+    assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_INVALID);
+    view = message(CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
+                   snapshot_flush_v2, sizeof(snapshot_flush_v2));
+    assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    assert(model.snapshot_revision == 2u);
+    assert(model.pane_tree.node_count == 3u);
+    assert(model.pane_tree.has_active_leaf != 0);
+    assert(strcmp(model.pane_tree.active_leaf, "leaf-a") == 0);
 
     return 0;
 }
