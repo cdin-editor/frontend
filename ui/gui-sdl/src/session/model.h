@@ -12,6 +12,13 @@
 #define CDIN_FRONTEND_GUI_SDL_MAX_VIEW_ID_BYTES CDIN_FRONTEND_GUI_SDL_LAYOUT_MAX_ID_BYTES
 #define CDIN_FRONTEND_GUI_SDL_MAX_VIEWS CDIN_FRONTEND_GUI_SDL_LAYOUT_MAX_VIEWS
 #define CDIN_FRONTEND_GUI_SDL_MAX_CACHE_BYTES (4u * 1024u * 1024u)
+#define CDIN_FRONTEND_GUI_SDL_MAX_STYLE_TABLE_BYTES (32u * 1024u)
+#define CDIN_FRONTEND_GUI_SDL_MAX_PROMPT_BYTES (4u * 1024u)
+#define CDIN_FRONTEND_GUI_SDL_MAX_PANELS 16u
+#define CDIN_FRONTEND_GUI_SDL_MAX_PANEL_ID_BYTES 128u
+#define CDIN_FRONTEND_GUI_SDL_MAX_PANEL_BYTES (4u * 1024u)
+#define CDIN_FRONTEND_GUI_SDL_MAX_PRESENTATION_BYTES (128u * 1024u)
+#define CDIN_FRONTEND_GUI_SDL_MAX_LINE_SPANS 4096u
 
 typedef enum cdin_frontend_gui_sdl_model_status {
     CDIN_FRONTEND_GUI_SDL_MODEL_OK = 0,
@@ -24,6 +31,11 @@ typedef enum cdin_frontend_gui_sdl_model_status {
 typedef struct cdin_frontend_gui_sdl_line {
     uint8_t *bytes;
     size_t length;
+    /* Exact CBOR encoding of the optional Protocol spans array. Kept opaque
+     * until the accepted style-role schema defines its presentation mapping. */
+    uint8_t *spans_cbor;
+    size_t spans_cbor_length;
+    size_t span_count;
 } cdin_frontend_gui_sdl_line;
 
 typedef struct cdin_frontend_gui_sdl_line_window {
@@ -64,12 +76,33 @@ typedef struct cdin_frontend_gui_sdl_view {
     int pending_lines_valid;
 } cdin_frontend_gui_sdl_view;
 
+typedef struct cdin_frontend_gui_sdl_panel_state {
+    char panel_id[CDIN_FRONTEND_GUI_SDL_MAX_PANEL_ID_BYTES + 1u];
+    size_t payload_length;
+    uint8_t payload_cbor[CDIN_FRONTEND_GUI_SDL_MAX_PANEL_BYTES];
+} cdin_frontend_gui_sdl_panel_state;
+
+/* The Protocol 1.0 style/panel/prompt values are opaque declarative maps.
+ * Preserve their exact bounded CBOR bytes; do not invent field semantics. */
+typedef struct cdin_frontend_gui_sdl_presentation {
+    uint64_t style_revision;
+    size_t style_table_length;
+    uint8_t style_table_cbor[CDIN_FRONTEND_GUI_SDL_MAX_STYLE_TABLE_BYTES];
+    size_t panel_count;
+    cdin_frontend_gui_sdl_panel_state panels[CDIN_FRONTEND_GUI_SDL_MAX_PANELS];
+    int has_prompt;
+    size_t prompt_length;
+    uint8_t prompt_cbor[CDIN_FRONTEND_GUI_SDL_MAX_PROMPT_BYTES];
+    size_t encoded_bytes;
+} cdin_frontend_gui_sdl_presentation;
+
 typedef struct cdin_frontend_gui_sdl_snapshot_state {
     uint64_t layout_revision;
     cdin_frontend_gui_sdl_layout layout;
     int has_layout;
     size_t view_count;
     cdin_frontend_gui_sdl_view_snapshot views[CDIN_FRONTEND_GUI_SDL_MAX_VIEWS];
+    cdin_frontend_gui_sdl_presentation presentation;
     char theme[64];
     char mode[32];
     char status[128];
@@ -96,6 +129,7 @@ typedef struct cdin_frontend_gui_sdl_model {
     size_t visible_line_capacity;
     size_t cache_bytes;
     uint64_t access_clock;
+    cdin_frontend_gui_sdl_presentation presentation;
     char theme[64];
     char mode[32];
     char status[128];
