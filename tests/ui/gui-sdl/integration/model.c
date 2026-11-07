@@ -157,7 +157,10 @@ int main(void)
                    invalid_pane_layout, sizeof(invalid_pane_layout));
     assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
            CDIN_FRONTEND_GUI_SDL_MODEL_INVALID);
-    assert(model.staged_snapshot.pane_tree.node_count == 0u);
+    /* A malformed later layout must not partially replace the valid
+     * staged PaneTree from the same atomic snapshot. */
+    assert(model.staged_snapshot.pane_tree.node_count == 3u);
+    assert(model.staged_snapshot.pane_tree.has_root != 0);
     view = message(CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
                    snapshot_flush, sizeof(snapshot_flush));
     assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
