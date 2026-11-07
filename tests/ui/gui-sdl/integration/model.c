@@ -497,7 +497,6 @@ static void test_independent_view_state_and_cache(void)
     before_invalid = model.layout;
     /* A one-byte reserved CBOR value is a deliberately malformed layout. */
     payload[0] = 0xffu;
-    length = 1u;
     assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
                          payload, 1u, &action) ==
            CDIN_FRONTEND_GUI_SDL_MODEL_INVALID);
