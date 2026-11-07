@@ -495,9 +495,9 @@ static void test_independent_view_state_and_cache(void)
 
     /* A malformed replacement layout does not destroy the last valid tree. */
     before_invalid = model.layout;
-    length = build_layout(payload, sizeof(payload), 99u, 0u);
-    /* Replace the empty root with a deliberately malformed CBOR payload. */
+    /* A one-byte reserved CBOR value is a deliberately malformed layout. */
     payload[0] = 0xffu;
+    length = 1u;
     assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
                          payload, 1u, &action) ==
            CDIN_FRONTEND_GUI_SDL_MODEL_INVALID);
