@@ -175,6 +175,95 @@ cdin_frontend_gui_sdl_geometry_status cdin_frontend_gui_sdl_geometry_compute(
     return CDIN_FRONTEND_GUI_SDL_GEOMETRY_OK;
 }
 
+
+static void collect_node_depth(
+    const cdin_frontend_gui_sdl_layout *layout,
+    size_t node_index,
+    size_t depth,
+    size_t *depths)
+{
+    const cdin_frontend_gui_sdl_layout_node *node;
+    if (layout == NULL || depths == NULL || node_index >= layout->node_count) {
+        return;
+    }
+    depths[node_index] = depth;
+    node = &layout->nodes[node_index];
+    if (node->kind == CDIN_FRONTEND_GUI_SDL_LAYOUT_SPLIT) {
+        collect_node_depth(layout, node->first_child, depth + 1u, depths);
+        collect_node_depth(layout, node->second_child, depth + 1u, depths);
+    }
+}
+
+cdin_frontend_gui_sdl_geometry_status cdin_frontend_gui_sdl_geometry_splitter_hit_test(
+    const cdin_frontend_gui_sdl_layout *layout,
+    const cdin_frontend_gui_sdl_rect *viewport,
+    uint32_t x,
+    uint32_t y,
+    uint32_t hit_radius,
+    size_t *out_split_node_index)
+{
+    cdin_frontend_gui_sdl_rect rectangles[CDIN_FRONTEND_GUI_SDL_LAYOUT_MAX_NODES];
+    size_t depths[CDIN_FRONTEND_GUI_SDL_LAYOUT_MAX_NODES] = {0u};
+    cdin_frontend_gui_sdl_geometry_status status;
+    size_t best_index = SIZE_MAX;
+    size_t best_depth = 0u;
+    uint32_t best_distance = UINT32_MAX;
+    size_t index;
+
+    if (out_split_node_index != NULL) *out_split_node_index = SIZE_MAX;
+    if (layout == NULL || viewport == NULL || out_split_node_index == NULL ||
+        viewport->width == 0u || viewport->height == 0u ||
+        viewport->x > UINT32_MAX - viewport->width ||
+        viewport->y > UINT32_MAX - viewport->height) {
+        return CDIN_FRONTEND_GUI_SDL_GEOMETRY_INVALID;
+    }
+    if (x < viewport->x || y < viewport->y ||
+        x >= viewport->x + viewport->width ||
+        y >= viewport->y + viewport->height) {
+        return CDIN_FRONTEND_GUI_SDL_GEOMETRY_OUTSIDE;
+    }
+
+    status = cdin_frontend_gui_sdl_geometry_compute(
+        layout, viewport, rectangles, CDIN_FRONTEND_GUI_SDL_LAYOUT_MAX_NODES);
+    if (status != CDIN_FRONTEND_GUI_SDL_GEOMETRY_OK) return status;
+    if (layout->has_root == 0) return CDIN_FRONTEND_GUI_SDL_GEOMETRY_OUTSIDE;
+    collect_node_depth(layout, layout->root_index, 0u, depths);
+
+    for (index = 0u; index < layout->node_count; ++index) {
+        const cdin_frontend_gui_sdl_layout_node *node = &layout->nodes[index];
+        const cdin_frontend_gui_sdl_rect *rect = &rectangles[index];
+        const cdin_frontend_gui_sdl_rect *first_rect;
+        uint32_t boundary;
+        uint32_t distance;
+        int within_cross_axis;
+
+        if (node->kind != CDIN_FRONTEND_GUI_SDL_LAYOUT_SPLIT) continue;
+        first_rect = &rectangles[node->first_child];
+        if (node->axis == CDIN_FRONTEND_GUI_SDL_LAYOUT_HORIZONTAL) {
+            boundary = first_rect->x + first_rect->width;
+            distance = x >= boundary ? x - boundary : boundary - x;
+            within_cross_axis = y >= rect->y && y < rect->y + rect->height;
+        } else {
+            boundary = first_rect->y + first_rect->height;
+            distance = y >= boundary ? y - boundary : boundary - y;
+            within_cross_axis = x >= rect->x && x < rect->x + rect->width;
+        }
+        if (!within_cross_axis || distance > hit_radius) continue;
+        if (best_index == SIZE_MAX || distance < best_distance ||
+            (distance == best_distance && depths[index] > best_depth)) {
+            best_index = index;
+            best_distance = distance;
+            best_depth = depths[index];
+        }
+    }
+
+    if (best_index == SIZE_MAX) {
+        return CDIN_FRONTEND_GUI_SDL_GEOMETRY_OUTSIDE;
+    }
+    *out_split_node_index = best_index;
+    return CDIN_FRONTEND_GUI_SDL_GEOMETRY_OK;
+}
+
 cdin_frontend_gui_sdl_geometry_status cdin_frontend_gui_sdl_geometry_hit_test(
     const cdin_frontend_gui_sdl_layout *layout,
     const cdin_frontend_gui_sdl_rect *viewport,
