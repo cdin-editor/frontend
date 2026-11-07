@@ -39,15 +39,16 @@ first-line/count/version tuple and remains pending until response-scoped
 PaneTree; a same-version view retains its cache, while a changed version drops
 only that view's stale cache. Snapshot revisions must be strictly increasing.
 
-Line bytes are held in disposable per-view windows (up to 64 lines of at most
-8192 bytes per window). The aggregate visible + pending line-byte budget is
-4 MiB. When a new response would exceed the budget, the model evicts the
-least-recently-used completed visible window, preferring non-focused views;
-pending responses are never evicted. If no window can be evicted to satisfy the
-bound, the response is rejected without replacing the target window. The
-current renderer still displays only the focused view; rendering all pane
-rectangles is a later phase. A platform-independent model regression exercises
-interleaved multi-view responses and aggregate LRU eviction even when SDL is
+Line bytes and their preserved span-CBOR arrays are held in disposable per-view
+windows (up to 64 lines of at most 8192 bytes per window). The aggregate visible
++ pending line-byte and span-CBOR budget is 4 MiB. When a new response would
+exceed the budget, the model evicts the least-recently-used completed visible
+window, preferring non-focused views; pending responses are never evicted. If
+no window can be evicted to satisfy the bound, the response is rejected without
+replacing the target window. The renderer traverses the committed PaneTree and
+renders every active leaf view in its own clipped rectangle. A
+platform-independent model regression exercises interleaved multi-view
+responses, span preservation and aggregate LRU eviction even when SDL is
 disabled.
 
 ## PaneTree geometry foundation
