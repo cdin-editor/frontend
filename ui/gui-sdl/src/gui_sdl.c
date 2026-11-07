@@ -263,9 +263,64 @@ static const char *mouse_button_name(uint8_t button)
     }
 }
 
+static void gui_content_viewport(
+    const cdin_frontend_gui_sdl *gui,
+    cdin_frontend_gui_sdl_rect *out_viewport)
+{
+    out_viewport->x = 0u;
+    out_viewport->y = 42u;
+    out_viewport->width = gui->width;
+    out_viewport->height = gui->height > 72u ? gui->height - 72u : 1u;
+}
+
+/* Runtime resolves input.mouse.target against its stable Runtime View IDs.
+ * Hit-test the pane geometry, then send the leaf's active_view ID—not the
+ * internal PaneTree node ID—so Runtime remains the focus authority. */
+static const char *mouse_target_for_position(
+    cdin_frontend_gui_sdl *gui, float x, float y)
+{
+    cdin_frontend_gui_sdl_rect viewport;
+    cdin_frontend_gui_sdl_geometry_status status;
+    size_t leaf_index = SIZE_MAX;
+    size_t view_index = SIZE_MAX;
+    if (gui == NULL || x < 0.0f || y < 0.0f ||
+        x > 32768.0f || y > 32768.0f) {
+        return NULL;
+    }
+    if (gui->model.has_layout == 0) {
+        const cdin_frontend_gui_sdl_view *focused =
+            cdin_frontend_gui_sdl_model_focused_view(&gui->model);
+        return focused != NULL ? focused->semantic.view_id : NULL;
+    }
+    if (gui->model.layout.has_root == 0) return NULL;
+    gui_content_viewport(gui, &viewport);
+    status = cdin_frontend_gui_sdl_geometry_hit_test(
+        &gui->model.layout, &viewport, (uint32_t)x, (uint32_t)y,
+        &leaf_index, &view_index);
+    if (status != CDIN_FRONTEND_GUI_SDL_GEOMETRY_OK ||
+        leaf_index >= gui->model.layout.node_count ||
+        view_index >= gui->model.layout.view_count) {
+        return NULL;
+    }
+    return gui->model.layout.view_ids[view_index];
+}
+
+static cdin_frontend_gui_sdl_status convert_mouse_event_to_render_coordinates(
+    cdin_frontend_gui_sdl *gui, SDL_Event *event)
+{
+    if (gui == NULL || gui->renderer == NULL || event == NULL) {
+        return CDIN_FRONTEND_GUI_SDL_INVALID_ARGUMENT;
+    }
+    if (!SDL_ConvertEventToRenderCoordinates(gui->renderer, event)) {
+        log_sdl_error(gui, "SDL_ConvertEventToRenderCoordinates");
+        return CDIN_FRONTEND_GUI_SDL_SDL_ERROR;
+    }
+    return CDIN_FRONTEND_GUI_SDL_OK;
+}
+
 static cdin_frontend_gui_sdl_status send_mouse_event(
     cdin_frontend_gui_sdl *gui, const char *action, const char *button,
-    SDL_Keymod modifiers, float x, float y)
+    const char *target, SDL_Keymod modifiers, float x, float y)
 {
     cdin_frontend_protocol_status status;
     uint32_t logical_x = 0u;
@@ -282,7 +337,7 @@ static cdin_frontend_gui_sdl_status send_mouse_event(
     }
     status = cdin_frontend_session_send_mouse(
         gui->session, action, button, input_modifiers(modifiers),
-        NULL, logical_x, logical_y, has_position);
+        target, logical_x, logical_y, has_position);
     if (status == CDIN_FRONTEND_PROTOCOL_UNSUPPORTED) {
         /* The Composition Root may choose not to negotiate optional mouse
          * support. The adapter then remains keyboard/text-only. */
@@ -328,13 +383,21 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
             case SDL_EVENT_MOUSE_BUTTON_UP: {
                 const char *button = mouse_button_name(event.button.button);
+                const char *target;
                 if (event.button.windowID != 0u &&
                     event.button.windowID != SDL_GetWindowID(gui->window)) break;
+                if (convert_mouse_event_to_render_coordinates(gui, &event) !=
+                    CDIN_FRONTEND_GUI_SDL_OK) {
+                    return CDIN_FRONTEND_GUI_SDL_SDL_ERROR;
+                }
+                target = event.button.down
+                    ? mouse_target_for_position(gui, event.button.x, event.button.y)
+                    : NULL;
                 if (button != NULL &&
                     send_mouse_event(gui, event.button.down ? "press" : "release",
-                                     button, SDL_GetModState(),
+                                     button, target, SDL_GetModState(),
                                      event.button.x, event.button.y) !=
-                        CDIN_FRONTEND_GUI_SDL_OK) {
+                    CDIN_FRONTEND_GUI_SDL_OK) {
                     return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
                 }
                 break;
@@ -342,22 +405,36 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
             case SDL_EVENT_MOUSE_MOTION:
                 if (event.motion.windowID != 0u &&
                     event.motion.windowID != SDL_GetWindowID(gui->window)) break;
-                if (send_mouse_event(gui, "move", "none", SDL_GetModState(),
-                                     event.motion.x, event.motion.y) !=
+                if (convert_mouse_event_to_render_coordinates(gui, &event) !=
                     CDIN_FRONTEND_GUI_SDL_OK) {
+                    return CDIN_FRONTEND_GUI_SDL_SDL_ERROR;
+                }
+                if (send_mouse_event(gui, "move", "none", NULL,
+                                     SDL_GetModState(), event.motion.x,
+                                     event.motion.y) != CDIN_FRONTEND_GUI_SDL_OK) {
                     return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
                 }
                 break;
             case SDL_EVENT_MOUSE_WHEEL: {
+                float vertical;
+                const char *button;
+                const char *target;
                 if (event.wheel.windowID != 0u &&
                     event.wheel.windowID != SDL_GetWindowID(gui->window)) break;
-                float vertical = event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED
+                if (convert_mouse_event_to_render_coordinates(gui, &event) !=
+                    CDIN_FRONTEND_GUI_SDL_OK) {
+                    return CDIN_FRONTEND_GUI_SDL_SDL_ERROR;
+                }
+                vertical = event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED
                     ? -event.wheel.y : event.wheel.y;
-                const char *button = vertical > 0.0f ? "wheel_up" :
-                                     vertical < 0.0f ? "wheel_down" : "none";
+                button = vertical > 0.0f ? "wheel_up" :
+                         vertical < 0.0f ? "wheel_down" : "none";
+                target = mouse_target_for_position(
+                    gui, event.wheel.mouse_x, event.wheel.mouse_y);
                 if (vertical != 0.0f &&
-                    send_mouse_event(gui, "scroll", button, SDL_GetModState(),
-                                     event.wheel.mouse_x, event.wheel.mouse_y) !=
+                    send_mouse_event(gui, "scroll", button, target,
+                                     SDL_GetModState(), event.wheel.mouse_x,
+                                     event.wheel.mouse_y) !=
                     CDIN_FRONTEND_GUI_SDL_OK) {
                     return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
                 }
@@ -576,10 +653,7 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_render(
         gui->model.status[0] != '\0' ? gui->model.status :
         (gui->model.mode[0] != '\0' ? gui->model.mode : "Connected"));
 
-    content.x = 0u;
-    content.y = 42u;
-    content.width = gui->width;
-    content.height = gui->height > 72u ? gui->height - 72u : 1u;
+    gui_content_viewport(gui, &content);
     render_status = cdin_frontend_gui_sdl_render_panes(
         gui->renderer, &gui->model, &content, &stats);
     if (render_status == CDIN_FRONTEND_GUI_SDL_RENDER_SDL_ERROR) {
