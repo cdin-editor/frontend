@@ -174,3 +174,48 @@ cdin_frontend_gui_sdl_geometry_status cdin_frontend_gui_sdl_geometry_compute(
            layout->node_count * sizeof(out_node_rects[0]));
     return CDIN_FRONTEND_GUI_SDL_GEOMETRY_OK;
 }
+
+cdin_frontend_gui_sdl_geometry_status cdin_frontend_gui_sdl_geometry_hit_test(
+    const cdin_frontend_gui_sdl_layout *layout,
+    const cdin_frontend_gui_sdl_rect *viewport,
+    uint32_t x,
+    uint32_t y,
+    size_t *out_leaf_node_index,
+    size_t *out_active_view_index)
+{
+    cdin_frontend_gui_sdl_rect rectangles[CDIN_FRONTEND_GUI_SDL_LAYOUT_MAX_NODES];
+    cdin_frontend_gui_sdl_geometry_status status;
+    size_t index;
+
+    if (out_leaf_node_index != NULL) *out_leaf_node_index = SIZE_MAX;
+    if (out_active_view_index != NULL) *out_active_view_index = SIZE_MAX;
+    if (layout == NULL || viewport == NULL ||
+        out_leaf_node_index == NULL || out_active_view_index == NULL) {
+        return CDIN_FRONTEND_GUI_SDL_GEOMETRY_INVALID;
+    }
+    status = cdin_frontend_gui_sdl_geometry_compute(
+        layout, viewport, rectangles, CDIN_FRONTEND_GUI_SDL_LAYOUT_MAX_NODES);
+    if (status != CDIN_FRONTEND_GUI_SDL_GEOMETRY_OK) return status;
+    if (layout->has_root == 0 ||
+        x < viewport->x || y < viewport->y ||
+        x >= viewport->x + viewport->width ||
+        y >= viewport->y + viewport->height) {
+        return CDIN_FRONTEND_GUI_SDL_GEOMETRY_OUTSIDE;
+    }
+
+    for (index = 0u; index < layout->node_count; ++index) {
+        const cdin_frontend_gui_sdl_layout_node *node = &layout->nodes[index];
+        const cdin_frontend_gui_sdl_rect *rect = &rectangles[index];
+        if (node->kind != CDIN_FRONTEND_GUI_SDL_LAYOUT_LEAF) continue;
+        if (x >= rect->x && y >= rect->y &&
+            x < rect->x + rect->width &&
+            y < rect->y + rect->height) {
+            *out_leaf_node_index = index;
+            if (node->has_active_view != 0) {
+                *out_active_view_index = (size_t)node->active_view_index;
+            }
+            return CDIN_FRONTEND_GUI_SDL_GEOMETRY_OK;
+        }
+    }
+    return CDIN_FRONTEND_GUI_SDL_GEOMETRY_OUTSIDE;
+}
