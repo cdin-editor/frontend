@@ -99,6 +99,34 @@ int main(void)
     assert(status == CDIN_FRONTEND_GUI_SDL_GEOMETRY_OUTSIDE);
     assert(hit_leaf == SIZE_MAX && hit_view == SIZE_MAX);
 
+    /* Divider hit targets are distinct from leaf hit-testing and report the
+     * stable split node index, never a Runtime view index. */
+    {
+        size_t split_index = SIZE_MAX;
+        status = cdin_frontend_gui_sdl_geometry_splitter_hit_test(
+            &layout, &viewport, 260u, 200u, 4u, &split_index);
+        assert(status == CDIN_FRONTEND_GUI_SDL_GEOMETRY_OK);
+        assert(split_index == 0u);
+        status = cdin_frontend_gui_sdl_geometry_splitter_hit_test(
+            &layout, &viewport, 500u, 380u, 4u, &split_index);
+        assert(status == CDIN_FRONTEND_GUI_SDL_GEOMETRY_OK);
+        assert(split_index == 2u);
+        /* At a nested-divider intersection, the deepest split wins. */
+        status = cdin_frontend_gui_sdl_geometry_splitter_hit_test(
+            &layout, &viewport, 260u, 380u, 4u, &split_index);
+        assert(status == CDIN_FRONTEND_GUI_SDL_GEOMETRY_OK);
+        assert(split_index == 2u);
+        /* The configured radius is inclusive; one pixel beyond is outside. */
+        status = cdin_frontend_gui_sdl_geometry_splitter_hit_test(
+            &layout, &viewport, 264u, 200u, 4u, &split_index);
+        assert(status == CDIN_FRONTEND_GUI_SDL_GEOMETRY_OK);
+        assert(split_index == 0u);
+        status = cdin_frontend_gui_sdl_geometry_splitter_hit_test(
+            &layout, &viewport, 265u, 200u, 4u, &split_index);
+        assert(status == CDIN_FRONTEND_GUI_SDL_GEOMETRY_OUTSIDE);
+        assert(split_index == SIZE_MAX);
+    }
+
     /* An empty active_view is a legitimate leaf state, not a fabricated target. */
     layout.nodes[3].has_active_view = 0;
     status = cdin_frontend_gui_sdl_geometry_hit_test(
