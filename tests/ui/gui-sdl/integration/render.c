@@ -14,8 +14,8 @@ static void set_view(
 {
     cdin_frontend_gui_sdl_view *view = &model->views[index];
     memset(view, 0, sizeof(*view));
-    (void)strncpy(view->semantic.view_id, view_id,
-                  sizeof(view->semantic.view_id) - 1u);
+    assert(strlen(view_id) < sizeof(view->semantic.view_id));
+    memcpy(view->semantic.view_id, view_id, strlen(view_id) + 1u);
     view->semantic.version = 1u;
     view->semantic.in_layout = 1;
     view->semantic.visible = 1;
