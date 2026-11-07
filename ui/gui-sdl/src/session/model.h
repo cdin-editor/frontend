@@ -33,10 +33,9 @@ typedef struct cdin_frontend_gui_sdl_pane_node {
     int first;
     int second;
     size_t view_count;
-    char views[CDIN_FRONTEND_GUI_SDL_MAX_PANE_VIEWS]
-              [CDIN_FRONTEND_GUI_SDL_MAX_PANE_VIEW_ID_BYTES + 1u];
+    uint8_t view_indices[CDIN_FRONTEND_GUI_SDL_MAX_PANE_VIEWS];
     int has_active_view;
-    char active_view[CDIN_FRONTEND_GUI_SDL_MAX_PANE_VIEW_ID_BYTES + 1u];
+    uint8_t active_view_index;
 } cdin_frontend_gui_sdl_pane_node;
 
 typedef struct cdin_frontend_gui_sdl_pane_tree {
@@ -45,6 +44,9 @@ typedef struct cdin_frontend_gui_sdl_pane_tree {
     int has_active_leaf;
     char active_leaf[CDIN_FRONTEND_GUI_SDL_MAX_PANE_ID_BYTES + 1u];
     size_t node_count;
+    size_t view_count;
+    char view_ids[CDIN_FRONTEND_GUI_SDL_MAX_PANE_VIEWS]
+                 [CDIN_FRONTEND_GUI_SDL_MAX_PANE_VIEW_ID_BYTES + 1u];
     cdin_frontend_gui_sdl_pane_node nodes[CDIN_FRONTEND_GUI_SDL_MAX_PANE_NODES];
 } cdin_frontend_gui_sdl_pane_tree;
 
