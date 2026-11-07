@@ -187,7 +187,7 @@ static void test_empty_input_and_failure_atomicity(void)
 
     count = 0u;
     assert(cdin_frontend_gui_sdl_utf8_decode(
-        bytes, sizeof(bytes), output, 2u, &count) ==
+        bytes, sizeof(bytes), output, 1u, &count) ==
         CDIN_FRONTEND_GUI_SDL_UTF8_BUFFER_TOO_SMALL);
     assert(count == 2u);
     assert(memcmp(output, unchanged, sizeof(output)) == 0);
