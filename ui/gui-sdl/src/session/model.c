@@ -32,16 +32,6 @@ static int copy_text_field(const uint8_t *map, size_t map_length,
         CDIN_FRONTEND_PROTOCOL_OK && length != 0u && length < capacity;
 }
 
-static int pane_id_exists(const cdin_frontend_gui_sdl_pane_tree *tree,
-                          const char *id)
-{
-    size_t index;
-    for (index = 0u; index < tree->node_count; ++index) {
-        if (strcmp(tree->nodes[index].id, id) == 0) return 1;
-    }
-    return 0;
-}
-
 static int pane_view_exists(const cdin_frontend_gui_sdl_pane_node *node,
                             const char *view_id)
 {
@@ -70,10 +60,8 @@ static int parse_pane_node(cdin_frontend_gui_sdl_pane_tree *tree,
     memset(node, 0, sizeof(*node));
     node->first = -1;
     node->second = -1;
-    if (!copy_text_field(map, map_length, "id", node->id, sizeof(node->id)) ||
-        pane_id_exists(tree, node->id)) {
-        /* The just-reserved node is excluded from duplicate detection below. */
-        if (node->id[0] == '\0') return 0;
+    if (!copy_text_field(map, map_length, "id", node->id, sizeof(node->id))) {
+        return 0;
     }
     for (index = 0u; index < (size_t)node_index; ++index) {
         if (strcmp(tree->nodes[index].id, node->id) == 0) return 0;
