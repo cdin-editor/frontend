@@ -27,7 +27,7 @@ static void test_ascii_and_nul(void)
 static void test_persian_and_arabic_letters_remain_distinct(void)
 {
     /* Persian Yeh U+06CC and Arabic Yeh U+064A. */
-    const uint8_t bytes[] = { 0xd9u, 0x8cu, 0xd9u, 0x8au };
+    const uint8_t bytes[] = { 0xdbu, 0x8cu, 0xd9u, 0x8au };
     cdin_frontend_gui_sdl_utf8_scalar scalars[2];
     size_t count = 0u;
 
@@ -144,7 +144,7 @@ static void test_rejects_overlong_surrogate_and_out_of_range_sequences(void)
 
 static void test_byte_offset_mapping(void)
 {
-    const uint8_t bytes[] = { 0x41u, 0xd9u, 0x8cu, 0x42u };
+    const uint8_t bytes[] = { 0x41u, 0xdbu, 0x8cu, 0x42u };
     size_t scalar_index = SIZE_MAX;
 
     assert(cdin_frontend_gui_sdl_utf8_byte_offset_to_index(
