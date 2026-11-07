@@ -120,6 +120,18 @@ static cdin_frontend_gui_sdl_render_status draw_view_pane(
     return CDIN_FRONTEND_GUI_SDL_RENDER_OK;
 }
 
+static const cdin_frontend_gui_sdl_view *find_focused_view(
+    const cdin_frontend_gui_sdl_model *model)
+{
+    size_t index;
+    for (index = 0u; index < model->view_count; ++index) {
+        if (model->views[index].semantic.focused != 0) {
+            return &model->views[index];
+        }
+    }
+    return NULL;
+}
+
 static cdin_frontend_gui_sdl_render_status draw_layout(
     SDL_Renderer *renderer,
     const cdin_frontend_gui_sdl_model *model,
@@ -133,6 +145,12 @@ static cdin_frontend_gui_sdl_render_status draw_layout(
     geometry_status = cdin_frontend_gui_sdl_geometry_compute(
         &model->layout, viewport, rectangles,
         CDIN_FRONTEND_GUI_SDL_LAYOUT_MAX_NODES);
+    if (geometry_status == CDIN_FRONTEND_GUI_SDL_GEOMETRY_LIMIT) {
+        const cdin_frontend_gui_sdl_view *focused = find_focused_view(model);
+        return draw_view_pane(renderer, focused,
+            focused != NULL ? focused->semantic.view_id : NULL,
+            viewport, focused != NULL, stats);
+    }
     if (geometry_status != CDIN_FRONTEND_GUI_SDL_GEOMETRY_OK) {
         return CDIN_FRONTEND_GUI_SDL_RENDER_INVALID_LAYOUT;
     }
@@ -177,8 +195,7 @@ cdin_frontend_gui_sdl_render_status cdin_frontend_gui_sdl_render_panes(
     if (model->has_layout != 0 && model->layout.has_root != 0) {
         status = draw_layout(renderer, model, viewport, &stats);
     } else {
-        focused_view = cdin_frontend_gui_sdl_model_focused_view(
-            (cdin_frontend_gui_sdl_model *)model);
+        focused_view = find_focused_view(model);
         status = draw_view_pane(
             renderer, focused_view,
             focused_view != NULL ? focused_view->semantic.view_id : NULL,
