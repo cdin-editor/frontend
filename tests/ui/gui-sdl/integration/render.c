@@ -111,6 +111,16 @@ static void test_nested_layout_renders_every_active_leaf(
     cdin_frontend_gui_sdl_rect viewport = { 0u, 42u, 640u, 328u };
     cdin_frontend_gui_sdl_render_stats stats;
     cdin_frontend_gui_sdl_render_status status;
+    SDL_Surface *pixels;
+    uint8_t left_r = 0u;
+    uint8_t left_g = 0u;
+    uint8_t left_b = 0u;
+    uint8_t top_r = 0u;
+    uint8_t top_g = 0u;
+    uint8_t top_b = 0u;
+    uint8_t bottom_r = 0u;
+    uint8_t bottom_g = 0u;
+    uint8_t bottom_b = 0u;
 
     make_two_pane_model(&model);
     model.layout.node_count = 5u;
@@ -144,6 +154,19 @@ static void test_nested_layout_renders_every_active_leaf(
     assert(status == CDIN_FRONTEND_GUI_SDL_RENDER_OK);
     assert(stats.pane_count == 3u);
     assert(stats.rendered_view_count == 3u);
+
+    pixels = SDL_RenderReadPixels(renderer, NULL);
+    assert(pixels != NULL);
+    assert(SDL_ReadSurfacePixel(
+        pixels, 128, 206, &left_r, &left_g, &left_b, NULL));
+    assert(SDL_ReadSurfacePixel(
+        pixels, 448, 124, &top_r, &top_g, &top_b, NULL));
+    assert(SDL_ReadSurfacePixel(
+        pixels, 448, 288, &bottom_r, &bottom_g, &bottom_b, NULL));
+    assert(left_r == 25u && left_g == 30u && left_b == 39u);
+    assert(top_r == 31u && top_g == 36u && top_b == 46u);
+    assert(bottom_r == 25u && bottom_g == 30u && bottom_b == 39u);
+    SDL_DestroySurface(pixels);
 }
 
 static void test_invalid_layout_fails_closed_and_empty_layout_draws_nothing(
