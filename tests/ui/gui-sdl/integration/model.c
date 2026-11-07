@@ -61,6 +61,14 @@ int main(void)
             0x6bu, 'a','c','t','i','v','e','_','v','i','e','w', 0x66u, 'v','i','e','w','-','2',
         0x6bu, 'a','c','t','i','v','e','_','l','e','a','f', 0x66u, 'l','e','a','f','-','1'
     };
+    static const uint8_t layout_empty[] = {
+        0xa2u,
+        0x68u, 'r','e','v','i','s','i','o','n', 0x0au,
+        0x66u, 'l','a','y','o','u','t',
+        0xa2u,
+        0x64u, 'r','o','o','t', 0xf6u,
+        0x6bu, 'a','c','t','i','v','e','_','l','e','a','f', 0xf6u
+    };
     static const uint8_t snapshot_flush[] = {
         0xa3u,
         0x65u, 's','c','o','p','e', 0x68u, 's','n','a','p','s','h','o','t',
@@ -121,6 +129,11 @@ int main(void)
     cdin_frontend_gui_sdl_model model;
     cdin_frontend_gui_sdl_model_action action;
     cdin_frontend_protocol_message_view view;
+    cdin_frontend_gui_sdl_layout parsed_layout;
+    cdin_frontend_gui_sdl_layout unchanged_layout;
+    uint8_t invalid_layout[sizeof(layout_split)];
+    size_t ratio_offset = SIZE_MAX;
+    size_t byte_index;
 
     /* The attach viewport ID is not a Runtime semantic view ID. The
      * first view-scoped snapshot message establishes the actual view. */
@@ -182,6 +195,42 @@ int main(void)
     assert(model.layout.nodes[model.layout.root_index].ratio_bp == 5000u);
     assert(strcmp(model.layout.nodes[model.layout.active_leaf_index].id,
                   "leaf-1") == 0);
+    assert(model.layout.nodes[model.layout.root_index].first_child == 1u);
+    assert(model.layout.nodes[model.layout.root_index].second_child == 2u);
+    assert(model.layout.nodes[1].has_active_view != 0);
+    assert(strcmp(model.layout.view_ids[
+                      model.layout.nodes[1].active_view_index], "view-1") == 0);
+
+    /* A legitimate empty layout is represented with two CBOR null values. */
+    view = message(CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
+                   layout_empty, sizeof(layout_empty));
+    assert(cdin_frontend_gui_sdl_layout_parse(&view, &parsed_layout) ==
+           CDIN_FRONTEND_GUI_SDL_LAYOUT_OK);
+    assert(parsed_layout.has_root == 0);
+    assert(parsed_layout.has_active_leaf == 0);
+    assert(parsed_layout.node_count == 0u);
+
+    /* Out-of-range fixed-point ratios are rejected without modifying output. */
+    memcpy(invalid_layout, layout_split, sizeof(invalid_layout));
+    for (byte_index = 0u; byte_index + 2u < sizeof(invalid_layout); ++byte_index) {
+        if (invalid_layout[byte_index] == 0x19u &&
+            invalid_layout[byte_index + 1u] == 0x13u &&
+            invalid_layout[byte_index + 2u] == 0x88u) {
+            ratio_offset = byte_index;
+            break;
+        }
+    }
+    assert(ratio_offset != SIZE_MAX);
+    invalid_layout[ratio_offset + 1u] = 0x23u;
+    invalid_layout[ratio_offset + 2u] = 0x28u; /* 9000, above 8999 */
+    memset(&parsed_layout, 0xa5, sizeof(parsed_layout));
+    unchanged_layout = parsed_layout;
+    view = message(CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
+                   invalid_layout, sizeof(invalid_layout));
+    assert(cdin_frontend_gui_sdl_layout_parse(&view, &parsed_layout) ==
+           CDIN_FRONTEND_GUI_SDL_LAYOUT_INVALID);
+    assert(memcmp(&parsed_layout, &unchanged_layout,
+                  sizeof(parsed_layout)) == 0);
 
     assert(cdin_frontend_gui_sdl_model_expect_lines(&model, 0u, 16u, 1u) ==
            CDIN_FRONTEND_GUI_SDL_MODEL_OK);
