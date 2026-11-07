@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0.0",
+  "component_id": "frontend",
+  "variant": "gui-sdl",
+  "version": "1.0.0",
+  "status": "active",
+  "source_units": [
+    {
+      "source_unit_id": "frontend-source",
+      "repository_uri": "https://github.com/cdin-editor/frontend",
+      "revision": "1373715c23eb965445caa926de3a99d9c0246f81"
+    }
+  ],
+  "dependencies": [],
+  "contracts": {
+    "provides": [],
+    "requires": [
+      {
+        "contract_id": "org.cdin.frontend-protocol",
+        "version_constraint": "1.0.0"
+      }
+    ]
+  }
+}
