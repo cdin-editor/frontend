@@ -67,12 +67,20 @@ Issue #15.
 
 ## Current rendering and input limits
 
-The first renderer uses SDL's diagnostic debug-text primitive and a simple
-pixel viewport. Non-ASCII bytes are shown as placeholders; the original bytes
-remain unchanged in the cache. It currently presents one attached view rather
-than rendering the full PaneTree. Style roles, complete options/layout
-projection, selection/cursor visualization, panels, widgets, scrolling and
-device-loss recovery are not yet complete.
+The SDL renderer now traverses the committed PaneTree and draws each
+leaf's active Runtime view in the deterministic pixel rectangle computed by
+the SDL-independent geometry module. Each pane has its own clipped drawing
+region, split boundary and active/inactive affordance; nested two- and
+three-pane layouts are covered by the dummy/software-renderer pixel tests.
+Geometry is recomputed from the current pixel viewport on every frame. A
+committed empty PaneTree draws no synthetic view, and too-small split geometry
+degrades to the focused view rather than dividing into zero-sized panes.
+
+Text is still drawn with SDL's diagnostic debug-text primitive. Non-ASCII
+bytes are shown as placeholders; the original bytes remain unchanged in the
+cache. The renderer is therefore multi-pane, but not yet a production Unicode
+text renderer. Style roles, cursor/selection visualization, panels, widgets,
+per-view scrolling and hit-testing/focus navigation remain later phases.
 
 The adapter advertises the mouse capability and forwards negotiated pointer
 and wheel input. It does not advertise IME, dialogs, clipboard-provider,
