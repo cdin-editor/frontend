@@ -46,6 +46,21 @@ cdin_frontend_gui_sdl_geometry_status cdin_frontend_gui_sdl_geometry_compute(
     size_t out_capacity);
 
 /*
+ * Hit-test the splitter divider bands in pixel coordinates. hit_radius is
+ * the inclusive distance from the mathematical divider line (4 gives a
+ * 9-pixel target). At nested divider intersections the deepest split wins;
+ * equal-distance candidates otherwise prefer the deepest split. The result
+ * is a layout node index, never a Runtime view index. OUTSIDE resets output.
+ */
+cdin_frontend_gui_sdl_geometry_status cdin_frontend_gui_sdl_geometry_splitter_hit_test(
+    const cdin_frontend_gui_sdl_layout *layout,
+    const cdin_frontend_gui_sdl_rect *viewport,
+    uint32_t x,
+    uint32_t y,
+    uint32_t hit_radius,
+    size_t *out_split_node_index);
+
+/*
  * Hit-test a point in pixel coordinates against the computed PaneTree.
  * Split rectangles are half-open: a point on a split boundary belongs to the
  * second child. On success, out_leaf_node_index identifies the leaf and
