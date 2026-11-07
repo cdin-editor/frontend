@@ -185,8 +185,13 @@ int main(void)
     assert(model.pane_tree.nodes[0].axis == CDIN_FRONTEND_GUI_SDL_PANE_VERTICAL);
     assert(model.pane_tree.nodes[0].ratio_bp == 5000u);
     assert(model.pane_tree.nodes[1].kind == CDIN_FRONTEND_GUI_SDL_PANE_LEAF);
+    assert(model.pane_tree.view_count == 2u);
     assert(model.pane_tree.nodes[1].view_count == 1u);
-    assert(strcmp(model.pane_tree.nodes[1].views[0], "view-1") == 0);
+    assert(strcmp(model.pane_tree.view_ids[
+                      model.pane_tree.nodes[1].view_indices[0]], "view-1") == 0);
+    assert(model.pane_tree.nodes[1].has_active_view != 0);
+    assert(strcmp(model.pane_tree.view_ids[
+                      model.pane_tree.nodes[1].active_view_index], "view-1") == 0);
     assert(model.pane_tree.nodes[2].kind == CDIN_FRONTEND_GUI_SDL_PANE_LEAF);
     assert(model.pane_tree.nodes[2].has_active_view == 0);
     assert(action.request_lines != 0);
