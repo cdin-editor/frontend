@@ -15,16 +15,25 @@ static void trace_step(const char *name)
 }
 
 typedef struct fake_stream {
+    uint8_t input[8192];
+    size_t input_length;
+    size_t input_offset;
     uint8_t output[8192];
     size_t output_length;
 } fake_stream;
 
 static ptrdiff_t fake_read(void *opaque, uint8_t *buffer, size_t length)
 {
-    (void)opaque;
-    (void)buffer;
-    (void)length;
-    return 0;
+    fake_stream *stream = (fake_stream *)opaque;
+    size_t available;
+    size_t amount;
+    if (stream == NULL || buffer == NULL) return -1;
+    available = stream->input_length - stream->input_offset;
+    if (available == 0u) return 0;
+    amount = length < available ? length : available;
+    memcpy(buffer, stream->input + stream->input_offset, amount);
+    stream->input_offset += amount;
+    return (ptrdiff_t)amount;
 }
 
 static ptrdiff_t fake_write(void *opaque, const uint8_t *bytes, size_t length)
@@ -94,6 +103,183 @@ static size_t output_count_type(
     return count;
 }
 
+typedef struct smoke_cbor_writer {
+    uint8_t *data;
+    size_t capacity;
+    size_t length;
+} smoke_cbor_writer;
+
+static void smoke_cbor_head(
+    smoke_cbor_writer *writer, uint8_t major, uint64_t value)
+{
+    size_t width;
+    size_t index;
+    assert(writer != NULL);
+    if (value < 24u) {
+        assert(writer->length + 1u <= writer->capacity);
+        writer->data[writer->length++] =
+            (uint8_t)((uint8_t)(major << 5u) | (uint8_t)value);
+        return;
+    }
+    if (value <= UINT8_MAX) width = 1u;
+    else if (value <= UINT16_MAX) width = 2u;
+    else if (value <= UINT32_MAX) width = 4u;
+    else width = 8u;
+    assert(writer->length + 1u + width <= writer->capacity);
+    writer->data[writer->length++] = (uint8_t)(
+        (uint8_t)(major << 5u) | (width == 1u ? 24u :
+        width == 2u ? 25u : width == 4u ? 26u : 27u));
+    for (index = 0u; index < width; ++index) {
+        size_t shift = (width - index - 1u) * 8u;
+        writer->data[writer->length++] = (uint8_t)(value >> shift);
+    }
+}
+
+static void smoke_cbor_uint(smoke_cbor_writer *writer, uint64_t value)
+{
+    smoke_cbor_head(writer, 0u, value);
+}
+
+static void smoke_cbor_map(smoke_cbor_writer *writer, size_t count)
+{
+    smoke_cbor_head(writer, 5u, (uint64_t)count);
+}
+
+static void smoke_cbor_text(smoke_cbor_writer *writer, const char *value)
+{
+    size_t length = strlen(value);
+    smoke_cbor_head(writer, 3u, (uint64_t)length);
+    assert(writer->length + length <= writer->capacity);
+    memcpy(writer->data + writer->length, value, length);
+    writer->length += length;
+}
+
+static void smoke_cbor_leaf(
+    smoke_cbor_writer *writer, const char *node_id, const char *view_id)
+{
+    smoke_cbor_map(writer, 4u);
+    smoke_cbor_text(writer, "id");
+    smoke_cbor_text(writer, node_id);
+    smoke_cbor_text(writer, "kind");
+    smoke_cbor_text(writer, "leaf");
+    smoke_cbor_text(writer, "views");
+    smoke_cbor_head(writer, 4u, 1u);
+    smoke_cbor_text(writer, view_id);
+    smoke_cbor_text(writer, "active_view");
+    smoke_cbor_text(writer, view_id);
+}
+
+static size_t smoke_two_view_layout(
+    uint8_t *output, size_t capacity)
+{
+    smoke_cbor_writer writer = { output, capacity, 0u };
+    smoke_cbor_map(&writer, 2u);
+    smoke_cbor_text(&writer, "layout");
+    smoke_cbor_map(&writer, 2u);
+    smoke_cbor_text(&writer, "root");
+    smoke_cbor_map(&writer, 6u);
+    smoke_cbor_text(&writer, "id");
+    smoke_cbor_text(&writer, "split-main");
+    smoke_cbor_text(&writer, "axis");
+    smoke_cbor_text(&writer, "horizontal");
+    smoke_cbor_text(&writer, "kind");
+    smoke_cbor_text(&writer, "split");
+    smoke_cbor_text(&writer, "first");
+    smoke_cbor_leaf(&writer, "leaf-left", "view-left");
+    smoke_cbor_text(&writer, "second");
+    smoke_cbor_leaf(&writer, "leaf-right", "view-right");
+    smoke_cbor_text(&writer, "ratio_bp");
+    smoke_cbor_uint(&writer, 5000u);
+    smoke_cbor_text(&writer, "active_leaf");
+    smoke_cbor_text(&writer, "leaf-left");
+    smoke_cbor_text(&writer, "revision");
+    smoke_cbor_uint(&writer, 1u);
+    return writer.length;
+}
+
+static size_t smoke_snapshot_flush(
+    uint8_t *output, size_t capacity)
+{
+    smoke_cbor_writer writer = { output, capacity, 0u };
+    smoke_cbor_map(&writer, 3u);
+    smoke_cbor_text(&writer, "scope");
+    smoke_cbor_text(&writer, "snapshot");
+    smoke_cbor_text(&writer, "revision");
+    smoke_cbor_uint(&writer, 1u);
+    smoke_cbor_text(&writer, "sequence");
+    smoke_cbor_uint(&writer, 1u);
+    return writer.length;
+}
+
+static cdin_frontend_protocol_message_view smoke_message(
+    cdin_frontend_protocol_message_type type,
+    const uint8_t *payload,
+    size_t payload_length)
+{
+    cdin_frontend_protocol_message_view message;
+    memset(&message, 0, sizeof(message));
+    message.major = CDIN_FRONTEND_PROTOCOL_VERSION_MAJOR;
+    message.minor = CDIN_FRONTEND_PROTOCOL_VERSION_MINOR;
+    message.type = type;
+    message.name_space = "core";
+    message.payload = payload;
+    message.payload_length = payload_length;
+    return message;
+}
+
+static void smoke_queue_inbound(
+    fake_stream *stream,
+    cdin_frontend_protocol_message_view *message)
+{
+    uint8_t frame[1024];
+    size_t frame_length = 0u;
+    assert(stream != NULL && message != NULL);
+    assert(cdin_frontend_protocol_encode_frame(
+        message, frame, sizeof(frame), &frame_length, 4096u) ==
+        CDIN_FRONTEND_PROTOCOL_OK);
+    assert(frame_length <= sizeof(stream->input) - stream->input_length);
+    memcpy(stream->input + stream->input_length, frame, frame_length);
+    stream->input_length += frame_length;
+}
+
+static void smoke_apply_two_view_snapshot(
+    cdin_frontend_gui_sdl *gui,
+    cdin_frontend_session *session,
+    fake_stream *stream)
+{
+    uint8_t payload[512];
+    size_t payload_length;
+    cdin_frontend_protocol_message_view message;
+    cdin_frontend_protocol_message_view received;
+    int committed = 0;
+
+    payload_length = smoke_two_view_layout(payload, sizeof(payload));
+    message = smoke_message(CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
+                            payload, payload_length);
+    message.sequence = 1u;
+    smoke_queue_inbound(stream, &message);
+
+    payload_length = smoke_snapshot_flush(payload, sizeof(payload));
+    message = smoke_message(CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
+                            payload, payload_length);
+    message.sequence = 2u;
+    smoke_queue_inbound(stream, &message);
+
+    assert(cdin_frontend_session_receive(session, &received) ==
+           CDIN_FRONTEND_PROTOCOL_OK);
+    assert(received.type == CDIN_FRONTEND_PROTOCOL_UI_LAYOUT);
+    assert(cdin_frontend_gui_sdl_apply_message(gui, &received, &committed) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    assert(committed == 0);
+
+    assert(cdin_frontend_session_receive(session, &received) ==
+           CDIN_FRONTEND_PROTOCOL_OK);
+    assert(received.type == CDIN_FRONTEND_PROTOCOL_UI_FLUSH);
+    assert(cdin_frontend_gui_sdl_apply_message(gui, &received, &committed) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    assert(committed != 0);
+}
+
 static int output_contains_expected_mouse(const fake_stream *stream)
 {
     size_t offset = 0u;
@@ -120,8 +306,10 @@ static int output_contains_expected_mouse(const fake_stream *stream)
         if (message.type == CDIN_FRONTEND_PROTOCOL_INPUT_MOUSE) {
             char action[16];
             char button[16];
+            char target[64];
             size_t action_length = 0u;
             size_t button_length = 0u;
+            size_t target_length = 0u;
             const uint8_t *position = NULL;
             size_t position_length = 0u;
             uint64_t x = 0u;
@@ -132,6 +320,9 @@ static int output_contains_expected_mouse(const fake_stream *stream)
                 cdin_frontend_protocol_payload_get_text(
                     message.payload, message.payload_length, "button",
                     button, sizeof(button), &button_length) == CDIN_FRONTEND_PROTOCOL_OK &&
+                cdin_frontend_protocol_payload_get_text(
+                    message.payload, message.payload_length, "target",
+                    target, sizeof(target), &target_length) == CDIN_FRONTEND_PROTOCOL_OK &&
                 cdin_frontend_protocol_payload_get_raw(
                     message.payload, message.payload_length, "position",
                     &position, &position_length) == CDIN_FRONTEND_PROTOCOL_OK &&
@@ -141,7 +332,8 @@ static int output_contains_expected_mouse(const fake_stream *stream)
                     position, position_length, "y", &y) == CDIN_FRONTEND_PROTOCOL_OK) {
                 return action_length == 5u && strcmp(action, "press") == 0 &&
                        button_length == 4u && strcmp(button, "left") == 0 &&
-                       x == 12u && y == 21u;
+                       target_length == 10u && strcmp(target, "view-right") == 0 &&
+                       x == 600u && y == 100u;
             }
         }
         offset += frame_length;
@@ -221,6 +413,8 @@ int main(void)
     assert(gui != NULL);
     trace_step("render initial frame");
     assert(cdin_frontend_gui_sdl_render(gui) == CDIN_FRONTEND_GUI_SDL_OK);
+    trace_step("apply two-view semantic snapshot");
+    smoke_apply_two_view_snapshot(gui, &session, &stream);
 
     /* A device-loss notification must recreate the renderer and leave the
      * adapter usable. The next frame is rebuilt from the presentation model. */
@@ -244,8 +438,8 @@ int main(void)
     event.button.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     event.button.button = SDL_BUTTON_LEFT;
     event.button.down = true;
-    event.button.x = 12.0f;
-    event.button.y = 21.0f;
+    event.button.x = 600.0f;
+    event.button.y = 100.0f;
     trace_step("push mouse event");
     assert(SDL_PushEvent(&event));
     trace_step("pump mouse event");
