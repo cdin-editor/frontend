@@ -12,7 +12,8 @@
 #define CDIN_FRONTEND_GUI_SDL_MAX_PANE_NODES 63u
 #define CDIN_FRONTEND_GUI_SDL_MAX_PANE_VIEWS 32u
 #define CDIN_FRONTEND_GUI_SDL_MAX_PANE_DEPTH 16u
-#define CDIN_FRONTEND_GUI_SDL_MAX_PANE_ID_BYTES 63u
+#define CDIN_FRONTEND_GUI_SDL_MAX_PANE_ID_BYTES 127u
+#define CDIN_FRONTEND_GUI_SDL_MAX_PANE_VIEW_ID_BYTES 63u
 
 typedef enum cdin_frontend_gui_sdl_pane_kind {
     CDIN_FRONTEND_GUI_SDL_PANE_LEAF = 1,
@@ -33,9 +34,9 @@ typedef struct cdin_frontend_gui_sdl_pane_node {
     int second;
     size_t view_count;
     char views[CDIN_FRONTEND_GUI_SDL_MAX_PANE_VIEWS]
-              [CDIN_FRONTEND_GUI_SDL_MAX_PANE_ID_BYTES + 1u];
+              [CDIN_FRONTEND_GUI_SDL_MAX_PANE_VIEW_ID_BYTES + 1u];
     int has_active_view;
-    char active_view[CDIN_FRONTEND_GUI_SDL_MAX_PANE_ID_BYTES + 1u];
+    char active_view[CDIN_FRONTEND_GUI_SDL_MAX_PANE_VIEW_ID_BYTES + 1u];
 } cdin_frontend_gui_sdl_pane_node;
 
 typedef struct cdin_frontend_gui_sdl_pane_tree {
