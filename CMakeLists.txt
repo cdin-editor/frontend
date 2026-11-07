@@ -203,6 +203,7 @@ if(BUILD_TESTING)
         tests/ui/gui-sdl/integration/geometry.c
         ui/gui-sdl/src/layout/geometry.c)
     target_include_directories(cdin_frontend_gui_sdl_geometry_tests PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
         "${CMAKE_CURRENT_SOURCE_DIR}/ui/gui-sdl/src/layout")
     target_compile_features(cdin_frontend_gui_sdl_geometry_tests PRIVATE c_std_11)
     cdin_frontend_enable_test_strict(cdin_frontend_gui_sdl_geometry_tests)
