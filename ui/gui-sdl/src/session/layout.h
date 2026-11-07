@@ -7,7 +7,7 @@
 #include <stdint.h>
 
 #define CDIN_FRONTEND_GUI_SDL_LAYOUT_MAX_VIEWS 32u
-#define CDIN_FRONTEND_GUI_SDL_LAYOUT_MAX_NODES 63u
+#define CDIN_FRONTEND_GUI_SDL_LAYOUT_MAX_NODES 255u
 #define CDIN_FRONTEND_GUI_SDL_LAYOUT_MAX_ID_BYTES 128u
 
 typedef enum cdin_frontend_gui_sdl_layout_node_kind {
