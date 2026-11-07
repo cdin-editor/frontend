@@ -176,6 +176,18 @@ static int parse_pane_tree(const uint8_t *map, size_t map_length,
         }
         if (!found) return 0;
     }
+    /* Protocol v1 bounds the whole semantic snapshot to 32 views, not
+     * 32 views per leaf. Count globally before accepting the tree. */
+    {
+        size_t total_views = 0u;
+        for (index = 0u; index < tree->node_count; ++index) {
+            if (tree->nodes[index].kind == CDIN_FRONTEND_GUI_SDL_PANE_LEAF) {
+                if (tree->nodes[index].view_count >
+                    CDIN_FRONTEND_GUI_SDL_MAX_PANE_VIEWS - total_views) return 0;
+                total_views += tree->nodes[index].view_count;
+            }
+        }
+    }
     /* A semantic view belongs to exactly one leaf in a PaneTree. */
     for (index = 0u; index < tree->node_count; ++index) {
         size_t other;
