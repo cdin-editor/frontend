@@ -35,6 +35,7 @@ typedef enum cdin_frontend_gui_sdl_utf8_status {
  * The function performs a sizing pass before writing. On BUFFER_TOO_SMALL the
  * required scalar count is returned through out_count and out_scalars remains
  * unchanged. Empty input succeeds with a NULL output buffer and zero capacity.
+ * The input bytes, output records and out_count storage must not overlap.
  */
 cdin_frontend_gui_sdl_utf8_status cdin_frontend_gui_sdl_utf8_decode(
     const uint8_t *bytes,
