@@ -2,6 +2,7 @@
 #define CDIN_FRONTEND_GUI_SDL_RENDER_H
 
 #include "../session/model.h"
+#include "../layout/geometry.h"
 
 #include <SDL3/SDL.h>
 
