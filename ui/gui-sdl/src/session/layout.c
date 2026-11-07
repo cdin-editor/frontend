@@ -1,6 +1,5 @@
 #include "layout.h"
 
-#include <stdio.h>
 #include <string.h>
 
 #define CDIN_FRONTEND_GUI_SDL_LAYOUT_MAX_DEPTH 32u
@@ -126,18 +125,12 @@ static cdin_frontend_gui_sdl_layout_status parse_node(
     node->second_child = SIZE_MAX;
     status = required_text(raw, raw_length, "kind", kind, sizeof(kind));
     if (status != CDIN_FRONTEND_GUI_SDL_LAYOUT_OK) {
-        (void)fprintf(stderr, "PaneTree node %zu: kind parse status=%d\\n",
-                      node_index, (int)status);
         return status;
     }
     status = required_text(raw, raw_length, "id", node->id, sizeof(node->id));
     if (status != CDIN_FRONTEND_GUI_SDL_LAYOUT_OK) {
-        (void)fprintf(stderr, "PaneTree node %zu: id parse status=%d\\n",
-                      node_index, (int)status);
         return status;
     }
-    (void)fprintf(stderr, "PaneTree node %zu kind=%s id=%s\\n",
-                  node_index, kind, node->id);
     if (identifier_exists(layout, node_index, node->id)) {
         return CDIN_FRONTEND_GUI_SDL_LAYOUT_INVALID;
     }
@@ -299,11 +292,8 @@ cdin_frontend_gui_sdl_layout_status cdin_frontend_gui_sdl_layout_parse(
     status = nullable_text(layout_map, layout_map_length, "active_leaf",
                            active_leaf, sizeof(active_leaf), &has_active_leaf);
     if (status != CDIN_FRONTEND_GUI_SDL_LAYOUT_OK) {
-        (void)fprintf(stderr, "PaneTree active_leaf parse status=%d\\n", (int)status);
         return status;
     }
-    (void)fprintf(stderr, "PaneTree root bytes=%zu active_leaf_present=%d active_leaf=%s\\n",
-                  root_length, has_active_leaf, active_leaf);
 
     if (raw_is_null(root, root_length)) {
         if (has_active_leaf) return CDIN_FRONTEND_GUI_SDL_LAYOUT_INVALID;
@@ -315,7 +305,6 @@ cdin_frontend_gui_sdl_layout_status cdin_frontend_gui_sdl_layout_parse(
     parser.layout = &parsed;
     status = parse_node(&parser, root, root_length, 1u, &parsed.root_index);
     if (status != CDIN_FRONTEND_GUI_SDL_LAYOUT_OK) {
-        (void)fprintf(stderr, "PaneTree node parse status=%d\\n", (int)status);
         return status;
     }
     parsed.has_root = 1;
