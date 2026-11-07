@@ -50,7 +50,8 @@ cdin_frontend_gui_sdl_geometry_status cdin_frontend_gui_sdl_geometry_compute(
  * the inclusive distance from the mathematical divider line (4 gives a
  * 9-pixel target). At nested divider intersections the deepest split wins;
  * equal-distance candidates otherwise prefer the deepest split. The result
- * is a layout node index, never a Runtime view index. OUTSIDE resets output.
+ * is an index into layout->nodes; callers resolve its stable semantic ID via
+ * layout->nodes[index].id. It is never a Runtime view index. OUTSIDE resets output.
  */
 cdin_frontend_gui_sdl_geometry_status cdin_frontend_gui_sdl_geometry_splitter_hit_test(
     const cdin_frontend_gui_sdl_layout *layout,
