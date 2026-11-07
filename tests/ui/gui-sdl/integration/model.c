@@ -426,6 +426,21 @@ static void test_independent_view_state_and_cache(void)
            CDIN_FRONTEND_GUI_SDL_MODEL_STALE);
     assert(first->visible.first_line == 0u);
     assert(second->visible.first_line == 10u);
+    /* A response for a newer/older document version or another view is stale. */
+    assert(cdin_frontend_gui_sdl_model_expect_lines(
+        &model, "view-0", 20u, 16u, 1u) == CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    length = build_lines(payload, sizeof(payload), "view-0", 2u, 20u,
+                         second_text, sizeof(second_text) - 1u);
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_VIEW_LINES,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_STALE);
+    length = build_lines(payload, sizeof(payload), "view-1", 3u, 20u,
+                         second_text, sizeof(second_text) - 1u);
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_VIEW_LINES,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_STALE);
+    assert(first->visible.first_line == 0u);
+    assert(second->visible.first_line == 10u);
     cdin_frontend_gui_sdl_model_cancel_line_request(&model, "view-0");
 
     /* A same-version complete snapshot retains both independent line caches. */
@@ -491,6 +506,30 @@ static void test_independent_view_state_and_cache(void)
     assert(model.view_count == 1u);
     assert(cdin_frontend_gui_sdl_model_find_view(&model, "view-1") == NULL);
     assert(cdin_frontend_gui_sdl_model_find_view(&model, "view-0") != NULL);
+    assert(model.cache_bytes == sizeof(first_text) - 1u);
+
+    /* Re-adding a removed ID creates fresh state; an earlier cache is not resurrected. */
+    length = build_layout(payload, sizeof(payload), 13u, 2u);
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    length = build_invalidate(payload, sizeof(payload), "view-0", 1u);
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_VIEW_INVALIDATE,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    length = build_invalidate(payload, sizeof(payload), "view-1", 5u);
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_VIEW_INVALIDATE,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    length = build_snapshot_flush(payload, sizeof(payload), 5u, 7u);
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    second = cdin_frontend_gui_sdl_model_find_view(&model, "view-1");
+    assert(second != NULL);
+    assert(second->semantic.version == 5u);
+    assert(second->visible.count == 0u);
+    assert(second->pending_lines_valid == 0);
     assert(model.cache_bytes == sizeof(first_text) - 1u);
 
     /* A malformed replacement layout does not destroy the last valid tree. */
