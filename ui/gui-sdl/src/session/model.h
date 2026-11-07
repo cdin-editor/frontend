@@ -9,6 +9,45 @@
 #define CDIN_FRONTEND_GUI_SDL_MAX_VISIBLE_LINES 64u
 #define CDIN_FRONTEND_GUI_SDL_MAX_LINE_BYTES 8192u
 
+#define CDIN_FRONTEND_GUI_SDL_MAX_PANE_NODES 63u
+#define CDIN_FRONTEND_GUI_SDL_MAX_PANE_VIEWS 32u
+#define CDIN_FRONTEND_GUI_SDL_MAX_PANE_DEPTH 32u
+#define CDIN_FRONTEND_GUI_SDL_MAX_PANE_ID_BYTES 128u
+#define CDIN_FRONTEND_GUI_SDL_MAX_PANE_VIEW_ID_BYTES 128u
+
+typedef enum cdin_frontend_gui_sdl_pane_kind {
+    CDIN_FRONTEND_GUI_SDL_PANE_LEAF = 1,
+    CDIN_FRONTEND_GUI_SDL_PANE_SPLIT = 2
+} cdin_frontend_gui_sdl_pane_kind;
+
+typedef enum cdin_frontend_gui_sdl_pane_axis {
+    CDIN_FRONTEND_GUI_SDL_PANE_HORIZONTAL = 1,
+    CDIN_FRONTEND_GUI_SDL_PANE_VERTICAL = 2
+} cdin_frontend_gui_sdl_pane_axis;
+
+typedef struct cdin_frontend_gui_sdl_pane_node {
+    cdin_frontend_gui_sdl_pane_kind kind;
+    char id[CDIN_FRONTEND_GUI_SDL_MAX_PANE_ID_BYTES + 1u];
+    cdin_frontend_gui_sdl_pane_axis axis;
+    uint16_t ratio_bp;
+    int first;
+    int second;
+    size_t view_count;
+    char views[CDIN_FRONTEND_GUI_SDL_MAX_PANE_VIEWS]
+              [CDIN_FRONTEND_GUI_SDL_MAX_PANE_VIEW_ID_BYTES + 1u];
+    int has_active_view;
+    char active_view[CDIN_FRONTEND_GUI_SDL_MAX_PANE_VIEW_ID_BYTES + 1u];
+} cdin_frontend_gui_sdl_pane_node;
+
+typedef struct cdin_frontend_gui_sdl_pane_tree {
+    int has_root;
+    int root_index;
+    int has_active_leaf;
+    char active_leaf[CDIN_FRONTEND_GUI_SDL_MAX_PANE_ID_BYTES + 1u];
+    size_t node_count;
+    cdin_frontend_gui_sdl_pane_node nodes[CDIN_FRONTEND_GUI_SDL_MAX_PANE_NODES];
+} cdin_frontend_gui_sdl_pane_tree;
+
 typedef enum cdin_frontend_gui_sdl_model_status {
     CDIN_FRONTEND_GUI_SDL_MODEL_OK = 0,
     CDIN_FRONTEND_GUI_SDL_MODEL_STALE,
@@ -34,6 +73,7 @@ typedef struct cdin_frontend_gui_sdl_snapshot_state {
     int has_cursor;
     int has_layout;
     int needs_lines;
+    cdin_frontend_gui_sdl_pane_tree pane_tree;
     char theme[64];
     char mode[32];
     char status[128];
@@ -50,6 +90,7 @@ typedef struct cdin_frontend_gui_sdl_model {
     int has_cursor;
     int has_layout;
     int needs_lines;
+    cdin_frontend_gui_sdl_pane_tree pane_tree;
     cdin_frontend_gui_sdl_snapshot_state staged_snapshot;
     int snapshot_pending_valid;
     cdin_frontend_gui_sdl_line_window visible;
