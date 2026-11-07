@@ -36,6 +36,36 @@ int main(void)
         0x67u, 'v','i','e','w','_','i','d', 0x66u, 'v','i','e','w','-','1',
         0x68u, 'p','o','s','i','t','i','o','n', 0x05u
     };
+    static const uint8_t layout_split[] = {
+        0xa2u, 0x66u, 0x6cu, 0x61u, 0x79u, 0x6fu, 0x75u, 0x74u, 0xa2u, 0x64u,
+        0x72u, 0x6fu, 0x6fu, 0x74u, 0xa6u, 0x62u, 0x69u, 0x64u, 0x67u, 0x73u,
+        0x70u, 0x6cu, 0x69u, 0x74u, 0x2du, 0x31u, 0x64u, 0x61u, 0x78u, 0x69u,
+        0x73u, 0x68u, 0x76u, 0x65u, 0x72u, 0x74u, 0x69u, 0x63u, 0x61u, 0x6cu,
+        0x64u, 0x6bu, 0x69u, 0x6eu, 0x64u, 0x65u, 0x73u, 0x70u, 0x6cu, 0x69u,
+        0x74u, 0x65u, 0x66u, 0x69u, 0x72u, 0x73u, 0x74u, 0xa4u, 0x62u, 0x69u,
+        0x64u, 0x66u, 0x6cu, 0x65u, 0x61u, 0x66u, 0x2du, 0x31u, 0x64u, 0x6bu,
+        0x69u, 0x6eu, 0x64u, 0x64u, 0x6cu, 0x65u, 0x61u, 0x66u, 0x65u, 0x76u,
+        0x69u, 0x65u, 0x77u, 0x73u, 0x81u, 0x66u, 0x76u, 0x69u, 0x65u, 0x77u,
+        0x2du, 0x31u, 0x6bu, 0x61u, 0x63u, 0x74u, 0x69u, 0x76u, 0x65u, 0x5fu,
+        0x76u, 0x69u, 0x65u, 0x77u, 0x66u, 0x76u, 0x69u, 0x65u, 0x77u, 0x2du,
+        0x31u, 0x66u, 0x73u, 0x65u, 0x63u, 0x6fu, 0x6eu, 0x64u, 0xa4u, 0x62u,
+        0x69u, 0x64u, 0x66u, 0x6cu, 0x65u, 0x61u, 0x66u, 0x2du, 0x32u, 0x64u,
+        0x6bu, 0x69u, 0x6eu, 0x64u, 0x64u, 0x6cu, 0x65u, 0x61u, 0x66u, 0x65u,
+        0x76u, 0x69u, 0x65u, 0x77u, 0x73u, 0x81u, 0x66u, 0x76u, 0x69u, 0x65u,
+        0x77u, 0x2du, 0x32u, 0x6bu, 0x61u, 0x63u, 0x74u, 0x69u, 0x76u, 0x65u,
+        0x5fu, 0x76u, 0x69u, 0x65u, 0x77u, 0x66u, 0x76u, 0x69u, 0x65u, 0x77u,
+        0x2du, 0x32u, 0x68u, 0x72u, 0x61u, 0x74u, 0x69u, 0x6fu, 0x5fu, 0x62u,
+        0x70u, 0x19u, 0x13u, 0x88u, 0x6bu, 0x61u, 0x63u, 0x74u, 0x69u, 0x76u,
+        0x65u, 0x5fu, 0x6cu, 0x65u, 0x61u, 0x66u, 0x66u, 0x6cu, 0x65u, 0x61u,
+        0x66u, 0x2du, 0x31u, 0x68u, 0x72u, 0x65u, 0x76u, 0x69u, 0x73u, 0x69u,
+        0x6fu, 0x6eu, 0x09u
+    };
+    static const uint8_t layout_empty[] = {
+        0xa2u, 0x66u, 0x6cu, 0x61u, 0x79u, 0x6fu, 0x75u, 0x74u, 0xa2u, 0x64u,
+        0x72u, 0x6fu, 0x6fu, 0x74u, 0xf6u, 0x6bu, 0x61u, 0x63u, 0x74u, 0x69u,
+        0x76u, 0x65u, 0x5fu, 0x6cu, 0x65u, 0x61u, 0x66u, 0xf6u, 0x68u, 0x72u,
+        0x65u, 0x76u, 0x69u, 0x73u, 0x69u, 0x6fu, 0x6eu, 0x0au
+    };
     static const uint8_t snapshot_flush[] = {
         0xa3u,
         0x65u, 's','c','o','p','e', 0x68u, 's','n','a','p','s','h','o','t',
@@ -96,6 +126,11 @@ int main(void)
     cdin_frontend_gui_sdl_model model;
     cdin_frontend_gui_sdl_model_action action;
     cdin_frontend_protocol_message_view view;
+    cdin_frontend_gui_sdl_layout parsed_layout;
+    cdin_frontend_gui_sdl_layout unchanged_layout;
+    uint8_t invalid_layout[sizeof(layout_split)];
+    size_t ratio_offset = SIZE_MAX;
+    size_t byte_index;
 
     /* The attach viewport ID is not a Runtime semantic view ID. The
      * first view-scoped snapshot message establishes the actual view. */
@@ -121,6 +156,15 @@ int main(void)
            CDIN_FRONTEND_GUI_SDL_MODEL_OK);
     assert(model.cursor_position == 0u);
     assert(model.has_cursor == 0);
+    view = message(CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
+                   layout_split, sizeof(layout_split));
+    assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    /* PaneTree is part of the atomic snapshot: it is parsed while staged but
+     * cannot replace the committed layout before the matching ui.flush. */
+    assert(model.has_layout == 0);
+    assert(model.staged_snapshot.has_layout != 0);
+    assert(model.staged_snapshot.layout.node_count == 3u);
     view = message(CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
                    snapshot_flush, sizeof(snapshot_flush));
     assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
@@ -134,6 +178,56 @@ int main(void)
     assert(action.version == 1u);
     assert(model.snapshot_revision == 1u);
     assert(model.has_snapshot_revision != 0);
+    assert(model.has_layout != 0);
+    assert(model.layout.revision == 9u);
+    assert(model.layout.has_root != 0);
+    assert(model.layout.has_active_leaf != 0);
+    assert(model.layout.node_count == 3u);
+    assert(model.layout.leaf_count == 2u);
+    assert(model.layout.view_count == 2u);
+    assert(model.layout.nodes[model.layout.root_index].kind ==
+           CDIN_FRONTEND_GUI_SDL_LAYOUT_SPLIT);
+    assert(model.layout.nodes[model.layout.root_index].axis ==
+           CDIN_FRONTEND_GUI_SDL_LAYOUT_VERTICAL);
+    assert(model.layout.nodes[model.layout.root_index].ratio_bp == 5000u);
+    assert(strcmp(model.layout.nodes[model.layout.active_leaf_index].id,
+                  "leaf-1") == 0);
+    assert(model.layout.nodes[model.layout.root_index].first_child == 1u);
+    assert(model.layout.nodes[model.layout.root_index].second_child == 2u);
+    assert(model.layout.nodes[1].has_active_view != 0);
+    assert(strcmp(model.layout.view_ids[
+                      model.layout.nodes[1].active_view_index], "view-1") == 0);
+
+    /* A legitimate empty layout is represented with two CBOR null values. */
+    view = message(CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
+                   layout_empty, sizeof(layout_empty));
+    assert(cdin_frontend_gui_sdl_layout_parse(&view, &parsed_layout) ==
+           CDIN_FRONTEND_GUI_SDL_LAYOUT_OK);
+    assert(parsed_layout.has_root == 0);
+    assert(parsed_layout.has_active_leaf == 0);
+    assert(parsed_layout.node_count == 0u);
+
+    /* Out-of-range fixed-point ratios are rejected without modifying output. */
+    memcpy(invalid_layout, layout_split, sizeof(invalid_layout));
+    for (byte_index = 0u; byte_index + 2u < sizeof(invalid_layout); ++byte_index) {
+        if (invalid_layout[byte_index] == 0x19u &&
+            invalid_layout[byte_index + 1u] == 0x13u &&
+            invalid_layout[byte_index + 2u] == 0x88u) {
+            ratio_offset = byte_index;
+            break;
+        }
+    }
+    assert(ratio_offset != SIZE_MAX);
+    invalid_layout[ratio_offset + 1u] = 0x23u;
+    invalid_layout[ratio_offset + 2u] = 0x28u; /* 9000, above 8999 */
+    memset(&parsed_layout, 0xa5, sizeof(parsed_layout));
+    memcpy(&unchanged_layout, &parsed_layout, sizeof(unchanged_layout));
+    view = message(CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
+                   invalid_layout, sizeof(invalid_layout));
+    assert(cdin_frontend_gui_sdl_layout_parse(&view, &parsed_layout) ==
+           CDIN_FRONTEND_GUI_SDL_LAYOUT_INVALID);
+    assert(memcmp(&parsed_layout, &unchanged_layout,
+                  sizeof(parsed_layout)) == 0);
 
     assert(cdin_frontend_gui_sdl_model_expect_lines(&model, 0u, 16u, 1u) ==
            CDIN_FRONTEND_GUI_SDL_MODEL_OK);

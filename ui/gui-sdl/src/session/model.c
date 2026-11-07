@@ -45,6 +45,7 @@ static void snapshot_begin(cdin_frontend_gui_sdl_model *model)
     staged->version = model->version;
     staged->cursor_position = model->cursor_position;
     staged->layout_revision = model->layout_revision;
+    staged->layout = model->layout;
     staged->has_cursor = model->has_cursor;
     staged->has_layout = model->has_layout;
     staged->needs_lines = model->needs_lines;
@@ -62,6 +63,7 @@ static void snapshot_commit(cdin_frontend_gui_sdl_model *model)
     model->version = staged->version;
     model->cursor_position = staged->cursor_position;
     model->layout_revision = staged->layout_revision;
+    model->layout = staged->layout;
     model->has_cursor = staged->has_cursor;
     model->has_layout = staged->has_layout;
     model->needs_lines = staged->needs_lines;
@@ -351,13 +353,21 @@ cdin_frontend_gui_sdl_model_status cdin_frontend_gui_sdl_model_apply(
             optional_text(message, "theme", model->staged_snapshot.theme,
                           sizeof(model->staged_snapshot.theme));
             break;
-        case CDIN_FRONTEND_PROTOCOL_UI_LAYOUT:
-            if (cdin_frontend_protocol_payload_get_uint(
-                    message->payload, message->payload_length, "revision",
-                    &model->staged_snapshot.layout_revision) == CDIN_FRONTEND_PROTOCOL_OK) {
+        case CDIN_FRONTEND_PROTOCOL_UI_LAYOUT: {
+            cdin_frontend_gui_sdl_layout_status layout_status =
+                cdin_frontend_gui_sdl_layout_parse(
+                    message, &model->staged_snapshot.layout);
+            if (layout_status == CDIN_FRONTEND_GUI_SDL_LAYOUT_OK) {
+                model->staged_snapshot.layout_revision =
+                    model->staged_snapshot.layout.revision;
                 model->staged_snapshot.has_layout = 1;
+            } else {
+                status = layout_status == CDIN_FRONTEND_GUI_SDL_LAYOUT_LIMIT
+                    ? CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT
+                    : CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
             }
             break;
+        }
         case CDIN_FRONTEND_PROTOCOL_UI_NOTIFY:
             optional_text(message, "text", model->staged_snapshot.notification,
                           sizeof(model->staged_snapshot.notification));
