@@ -225,6 +225,140 @@ static size_t build_lines(
     return writer.length;
 }
 
+static size_t build_lines_with_one_span(
+    uint8_t *output, size_t capacity,
+    const char *view_id, uint64_t version,
+    uint64_t first_line, const uint8_t *line_bytes, size_t line_length,
+    uint64_t span_start, uint64_t span_end, const char *role)
+{
+    cbor_writer writer = { output, capacity, 0u };
+    put_map(&writer, 4u);
+    put_text(&writer, "lines");
+    put_array(&writer, 1u);
+    put_map(&writer, 2u);
+    put_text(&writer, "bytes");
+    put_bytes(&writer, line_bytes, line_length);
+    put_text(&writer, "spans");
+    put_array(&writer, 1u);
+    put_map(&writer, 3u);
+    put_text(&writer, "end");
+    put_uint(&writer, span_end);
+    put_text(&writer, "role");
+    put_text(&writer, role);
+    put_text(&writer, "start");
+    put_uint(&writer, span_start);
+    put_text(&writer, "version");
+    put_uint(&writer, version);
+    put_text(&writer, "view_id");
+    put_text(&writer, view_id);
+    put_text(&writer, "first_line");
+    put_uint(&writer, first_line);
+    return writer.length;
+}
+
+static size_t build_style_table(
+    uint8_t *output, size_t capacity, uint64_t revision, const char *role)
+{
+    cbor_writer writer = { output, capacity, 0u };
+    put_map(&writer, 2u);
+    put_text(&writer, "styles");
+    put_map(&writer, 1u);
+    put_text(&writer, role);
+    put_map(&writer, 0u);
+    put_text(&writer, "revision");
+    put_uint(&writer, revision);
+    return writer.length;
+}
+
+static size_t build_panel(
+    uint8_t *output, size_t capacity, uint64_t revision,
+    const char *panel_id, const char *kind)
+{
+    cbor_writer writer = { output, capacity, 0u };
+    put_map(&writer, 3u);
+    put_text(&writer, "panel");
+    put_map(&writer, 1u);
+    put_text(&writer, "kind");
+    put_text(&writer, kind);
+    put_text(&writer, "panel_id");
+    put_text(&writer, panel_id);
+    put_text(&writer, "revision");
+    put_uint(&writer, revision);
+    return writer.length;
+}
+
+static size_t build_panel_remove(
+    uint8_t *output, size_t capacity, uint64_t revision,
+    const char *panel_id)
+{
+    cbor_writer writer = { output, capacity, 0u };
+    put_map(&writer, 3u);
+    put_text(&writer, "panel");
+    put_null(&writer);
+    put_text(&writer, "panel_id");
+    put_text(&writer, panel_id);
+    put_text(&writer, "revision");
+    put_uint(&writer, revision);
+    return writer.length;
+}
+
+static size_t build_prompt(
+    uint8_t *output, size_t capacity, uint64_t revision,
+    const char *kind)
+{
+    cbor_writer writer = { output, capacity, 0u };
+    put_map(&writer, 2u);
+    put_text(&writer, "prompt");
+    put_map(&writer, 1u);
+    put_text(&writer, "kind");
+    put_text(&writer, kind);
+    put_text(&writer, "revision");
+    put_uint(&writer, revision);
+    return writer.length;
+}
+
+static size_t build_oversized_style_table(
+    uint8_t *output, size_t capacity, const uint8_t *value, size_t value_length)
+{
+    cbor_writer writer = { output, capacity, 0u };
+    put_map(&writer, 2u);
+    put_text(&writer, "styles");
+    put_map(&writer, 1u);
+    put_text(&writer, "normal");
+    put_map(&writer, 1u);
+    put_text(&writer, "extension");
+    put_bytes(&writer, value, value_length);
+    put_text(&writer, "revision");
+    put_uint(&writer, 1u);
+    return writer.length;
+}
+
+static size_t build_oversized_prompt(
+    uint8_t *output, size_t capacity, const uint8_t *value, size_t value_length)
+{
+    cbor_writer writer = { output, capacity, 0u };
+    put_map(&writer, 2u);
+    put_text(&writer, "prompt");
+    put_map(&writer, 1u);
+    put_text(&writer, "extension");
+    put_bytes(&writer, value, value_length);
+    put_text(&writer, "revision");
+    put_uint(&writer, 1u);
+    return writer.length;
+}
+
+static size_t build_prompt_clear(
+    uint8_t *output, size_t capacity, uint64_t revision)
+{
+    cbor_writer writer = { output, capacity, 0u };
+    put_map(&writer, 2u);
+    put_text(&writer, "prompt");
+    put_null(&writer);
+    put_text(&writer, "revision");
+    put_uint(&writer, revision);
+    return writer.length;
+}
+
 static size_t build_large_lines(
     uint8_t *output, size_t capacity,
     const char *view_id, uint64_t version,
@@ -550,6 +684,199 @@ static void test_independent_view_state_and_cache(void)
     assert(model.cache_bytes == 0u);
 }
 
+static void test_styles_panels_prompts_and_line_spans(void)
+{
+    cdin_frontend_gui_sdl_model model;
+    cdin_frontend_gui_sdl_model_action action;
+    uint8_t payload[8192];
+    size_t length;
+    static const uint8_t line_bytes[] = "alpha beta";
+    const cdin_frontend_gui_sdl_view *view;
+
+    assert(cdin_frontend_gui_sdl_model_init(&model, "", 16u) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+
+    length = build_layout(payload, sizeof(payload), 1u, 1u);
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    length = build_invalidate(payload, sizeof(payload), "view-0", 4u);
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_VIEW_INVALIDATE,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+
+    /* Style-role and widget maps are retained as opaque bounded CBOR. Their
+     * field-level rendering semantics are owned by the pending Spec contract. */
+    length = build_style_table(payload, sizeof(payload), 7u, "normal");
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_STYLE_TABLE,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    length = build_panel(payload, sizeof(payload), 1u, "tree", "tree");
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_PANEL,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    length = build_panel(payload, sizeof(payload), 1u, "search", "list");
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_PANEL,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    length = build_panel_remove(payload, sizeof(payload), 1u, "tree");
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_PANEL,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    length = build_prompt(payload, sizeof(payload), 1u, "input");
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_PROMPT,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+
+    length = build_snapshot_flush(payload, sizeof(payload), 1u, 1u);
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    assert(model.presentation.style_revision == 7u);
+    assert(model.presentation.style_table_length != 0u);
+    assert(model.presentation.panel_count == 1u);
+    assert(strcmp(model.presentation.panels[0].panel_id, "search") == 0);
+    assert(model.presentation.panels[0].payload_length != 0u);
+    assert(model.presentation.has_prompt != 0);
+    assert(model.presentation.prompt_length != 0u);
+    assert(model.presentation.encoded_bytes ==
+           model.presentation.style_table_length +
+           model.presentation.panels[0].payload_length +
+           model.presentation.prompt_length);
+
+    assert(cdin_frontend_gui_sdl_model_expect_lines(
+        &model, "view-0", 0u, 16u, 4u) ==
+        CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    length = build_lines_with_one_span(
+        payload, sizeof(payload), "view-0", 4u, 0u,
+        line_bytes, sizeof(line_bytes) - 1u, 6u, 10u, "keyword");
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_VIEW_LINES,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    view = cdin_frontend_gui_sdl_model_find_view_const(&model, "view-0");
+    assert(view != NULL && view->pending_lines_valid != 0);
+    assert(view->pending.count == 1u);
+    assert(view->pending.lines[0].span_count == 1u);
+    assert(view->pending.lines[0].spans_cbor_length != 0u);
+    assert(view->pending.lines[0].spans_cbor[0] == 0x81u);
+    {
+        size_t before = model.cache_bytes;
+        length = build_lines_with_one_span(
+            payload, sizeof(payload), "view-0", 4u, 0u,
+            line_bytes, sizeof(line_bytes) - 1u, 0u, 999u, "invalid");
+        assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_VIEW_LINES,
+                             payload, length, &action) ==
+               CDIN_FRONTEND_GUI_SDL_MODEL_INVALID);
+        assert(model.cache_bytes == before);
+        assert(view->pending_lines_valid != 0);
+        assert(view->pending.lines[0].span_count == 1u);
+    }
+    length = build_response_flush(payload, sizeof(payload), 2u);
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    view = cdin_frontend_gui_sdl_model_find_view_const(&model, "view-0");
+    assert(view != NULL && view->visible.count == 1u);
+    assert(view->visible.lines[0].span_count == 1u);
+    assert(model.cache_bytes ==
+           sizeof(line_bytes) - 1u + view->visible.lines[0].spans_cbor_length);
+
+    /* A complete snapshot replaces the declarative surfaces. Omitting panels
+     * removes them; prompt null clears it; a new style table replaces the old. */
+    length = build_layout(payload, sizeof(payload), 2u, 1u);
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    length = build_invalidate(payload, sizeof(payload), "view-0", 4u);
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_VIEW_INVALIDATE,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    length = build_style_table(payload, sizeof(payload), 8u, "comment");
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_STYLE_TABLE,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    length = build_prompt_clear(payload, sizeof(payload), 2u);
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_PROMPT,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    length = build_snapshot_flush(payload, sizeof(payload), 2u, 3u);
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    assert(model.presentation.style_revision == 8u);
+    assert(model.presentation.panel_count == 0u);
+    assert(model.presentation.has_prompt == 0);
+    assert(model.presentation.prompt_length == 0u);
+    assert(model.presentation.encoded_bytes ==
+           model.presentation.style_table_length);
+
+    cdin_frontend_gui_sdl_model_destroy(&model);
+    assert(model.cache_bytes == 0u);
+}
+
+static void test_presentation_limits_and_atomic_rejection(void)
+{
+    cdin_frontend_gui_sdl_model model;
+    cdin_frontend_gui_sdl_model_action action;
+    uint8_t payload[65536];
+    uint8_t oversized[CDIN_FRONTEND_GUI_SDL_MAX_STYLE_TABLE_BYTES + 1u];
+    char panel_id[CDIN_FRONTEND_GUI_SDL_MAX_PANEL_ID_BYTES + 2u];
+    char valid_id[32];
+    size_t length;
+    size_t index;
+
+    memset(oversized, 0x5a, sizeof(oversized));
+    assert(cdin_frontend_gui_sdl_model_init(&model, "", 16u) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    length = build_layout(payload, sizeof(payload), 1u, 0u);
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+
+    length = build_oversized_style_table(
+        payload, sizeof(payload), oversized, sizeof(oversized));
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_STYLE_TABLE,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT);
+    assert(model.staged_snapshot.presentation.style_table_length == 0u);
+    assert(model.staged_snapshot.presentation.encoded_bytes == 0u);
+
+    length = build_oversized_prompt(
+        payload, sizeof(payload), oversized, CDIN_FRONTEND_GUI_SDL_MAX_PROMPT_BYTES + 1u);
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_PROMPT,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT);
+    assert(model.staged_snapshot.presentation.has_prompt == 0);
+    assert(model.staged_snapshot.presentation.encoded_bytes == 0u);
+
+    for (index = 0u; index < CDIN_FRONTEND_GUI_SDL_MAX_PANELS; ++index) {
+        (void)snprintf(valid_id, sizeof(valid_id), "panel-%zu", index);
+        length = build_panel(payload, sizeof(payload), 1u, valid_id, "list");
+        assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_PANEL,
+                             payload, length, &action) ==
+               CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    }
+    assert(model.staged_snapshot.presentation.panel_count ==
+           CDIN_FRONTEND_GUI_SDL_MAX_PANELS);
+    length = build_panel(payload, sizeof(payload), 1u, "panel-overflow", "list");
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_PANEL,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT);
+    assert(model.staged_snapshot.presentation.panel_count ==
+           CDIN_FRONTEND_GUI_SDL_MAX_PANELS);
+
+    memset(panel_id, 'p', sizeof(panel_id));
+    panel_id[sizeof(panel_id) - 1u] = '\0';
+    length = build_panel(payload, sizeof(payload), 1u, panel_id, "list");
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_PANEL,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT);
+    assert(model.staged_snapshot.presentation.panel_count ==
+           CDIN_FRONTEND_GUI_SDL_MAX_PANELS);
+
+    cdin_frontend_gui_sdl_model_destroy(&model);
+}
+
 static void test_aggregate_cache_budget_and_lru(void)
 {
     enum { TEST_VIEW_COUNT = 9, LARGE_LINE_COUNT = 64, LARGE_LINE_BYTES = 8192 };
@@ -640,6 +967,8 @@ static void test_aggregate_cache_budget_and_lru(void)
 int main(void)
 {
     test_independent_view_state_and_cache();
+    test_styles_panels_prompts_and_line_spans();
+    test_presentation_limits_and_atomic_rejection();
     test_aggregate_cache_budget_and_lru();
     return 0;
 }
