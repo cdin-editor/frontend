@@ -32,14 +32,40 @@ static int copy_text_field(const uint8_t *map, size_t map_length,
         CDIN_FRONTEND_PROTOCOL_OK && length != 0u && length < capacity;
 }
 
-static int pane_view_exists(const cdin_frontend_gui_sdl_pane_node *node,
-                            const char *view_id)
+static int pane_view_exists(
+    const cdin_frontend_gui_sdl_pane_tree *tree,
+    const cdin_frontend_gui_sdl_pane_node *node,
+    const char *view_id)
 {
     size_t index;
+    if (tree == NULL || node == NULL || view_id == NULL) return 0;
     for (index = 0u; index < node->view_count; ++index) {
-        if (strcmp(node->views[index], view_id) == 0) return 1;
+        uint8_t view_index = node->view_indices[index];
+        if ((size_t)view_index < tree->view_count &&
+            strcmp(tree->view_ids[view_index], view_id) == 0) return 1;
     }
     return 0;
+}
+
+static int add_pane_view(
+    cdin_frontend_gui_sdl_pane_tree *tree,
+    const char *view_id,
+    uint8_t *out_index)
+{
+    size_t index;
+    size_t length;
+    if (tree == NULL || view_id == NULL || view_id[0] == '\0' ||
+        out_index == NULL) return 0;
+    length = strlen(view_id);
+    if (length > CDIN_FRONTEND_GUI_SDL_MAX_PANE_VIEW_ID_BYTES) return 0;
+    for (index = 0u; index < tree->view_count; ++index) {
+        if (strcmp(tree->view_ids[index], view_id) == 0) return 0;
+    }
+    if (tree->view_count >= CDIN_FRONTEND_GUI_SDL_MAX_PANE_VIEWS) return 0;
+    memcpy(tree->view_ids[tree->view_count], view_id, length + 1u);
+    *out_index = (uint8_t)tree->view_count;
+    tree->view_count++;
+    return 1;
 }
 
 static int parse_pane_node(cdin_frontend_gui_sdl_pane_tree *tree,
@@ -80,26 +106,35 @@ static int parse_pane_node(cdin_frontend_gui_sdl_pane_tree *tree,
                 CDIN_FRONTEND_PROTOCOL_OK ||
             view_count > CDIN_FRONTEND_GUI_SDL_MAX_PANE_VIEWS) return 0;
         node->kind = CDIN_FRONTEND_GUI_SDL_PANE_LEAF;
-        node->view_count = view_count;
         for (index = 0u; index < view_count; ++index) {
+            char view_id[CDIN_FRONTEND_GUI_SDL_MAX_PANE_VIEW_ID_BYTES + 1u];
             size_t view_length = 0u;
-            size_t previous;
+            uint8_t view_index = 0u;
             if (cdin_frontend_protocol_array_get_text(
-                    views, views_length, index, node->views[index],
-                    sizeof(node->views[index]), &view_length) !=
-                    CDIN_FRONTEND_PROTOCOL_OK || view_length == 0u) return 0;
-            for (previous = 0u; previous < index; ++previous) {
-                if (strcmp(node->views[previous], node->views[index]) == 0) return 0;
-            }
+                    views, views_length, index, view_id, sizeof(view_id),
+                    &view_length) != CDIN_FRONTEND_PROTOCOL_OK ||
+                view_length == 0u ||
+                !add_pane_view(tree, view_id, &view_index)) return 0;
+            node = &tree->nodes[node_index];
+            node->view_indices[node->view_count++] = view_index;
         }
         if (cdin_frontend_protocol_payload_get_raw(
                 map, map_length, "active_view", &active, &active_length) !=
                 CDIN_FRONTEND_PROTOCOL_OK) return 0;
         if (!raw_is_null(active, active_length)) {
+            char active_view[CDIN_FRONTEND_GUI_SDL_MAX_PANE_VIEW_ID_BYTES + 1u];
             if (!copy_text_field(map, map_length, "active_view",
-                                 node->active_view, sizeof(node->active_view)) ||
-                !pane_view_exists(node, node->active_view)) return 0;
-            node->has_active_view = 1;
+                                 active_view, sizeof(active_view)) ||
+                !pane_view_exists(tree, node, active_view)) return 0;
+            for (index = 0u; index < node->view_count; ++index) {
+                uint8_t candidate = node->view_indices[index];
+                if (strcmp(tree->view_ids[candidate], active_view) == 0) {
+                    node->active_view_index = candidate;
+                    node->has_active_view = 1;
+                    break;
+                }
+            }
+            if (!node->has_active_view) return 0;
         }
     } else if (strcmp(kind, "split") == 0) {
         const uint8_t *first = NULL;
@@ -170,37 +205,11 @@ static int parse_pane_tree(const uint8_t *map, size_t map_length,
     if (tree->has_active_leaf) {
         int found = 0;
         for (index = 0u; index < tree->node_count; ++index) {
-            const cdin_frontend_gui_sdl_pane_node *node = &tree->nodes[index];
-            if (node->kind == CDIN_FRONTEND_GUI_SDL_PANE_LEAF &&
-                strcmp(node->id, tree->active_leaf) == 0) found = 1;
+            const cdin_frontend_gui_sdl_pane_node *candidate = &tree->nodes[index];
+            if (candidate->kind == CDIN_FRONTEND_GUI_SDL_PANE_LEAF &&
+                strcmp(candidate->id, tree->active_leaf) == 0) found = 1;
         }
         if (!found) return 0;
-    }
-    /* Protocol v1 bounds the whole semantic snapshot to 32 views, not
-     * 32 views per leaf. Count globally before accepting the tree. */
-    {
-        size_t total_views = 0u;
-        for (index = 0u; index < tree->node_count; ++index) {
-            if (tree->nodes[index].kind == CDIN_FRONTEND_GUI_SDL_PANE_LEAF) {
-                if (tree->nodes[index].view_count >
-                    CDIN_FRONTEND_GUI_SDL_MAX_PANE_VIEWS - total_views) return 0;
-                total_views += tree->nodes[index].view_count;
-            }
-        }
-    }
-    /* A semantic view belongs to exactly one leaf in a PaneTree. */
-    for (index = 0u; index < tree->node_count; ++index) {
-        size_t other;
-        size_t view;
-        const cdin_frontend_gui_sdl_pane_node *node = &tree->nodes[index];
-        if (node->kind != CDIN_FRONTEND_GUI_SDL_PANE_LEAF) continue;
-        for (other = index + 1u; other < tree->node_count; ++other) {
-            const cdin_frontend_gui_sdl_pane_node *candidate = &tree->nodes[other];
-            if (candidate->kind != CDIN_FRONTEND_GUI_SDL_PANE_LEAF) continue;
-            for (view = 0u; view < node->view_count; ++view) {
-                if (pane_view_exists(candidate, node->views[view])) return 0;
-            }
-        }
     }
     return 1;
 }
