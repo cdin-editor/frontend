@@ -15,12 +15,23 @@ static cdin_frontend_protocol_status message_text(
         output, capacity, out_length);
 }
 
+static int raw_is_null(const uint8_t *raw, size_t length)
+{
+    return raw != NULL && length == 1u && raw[0] == 0xf6u;
+}
+
+static int raw_is_map(const uint8_t *raw, size_t length)
+{
+    return raw != NULL && length != 0u && (raw[0] >> 5u) == 5u;
+}
+
 static void line_window_dispose(cdin_frontend_gui_sdl_line_window *window)
 {
     size_t index;
     if (window == NULL) return;
     for (index = 0u; index < window->count; ++index) {
         free(window->lines[index].bytes);
+        free(window->lines[index].spans_cbor);
     }
     memset(window, 0, sizeof(*window));
 }
@@ -338,6 +349,7 @@ static void snapshot_commit(cdin_frontend_gui_sdl_model *model)
     model->layout_revision = model->staged_snapshot.layout_revision;
     model->layout = model->staged_snapshot.layout;
     model->has_layout = model->staged_snapshot.has_layout;
+    model->presentation = model->staged_snapshot.presentation;
     memcpy(model->theme, model->staged_snapshot.theme, sizeof(model->theme));
     memcpy(model->mode, model->staged_snapshot.mode, sizeof(model->mode));
     memcpy(model->status, model->staged_snapshot.status, sizeof(model->status));
@@ -458,6 +470,56 @@ static cdin_frontend_gui_sdl_model_status apply_selection(
     return CDIN_FRONTEND_GUI_SDL_MODEL_OK;
 }
 
+static cdin_frontend_gui_sdl_model_status validate_line_spans(
+    const uint8_t *raw,
+    size_t raw_length,
+    size_t line_length,
+    size_t *out_count)
+{
+    size_t count = 0u;
+    size_t index;
+    if (out_count != NULL) *out_count = 0u;
+    if (raw == NULL || raw_length == 0u || out_count == NULL ||
+        cdin_frontend_protocol_array_count(raw, raw_length, &count) !=
+            CDIN_FRONTEND_PROTOCOL_OK) {
+        return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
+    }
+    if (count > CDIN_FRONTEND_GUI_SDL_MAX_LINE_SPANS) {
+        return CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT;
+    }
+    for (index = 0u; index < count; ++index) {
+        const uint8_t *span = NULL;
+        size_t span_length = 0u;
+        uint64_t start = 0u;
+        uint64_t end = 0u;
+        char role[CDIN_FRONTEND_GUI_SDL_MAX_PANEL_ID_BYTES + 1u];
+        size_t role_length = 0u;
+        cdin_frontend_protocol_status status;
+        if (cdin_frontend_protocol_array_get_raw(
+                raw, raw_length, index, &span, &span_length) !=
+                CDIN_FRONTEND_PROTOCOL_OK ||
+            cdin_frontend_protocol_payload_get_uint(
+                span, span_length, "start", &start) !=
+                CDIN_FRONTEND_PROTOCOL_OK ||
+            cdin_frontend_protocol_payload_get_uint(
+                span, span_length, "end", &end) !=
+                CDIN_FRONTEND_PROTOCOL_OK) {
+            return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
+        }
+        status = cdin_frontend_protocol_payload_get_text(
+            span, span_length, "role", role, sizeof(role), &role_length);
+        if (status == CDIN_FRONTEND_PROTOCOL_BUFFER_TOO_SMALL) {
+            return CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT;
+        }
+        if (status != CDIN_FRONTEND_PROTOCOL_OK || role_length == 0u ||
+            start > end || end > (uint64_t)line_length) {
+            return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
+        }
+    }
+    *out_count = count;
+    return CDIN_FRONTEND_GUI_SDL_MODEL_OK;
+}
+
 static cdin_frontend_gui_sdl_model_status apply_lines(
     cdin_frontend_gui_sdl_model *model,
     const cdin_frontend_protocol_message_view *message)
@@ -466,7 +528,10 @@ static cdin_frontend_gui_sdl_model_status apply_lines(
     size_t array_length = 0u;
     size_t count = 0u;
     const uint8_t *source[CDIN_FRONTEND_GUI_SDL_MAX_VISIBLE_LINES];
+    const uint8_t *span_source[CDIN_FRONTEND_GUI_SDL_MAX_VISIBLE_LINES];
     size_t lengths[CDIN_FRONTEND_GUI_SDL_MAX_VISIBLE_LINES];
+    size_t span_lengths[CDIN_FRONTEND_GUI_SDL_MAX_VISIBLE_LINES];
+    size_t span_counts[CDIN_FRONTEND_GUI_SDL_MAX_VISIBLE_LINES];
     uint64_t version = 0u;
     uint64_t first_line = 0u;
     size_t id_length = 0u;
@@ -478,6 +543,9 @@ static cdin_frontend_gui_sdl_model_status apply_lines(
     cdin_frontend_gui_sdl_model_status cache_status;
 
     memset(&pending, 0, sizeof(pending));
+    memset(span_source, 0, sizeof(span_source));
+    memset(span_lengths, 0, sizeof(span_lengths));
+    memset(span_counts, 0, sizeof(span_counts));
     if (message_text(message, "view_id", view_id, sizeof(view_id), &id_length) !=
             CDIN_FRONTEND_PROTOCOL_OK || id_length == 0u ||
         cdin_frontend_protocol_payload_get_uint(
@@ -510,6 +578,7 @@ static cdin_frontend_gui_sdl_model_status apply_lines(
     for (index = 0u; index < count; ++index) {
         const uint8_t *line_map = NULL;
         size_t line_map_length = 0u;
+        cdin_frontend_protocol_status span_status;
         if (cdin_frontend_protocol_array_get_raw(
                 array, array_length, index, &line_map, &line_map_length) !=
                 CDIN_FRONTEND_PROTOCOL_OK ||
@@ -523,6 +592,22 @@ static cdin_frontend_gui_sdl_model_status apply_lines(
             return CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT;
         }
         total_bytes += lengths[index];
+
+        span_status = cdin_frontend_protocol_payload_get_raw(
+            line_map, line_map_length, "spans",
+            &span_source[index], &span_lengths[index]);
+        if (span_status == CDIN_FRONTEND_PROTOCOL_OK) {
+            status = validate_line_spans(
+                span_source[index], span_lengths[index],
+                lengths[index], &span_counts[index]);
+            if (status != CDIN_FRONTEND_GUI_SDL_MODEL_OK) return status;
+            if (span_lengths[index] > SIZE_MAX - total_bytes) {
+                return CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT;
+            }
+            total_bytes += span_lengths[index];
+        } else if (span_status != CDIN_FRONTEND_PROTOCOL_UNSUPPORTED) {
+            return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
+        }
     }
     cache_status = ensure_cache_room(model, total_bytes, view);
     if (cache_status != CDIN_FRONTEND_GUI_SDL_MODEL_OK) return cache_status;
@@ -540,6 +625,18 @@ static cdin_frontend_gui_sdl_model_status apply_lines(
             memcpy(pending.lines[index].bytes, source[index], lengths[index]);
         }
         pending.lines[index].length = lengths[index];
+        pending.lines[index].span_count = span_counts[index];
+        pending.lines[index].spans_cbor_length = span_lengths[index];
+        if (span_lengths[index] != 0u) {
+            pending.lines[index].spans_cbor =
+                (uint8_t *)malloc(span_lengths[index]);
+            if (pending.lines[index].spans_cbor == NULL) {
+                line_window_dispose(&pending);
+                return CDIN_FRONTEND_GUI_SDL_MODEL_NO_MEMORY;
+            }
+            memcpy(pending.lines[index].spans_cbor,
+                   span_source[index], span_lengths[index]);
+        }
     }
 
     line_window_release(model, &view->pending);
