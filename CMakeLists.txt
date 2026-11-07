@@ -108,7 +108,8 @@ if(CDIN_FRONTEND_BUILD_UI_SDL)
     find_package(SDL3 3.2 CONFIG REQUIRED)
     add_library(cdin_frontend_ui_gui_sdl STATIC
         ui/gui-sdl/src/gui_sdl.c
-        ui/gui-sdl/src/session/model.c)
+        ui/gui-sdl/src/session/model.c
+        ui/gui-sdl/src/session/layout.c)
     add_library(cdin::frontend_ui_gui_sdl ALIAS cdin_frontend_ui_gui_sdl)
     set_target_properties(cdin_frontend_ui_gui_sdl PROPERTIES
         EXPORT_NAME frontend_ui_gui_sdl)
@@ -187,7 +188,8 @@ if(BUILD_TESTING)
 
     add_executable(cdin_frontend_gui_sdl_model_tests
         tests/ui/gui-sdl/integration/model.c
-        ui/gui-sdl/src/session/model.c)
+        ui/gui-sdl/src/session/model.c
+        ui/gui-sdl/src/session/layout.c)
     target_include_directories(cdin_frontend_gui_sdl_model_tests PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/ui/gui-sdl/src/session")
     target_link_libraries(cdin_frontend_gui_sdl_model_tests PRIVATE cdin::frontend_core)
