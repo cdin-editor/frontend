@@ -62,9 +62,12 @@ top, second child bottom). The first extent uses integer floor arithmetic on
 at least one pixel. Unsplittable viewports fail without publishing partial
 geometry. The pure geometry tests run even when SDL is disabled.
 
-This is a geometry foundation only. It does not yet create per-view caches or
-render multiple panes; those remain separate acceptance gates in Frontend
-Issue #15.
+The geometry engine is now consumed by the committed multi-view model and
+multi-pane renderer described above. It is also used by the pure splitter
+hit-test API added in [Frontend PR #29](https://github.com/cdin-editor/frontend/pull/29).
+That API reports stable split-node IDs for a configurable pixel hit radius,
+including nested divider intersections; it does not mutate Runtime state or
+send resize requests. Drag/commit remains gated by [Spec issue #20](https://github.com/cdin-editor/spec/issues/20).
 
 ## Current rendering and input limits
 
@@ -148,11 +151,12 @@ dependency selected with `CDIN_FRONTEND_BUILD_UI_SDL=ON`.
 
 The SDL3-specific workflow uses SDL3 3.4.16 built from a checksum-pinned
 archive and the production logger. It validates partial-startup rollback,
-adapter creation/render, SDL event delivery and Protocol mouse forwarding under
-AddressSanitizer, then installs the static library and verifies an independent
-CMake consumer can find and link `cdin::frontend_ui_gui_sdl`. The complete
-Frontend CI run 42295241142 passed these checks together with the Linux,
-macOS, Windows and Pipeline matrix.
+adapter creation/render, SDL event delivery, Protocol mouse forwarding and
+the pure geometry/splitter hit-test suites; it also runs the GUI-SDL tests
+under AddressSanitizer, installs the static library and verifies an independent
+CMake consumer can find and link `cdin::frontend_ui_gui_sdl`. Frontend CI run
+[42408705005](https://github.com/cdin-editor/frontend/actions/runs/42408705005)
+passed these checks together with the Linux, macOS, Windows and Pipeline matrix.
 
 This is component-level verification. It does not validate CDIN's transport,
 Backend/Runtime startup, a complete editing session, reconnect, installer
