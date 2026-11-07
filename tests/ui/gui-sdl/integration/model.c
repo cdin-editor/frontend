@@ -36,6 +36,31 @@ int main(void)
         0x67u, 'v','i','e','w','_','i','d', 0x66u, 'v','i','e','w','-','1',
         0x68u, 'p','o','s','i','t','i','o','n', 0x05u
     };
+    static const uint8_t layout_split[] = {
+        0xa2u,
+        0x68u, 'r','e','v','i','s','i','o','n', 0x09u,
+        0x66u, 'l','a','y','o','u','t',
+        0xa2u,
+        0x64u, 'r','o','o','t',
+        0xa6u,
+          0x64u, 'k','i','n','d', 0x65u, 's','p','l','i','t',
+          0x62u, 'i','d', 0x67u, 's','p','l','i','t','-','1',
+          0x64u, 'a','x','i','s', 0x68u, 'v','e','r','t','i','c','a','l',
+          0x68u, 'r','a','t','i','o','_','b','p', 0x19u, 0x13u, 0x88u,
+          0x65u, 'f','i','r','s','t',
+          0xa4u,
+            0x64u, 'k','i','n','d', 0x64u, 'l','e','a','f',
+            0x62u, 'i','d', 0x66u, 'l','e','a','f','-','1',
+            0x65u, 'v','i','e','w','s', 0x81u, 0x66u, 'v','i','e','w','-','1',
+            0x6bu, 'a','c','t','i','v','e','_','v','i','e','w', 0x66u, 'v','i','e','w','-','1',
+          0x66u, 's','e','c','o','n','d',
+          0xa4u,
+            0x64u, 'k','i','n','d', 0x64u, 'l','e','a','f',
+            0x62u, 'i','d', 0x66u, 'l','e','a','f','-','2',
+            0x65u, 'v','i','e','w','s', 0x81u, 0x66u, 'v','i','e','w','-','2',
+            0x6bu, 'a','c','t','i','v','e','_','v','i','e','w', 0x66u, 'v','i','e','w','-','2',
+        0x6bu, 'a','c','t','i','v','e','_','l','e','a','f', 0x66u, 'l','e','a','f','-','1'
+    };
     static const uint8_t snapshot_flush[] = {
         0xa3u,
         0x65u, 's','c','o','p','e', 0x68u, 's','n','a','p','s','h','o','t',
@@ -121,6 +146,15 @@ int main(void)
            CDIN_FRONTEND_GUI_SDL_MODEL_OK);
     assert(model.cursor_position == 0u);
     assert(model.has_cursor == 0);
+    view = message(CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
+                   layout_split, sizeof(layout_split));
+    assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    /* PaneTree is part of the atomic snapshot: it is parsed while staged but
+     * cannot replace the committed layout before the matching ui.flush. */
+    assert(model.has_layout == 0);
+    assert(model.staged_snapshot.has_layout != 0);
+    assert(model.staged_snapshot.layout.node_count == 3u);
     view = message(CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
                    snapshot_flush, sizeof(snapshot_flush));
     assert(cdin_frontend_gui_sdl_model_apply(&model, &view, &action) ==
@@ -134,6 +168,20 @@ int main(void)
     assert(action.version == 1u);
     assert(model.snapshot_revision == 1u);
     assert(model.has_snapshot_revision != 0);
+    assert(model.has_layout != 0);
+    assert(model.layout.revision == 9u);
+    assert(model.layout.has_root != 0);
+    assert(model.layout.has_active_leaf != 0);
+    assert(model.layout.node_count == 3u);
+    assert(model.layout.leaf_count == 2u);
+    assert(model.layout.view_count == 2u);
+    assert(model.layout.nodes[model.layout.root_index].kind ==
+           CDIN_FRONTEND_GUI_SDL_LAYOUT_SPLIT);
+    assert(model.layout.nodes[model.layout.root_index].axis ==
+           CDIN_FRONTEND_GUI_SDL_LAYOUT_VERTICAL);
+    assert(model.layout.nodes[model.layout.root_index].ratio_bp == 5000u);
+    assert(strcmp(model.layout.nodes[model.layout.active_leaf_index].id,
+                  "leaf-1") == 0);
 
     assert(cdin_frontend_gui_sdl_model_expect_lines(&model, 0u, 16u, 1u) ==
            CDIN_FRONTEND_GUI_SDL_MODEL_OK);
