@@ -317,6 +317,36 @@ static size_t build_prompt(
     return writer.length;
 }
 
+static size_t build_oversized_style_table(
+    uint8_t *output, size_t capacity, const uint8_t *value, size_t value_length)
+{
+    cbor_writer writer = { output, capacity, 0u };
+    put_map(&writer, 2u);
+    put_text(&writer, "styles");
+    put_map(&writer, 1u);
+    put_text(&writer, "normal");
+    put_map(&writer, 1u);
+    put_text(&writer, "extension");
+    put_bytes(&writer, value, value_length);
+    put_text(&writer, "revision");
+    put_uint(&writer, 1u);
+    return writer.length;
+}
+
+static size_t build_oversized_prompt(
+    uint8_t *output, size_t capacity, const uint8_t *value, size_t value_length)
+{
+    cbor_writer writer = { output, capacity, 0u };
+    put_map(&writer, 2u);
+    put_text(&writer, "prompt");
+    put_map(&writer, 1u);
+    put_text(&writer, "extension");
+    put_bytes(&writer, value, value_length);
+    put_text(&writer, "revision");
+    put_uint(&writer, 1u);
+    return writer.length;
+}
+
 static size_t build_prompt_clear(
     uint8_t *output, size_t capacity, uint64_t revision)
 {
@@ -784,6 +814,69 @@ static void test_styles_panels_prompts_and_line_spans(void)
     assert(model.cache_bytes == 0u);
 }
 
+static void test_presentation_limits_and_atomic_rejection(void)
+{
+    cdin_frontend_gui_sdl_model model;
+    cdin_frontend_gui_sdl_model_action action;
+    uint8_t payload[65536];
+    uint8_t oversized[CDIN_FRONTEND_GUI_SDL_MAX_STYLE_TABLE_BYTES + 1u];
+    char panel_id[CDIN_FRONTEND_GUI_SDL_MAX_PANEL_ID_BYTES + 2u];
+    char valid_id[32];
+    size_t length;
+    size_t index;
+
+    memset(oversized, 0x5a, sizeof(oversized));
+    assert(cdin_frontend_gui_sdl_model_init(&model, "", 16u) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    length = build_layout(payload, sizeof(payload), 1u, 0u);
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+
+    length = build_oversized_style_table(
+        payload, sizeof(payload), oversized, sizeof(oversized));
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_STYLE_TABLE,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT);
+    assert(model.staged_snapshot.presentation.style_table_length == 0u);
+    assert(model.staged_snapshot.presentation.encoded_bytes == 0u);
+
+    length = build_oversized_prompt(
+        payload, sizeof(payload), oversized, CDIN_FRONTEND_GUI_SDL_MAX_PROMPT_BYTES + 1u);
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_PROMPT,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT);
+    assert(model.staged_snapshot.presentation.has_prompt == 0);
+    assert(model.staged_snapshot.presentation.encoded_bytes == 0u);
+
+    for (index = 0u; index < CDIN_FRONTEND_GUI_SDL_MAX_PANELS; ++index) {
+        (void)snprintf(valid_id, sizeof(valid_id), "panel-%zu", index);
+        length = build_panel(payload, sizeof(payload), 1u, valid_id, "list");
+        assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_PANEL,
+                             payload, length, &action) ==
+               CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+    }
+    assert(model.staged_snapshot.presentation.panel_count ==
+           CDIN_FRONTEND_GUI_SDL_MAX_PANELS);
+    length = build_panel(payload, sizeof(payload), 1u, "panel-overflow", "list");
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_PANEL,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT);
+    assert(model.staged_snapshot.presentation.panel_count ==
+           CDIN_FRONTEND_GUI_SDL_MAX_PANELS);
+
+    memset(panel_id, 'p', sizeof(panel_id));
+    panel_id[sizeof(panel_id) - 1u] = '\0';
+    length = build_panel(payload, sizeof(payload), 1u, panel_id, "list");
+    assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_PANEL,
+                         payload, length, &action) ==
+           CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT);
+    assert(model.staged_snapshot.presentation.panel_count ==
+           CDIN_FRONTEND_GUI_SDL_MAX_PANELS);
+
+    cdin_frontend_gui_sdl_model_destroy(&model);
+}
+
 static void test_aggregate_cache_budget_and_lru(void)
 {
     enum { TEST_VIEW_COUNT = 9, LARGE_LINE_COUNT = 64, LARGE_LINE_BYTES = 8192 };
@@ -875,6 +968,7 @@ int main(void)
 {
     test_independent_view_state_and_cache();
     test_styles_panels_prompts_and_line_spans();
+    test_presentation_limits_and_atomic_rejection();
     test_aggregate_cache_budget_and_lru();
     return 0;
 }
