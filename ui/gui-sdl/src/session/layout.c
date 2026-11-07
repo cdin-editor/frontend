@@ -64,10 +64,11 @@ static cdin_frontend_gui_sdl_layout_status nullable_text(
 }
 
 static int identifier_exists(
-    const cdin_frontend_gui_sdl_layout *layout, const char *id)
+    const cdin_frontend_gui_sdl_layout *layout, size_t before_count,
+    const char *id)
 {
     size_t index;
-    for (index = 0u; index < layout->node_count; ++index) {
+    for (index = 0u; index < before_count; ++index) {
         if (strcmp(layout->nodes[index].id, id) == 0) return 1;
     }
     return 0;
@@ -126,15 +127,8 @@ static cdin_frontend_gui_sdl_layout_status parse_node(
     if (status != CDIN_FRONTEND_GUI_SDL_LAYOUT_OK) return status;
     status = required_text(raw, raw_length, "id", node->id, sizeof(node->id));
     if (status != CDIN_FRONTEND_GUI_SDL_LAYOUT_OK) return status;
-    if (identifier_exists(layout, node->id)) {
-        /* The current node is included in node_count; compare only its
-         * predecessors to avoid treating itself as a duplicate. */
-        size_t prior;
-        for (prior = 0u; prior < node_index; ++prior) {
-            if (strcmp(layout->nodes[prior].id, node->id) == 0) {
-                return CDIN_FRONTEND_GUI_SDL_LAYOUT_INVALID;
-            }
-        }
+    if (identifier_exists(layout, node_index, node->id)) {
+        return CDIN_FRONTEND_GUI_SDL_LAYOUT_INVALID;
     }
 
     if (strcmp(kind, "leaf") == 0) {
