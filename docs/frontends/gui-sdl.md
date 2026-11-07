@@ -30,13 +30,25 @@ printable keydowns are not duplicated as both key and text.
 ## Model and cache
 
 The GUI has a separate presentation model; it does not cache canonical
-document or selection state. It checks Runtime view identity and document
-versions, accepts line data only when it matches the currently outstanding
-`first_line`/count/version request, stages that response until response-scoped
-`ui.flush`, and requests version-pinned visible ranges only after snapshot ACK.
-Snapshot revisions must be strictly increasing. Its fixed cache is bounded to
-64 lines of at most 8192 bytes each. The renderer never mutates cached document
-bytes. A platform-independent model regression runs even when SDL is disabled.
+document bytes or move selection authority out of Runtime. It tracks up to 32
+stable Runtime view IDs, with independent document version, cursor, selection,
+scroll anchor, visibility/focus and one outstanding line-window request per
+view. A `view.lines` response is accepted only for that view's exact requested
+first-line/count/version tuple and remains pending until response-scoped
+`ui.flush`. Complete snapshot replacement removes views omitted by the new
+PaneTree; a same-version view retains its cache, while a changed version drops
+only that view's stale cache. Snapshot revisions must be strictly increasing.
+
+Line bytes are held in disposable per-view windows (up to 64 lines of at most
+8192 bytes per window). The aggregate visible + pending line-byte budget is
+4 MiB. When a new response would exceed the budget, the model evicts the
+least-recently-used completed visible window, preferring non-focused views;
+pending responses are never evicted. If no window can be evicted to satisfy the
+bound, the response is rejected without replacing the target window. The
+current renderer still displays only the focused view; rendering all pane
+rectangles is a later phase. A platform-independent model regression exercises
+interleaved multi-view responses and aggregate LRU eviction even when SDL is
+disabled.
 
 ## PaneTree geometry foundation
 
