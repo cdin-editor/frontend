@@ -1,12 +1,12 @@
-## Unreleased — Registry integration candidate 1.0.1
+## Unreleased — Registry integration candidate 1.0.2
 
-The CMake/package version is now `1.0.1` for the next immutable TUI and
-GUI-SDL Registry source identities. The candidate includes the merged
-splitter hit-target API (Frontend PR #29), strict UTF-8 byte/scalar mapping
-(Frontend PR #30), and the GUI-SDL Unicode text-pipeline engineering proposal
-(Frontend PR #31). These changes are additive to the 1.0.0 package boundary.
+The CMake/package version is now `1.0.2` for the next immutable TUI and
+GUI-SDL Registry source identities. It includes the additive GUI-SDL borrowed
+Session-lifecycle guard and fail-closed behavior from Frontend PR #33, on top
+of the 1.0.1 splitter hit-test and strict UTF-8 mapping changes. The separate
+text-pipeline byte-anchor design remains a proposal linked to Spec #25.
 
-This is a Registry integration candidate, not a formal `v1.0.1` Git tag or
+This is a Registry integration candidate, not a formal `v1.0.2` Git tag or
 GitHub Release. The current GUI-SDL implementation remains an ASCII/debug-text
 renderer; production grapheme layout, shaping, bidi, font fallback, IME,
 semantic panels/widgets and product-level reconnect gates remain incomplete.

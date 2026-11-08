@@ -42,12 +42,13 @@ The current cross-project design authority is [CDIN Spec 1.2.0](https://github.c
 
 ## Package status
 
-The current source package version is **1.0.1**. This is an active Registry
+The current source package version is **1.0.2**. This is an active Registry
 integration candidate for both the TUI and GUI-SDL variants, pinned to the
-post-PR #29/#30/#31 source. The previous `1.0.0` metadata remains immutable
-and continues to describe its original source revision.
+post-PR #33 GUI-SDL Session-lifecycle fix. The previous `1.0.1` and `1.0.0`
+metadata identities remain immutable and continue to describe their original
+source revisions.
 
-This candidate is not yet a formal `v1.0.1` Git-tagged source release or GitHub
+This candidate is not yet a formal `v1.0.2` Git-tagged source release or GitHub
 Release. The release workflow remains tag-driven; it will publish an archive
 only when the matching version tag is deliberately created. GUI-SDL remains
 an incomplete desktop renderer: the package update does not claim production
