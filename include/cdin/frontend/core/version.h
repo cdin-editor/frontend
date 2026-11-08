@@ -4,8 +4,8 @@
 /* Stable source API version of the UI-neutral Frontend Foundation package. */
 #define CDIN_FRONTEND_FOUNDATION_VERSION_MAJOR 1u
 #define CDIN_FRONTEND_FOUNDATION_VERSION_MINOR 0u
-#define CDIN_FRONTEND_FOUNDATION_VERSION_PATCH 0u
-#define CDIN_FRONTEND_FOUNDATION_VERSION_STRING "1.0.0"
+#define CDIN_FRONTEND_FOUNDATION_VERSION_PATCH 1u
+#define CDIN_FRONTEND_FOUNDATION_VERSION_STRING "1.0.1"
 
 /* The shared Backend/Frontend wire contract is versioned independently. */
 #define CDIN_FRONTEND_FOUNDATION_PROTOCOL_MAJOR 1u

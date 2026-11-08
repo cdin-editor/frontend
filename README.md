@@ -40,6 +40,20 @@ which frontend adapter to launch.
 
 The current cross-project design authority is [CDIN Spec 1.2.0](https://github.com/cdin-editor/spec). A requirement marked `ACCEPTED` in Spec records a decision; it does not mean this repository has implemented it. See [implementation status](docs/status.md) and [traceability](docs/traceability.md).
 
+## Package status
+
+The current source package version is **1.0.1**. This is an active Registry
+integration candidate for both the TUI and GUI-SDL variants, pinned to the
+post-PR #29/#30/#31 source. The previous `1.0.0` metadata remains immutable
+and continues to describe its original source revision.
+
+This candidate is not yet a formal `v1.0.1` Git-tagged source release or GitHub
+Release. The release workflow remains tag-driven; it will publish an archive
+only when the matching version tag is deliberately created. GUI-SDL remains
+an incomplete desktop renderer: the package update does not claim production
+Unicode shaping, bidi, Persian/Arabic rendering, IME or complete product
+readiness.
+
 ## Build and test
 
 Requirements: C11 compiler, CMake 3.22+, GNU Make, Git, Bash and network access
