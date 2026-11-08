@@ -70,6 +70,13 @@ radius, including nested divider intersections. Callers resolve the stable
 semantic split ID from `layout.nodes[index].id`; the hit-test itself does not
 mutate Runtime state or send resize requests. Drag/commit remains gated by [Spec issue #20](https://github.com/cdin-editor/spec/issues/20).
 
+## Text pipeline design
+
+The production Unicode renderer direction, candidate dependencies, byte/cluster
+mapping requirements, cache key and conformance gates are recorded in
+[gui-sdl-text-pipeline.md](gui-sdl-text-pipeline.md). The note is an engineering
+proposal; it does not add or pin a font/bidi dependency.
+
 ## Current rendering and input limits
 
 The SDL renderer now traverses the committed PaneTree and draws each
