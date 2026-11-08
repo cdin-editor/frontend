@@ -1,17 +1,20 @@
 ## Unreleased — Registry integration candidate 1.0.2
 
 The CMake/package version is now `1.0.2` for the next immutable TUI and
-GUI-SDL Registry source identities. It includes the additive GUI-SDL borrowed
-Session-lifecycle guard and fail-closed behavior from Frontend PR #33, on top
-of the 1.0.1 splitter hit-test and strict UTF-8 mapping changes. The separate
-text-pipeline byte-anchor design remains a proposal linked to Spec #25.
+GUI-SDL Registry source identities. This is a Registry integration candidate,
+not a formal `v1.0.2` tag or GitHub Release.
 
-This is a Registry integration candidate, not a formal `v1.0.2` Git tag or
-GitHub Release. The current GUI-SDL implementation remains an ASCII/debug-text
-renderer; production grapheme layout, shaping, bidi, font fallback, IME,
-semantic panels/widgets and product-level reconnect gates remain incomplete.
-The release workflow publishes source archives only from a deliberate
-version-matching tag.
+### Added
+
+- Add stable split-node identity, nested PaneTree geometry and divider hit-testing to the SDL-independent GUI-SDL presentation foundation.
+- Add reversible UTF-8 display mapping primitives with source-byte mapping for non-ASCII text.
+- Harden borrowed Session detach and fail-closed adapter lifecycle handling, including repeated detach and renderer-recreation failure coverage.
+
+### Release limitations
+
+- GUI-SDL still uses SDL debug-text rendering and lacks full Unicode shaping, bidi, font fallback and semantic widget/panel rendering.
+- SDL text preedit/IME lifecycle and splitter drag/commit are not implemented; neither capability may be advertised yet.
+- Interactive TUI/GUI product acceptance and reconnect gates remain separate from this component candidate. The formal 1.0.2 release stays gated by production GUI and product integration requirements.
 
 ## [1.0.0] - 2026-11-04
 
