@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0.0",
+  "component_id": "frontend",
+  "variant": "tui",
+  "version": "1.0.1",
+  "status": "active",
+  "source_units": [
+    {
+      "source_unit_id": "frontend-source",
+      "repository_uri": "https://github.com/cdin-editor/frontend",
+      "revision": "5d0545c6723115ab74c20bad705ef6217429bcba"
+    }
+  ],
+  "dependencies": [],
+  "contracts": {
+    "provides": [],
+    "requires": [
+      {
+        "contract_id": "org.cdin.frontend-protocol",
+        "version_constraint": "1.0.0"
+      }
+    ]
+  }
+}
