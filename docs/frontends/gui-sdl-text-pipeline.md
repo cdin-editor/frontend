@@ -7,7 +7,8 @@ choice is finalized.
 
 Related: [Frontend #15, Phases 5–7](https://github.com/cdin-editor/frontend/issues/15),
 [Spec #14, IME contract](https://github.com/cdin-editor/spec/issues/14),
-[Spec #21, presentation schemas](https://github.com/cdin-editor/spec/issues/21).
+[Spec #21, presentation schemas](https://github.com/cdin-editor/spec/issues/21),
+[Spec #25, byte-anchored visible line windows](https://github.com/cdin-editor/spec/issues/25).
 
 ## 1. Current boundary
 
@@ -99,7 +100,14 @@ conformance suite.
 The target pipeline is:
 
 1. **Source window:** receive a version-pinned line byte string and the
-   corresponding optional semantic byte spans. Retain both unchanged.
+   corresponding optional semantic byte spans. Retain both unchanged. The
+   window also needs the exact logical `first_line` and document-byte
+   `first_byte` for its first returned line. Protocol 1.0.0 currently returns
+   `first_line` but not `first_byte`; the proposed additive
+   [byte-anchored line-window contract](https://github.com/cdin-editor/spec/pull/26)
+   defines the missing metadata. Until that contract is accepted and
+   implemented, the renderer must not infer the document byte start from the
+   first cached line, average line lengths, or a scan from byte zero.
 2. **Decode:** use the strict UTF-8 decoder. Valid scalars keep exact byte
    ranges; malformed bytes display as U+FFFD with one-byte source mapping.
 3. **Grapheme segmentation:** compute extended grapheme clusters from the
@@ -128,6 +136,7 @@ model.
 Text layout is disposable and keyed by all inputs that can affect geometry:
 
 - view ID and document version;
+- actual logical first-line index and document-byte start of the window;
 - source line identity/bytes and style spans;
 - viewport width/height and drawable scale;
 - font identity, size, fallback chain and font generation;
@@ -156,7 +165,8 @@ supported platform:
 - emoji modifiers, variation selectors, flags, keycaps and ZWJ sequences;
 - font fallback where one grapheme must not be split across fonts;
 - line wrapping, tabs, line endings, clipped panes and high-DPI scaling;
-- byte-to-cluster, point-to-byte, cursor and multi-run selection mapping;
+- byte-to-line-window and byte-to-cluster mapping, point-to-byte,
+  cursor and multi-run selection mapping;
 - repeated font load/close, resize, device reset, cache eviction and teardown.
 
 Tests assert logical byte preservation and stable mappings; pixel snapshots
