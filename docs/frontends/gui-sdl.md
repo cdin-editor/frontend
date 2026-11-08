@@ -155,16 +155,43 @@ is not silently added as a dependency. SDL3 itself remains an optional build
 dependency selected with `CDIN_FRONTEND_BUILD_UI_SDL=ON`.
 
 
+## Borrowed Session lifetime
+
+The Composition Root owns the Core Session and its transport. GUI-SDL borrows
+that Session and never detaches or destroys it.
+
+When the borrowed Session leaves `ATTACHED` (including `DETACH_SENT`), the
+adapter fails closed:
+- incoming semantic messages are rejected before they can mutate the staged
+  or committed presentation model, and a stale `ui.flush` is never ACKed;
+- rendering cached content and issuing additional line-window requests are
+  rejected;
+- queued input and renderer events are ignored, while native quit/window-close
+  events remain available so the host can exit;
+- `destroy()` releases only GUI-owned SDL/model resources; the Composition
+  Root remains responsible for Session detach, transport shutdown and Session
+  destruction.
+
+The SDL adapter smoke now exercises a detached inbound flush, verifies that
+no ACK or committed state transition occurs, checks that cached render is
+refused, confirms queued text input is dropped, preserves the quit event, and
+runs repeated create/render/destroy cycles after forced partial-startup
+failure. This is a component lifecycle sub-gate, not proof of transport
+reconnect or Backend/Runtime process recovery.
+
+
 ## Current verification record
 
 The SDL3-specific workflow uses SDL3 3.4.16 built from a checksum-pinned
 archive and the production logger. It validates partial-startup rollback,
-adapter creation/render, SDL event delivery, Protocol mouse forwarding and
-the pure geometry/splitter hit-test suites; it also runs the GUI-SDL tests
-under AddressSanitizer, installs the static library and verifies an independent
-CMake consumer can find and link `cdin::frontend_ui_gui_sdl`. Frontend CI run
-[42408705005](https://github.com/cdin-editor/frontend/actions/runs/42408705005)
-passed these checks together with the Linux, macOS, Windows and Pipeline matrix.
+adapter creation/render, SDL event delivery, Protocol mouse forwarding, the
+pure geometry/splitter hit-test suites, and borrowed-Session detach behavior.
+It runs GUI-SDL tests under AddressSanitizer, installs the static library and
+verifies an independent CMake consumer can find and link
+`cdin::frontend_ui_gui_sdl`. Frontend CI run
+[42446596171](https://github.com/cdin-editor/frontend/actions/runs/42446596171)
+passed all five jobs: Linux, macOS, Windows, SDL3/ASan + installed consumer,
+and Pipeline quality.
 
 This is component-level verification. It does not validate CDIN's transport,
 Backend/Runtime startup, a complete editing session, reconnect, installer
