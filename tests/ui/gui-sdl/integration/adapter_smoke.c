@@ -497,6 +497,76 @@ int main(void)
     trace_step("destroy adapter");
     cdin_frontend_gui_sdl_destroy(gui);
     assert((SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO) == 0u);
+
+    /* Repeated create/render/destroy cycles must release all SDL video state. */
+    {
+        size_t cycle;
+        for (cycle = 0u; cycle < 3u; ++cycle) {
+            gui = NULL;
+            assert(cdin_frontend_gui_sdl_create(&config, &gui) ==
+                   CDIN_FRONTEND_GUI_SDL_OK);
+            assert(gui != NULL);
+            assert(cdin_frontend_gui_sdl_render(gui) == CDIN_FRONTEND_GUI_SDL_OK);
+            cdin_frontend_gui_sdl_destroy(gui);
+            gui = NULL;
+            assert((SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO) == 0u);
+        }
+    }
+
+    /* The GUI borrows Session lifetime. After detach, cached frames must not
+     * render, inbound flushes must not be ACKed, and queued input is discarded.
+     * The native quit event must still be delivered to the host loop. */
+    gui = NULL;
+    assert(cdin_frontend_gui_sdl_create(&config, &gui) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    assert(gui != NULL);
+    session.state = CDIN_FRONTEND_SESSION_DETACHED;
+
+    {
+        size_t ack_count = output_count_type(
+            &stream, CDIN_FRONTEND_PROTOCOL_ACK);
+        uint8_t payload[128];
+        size_t payload_length = smoke_snapshot_flush(payload, sizeof(payload));
+        cdin_frontend_protocol_message_view message = smoke_message(
+            CDIN_FRONTEND_PROTOCOL_UI_FLUSH, payload, payload_length);
+        int committed = 1;
+        message.sequence = 3u;
+        assert(cdin_frontend_gui_sdl_apply_message(gui, &message, &committed) ==
+               CDIN_FRONTEND_GUI_SDL_INVALID_STATE);
+        assert(committed == 0);
+        assert(output_count_type(&stream, CDIN_FRONTEND_PROTOCOL_ACK) == ack_count);
+    }
+    assert(cdin_frontend_gui_sdl_render(gui) ==
+           CDIN_FRONTEND_GUI_SDL_INVALID_STATE);
+
+    {
+        size_t text_count = output_count_type(
+            &stream, CDIN_FRONTEND_PROTOCOL_INPUT_TEXT);
+        memset(&event, 0, sizeof(event));
+        event.type = SDL_EVENT_TEXT_INPUT;
+        event.text.type = SDL_EVENT_TEXT_INPUT;
+        event.text.text = "DETACHED_INPUT_MUST_BE_DROPPED";
+        assert(SDL_PushEvent(&event));
+
+        memset(&event, 0, sizeof(event));
+        event.type = SDL_EVENT_QUIT;
+        event.quit.type = SDL_EVENT_QUIT;
+        assert(SDL_PushEvent(&event));
+        quit_requested = 0;
+        assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+               CDIN_FRONTEND_GUI_SDL_OK);
+        assert(quit_requested != 0);
+        assert(output_count_type(&stream, CDIN_FRONTEND_PROTOCOL_INPUT_TEXT) ==
+               text_count);
+    }
+
+    cdin_frontend_gui_sdl_destroy(gui);
+    gui = NULL;
+    assert((SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO) == 0u);
+    assert(cdin_frontend_gui_sdl_create(&config, &gui) ==
+           CDIN_FRONTEND_GUI_SDL_INVALID_ARGUMENT);
+    assert(gui == NULL);
+
     trace_step("complete");
     return 0;
 }
