@@ -58,6 +58,15 @@ static int event_matches_window(
            (window_id == 0u || window_id == SDL_GetWindowID(gui->window));
 }
 
+/* Session lifetime belongs to the Composition Root. A detached borrowed
+ * Session must never be used to apply snapshots, render cached state or issue
+ * new line requests. */
+static int gui_session_attached(const cdin_frontend_gui_sdl *gui)
+{
+    return gui != NULL && gui->session != NULL &&
+           gui->session->state == CDIN_FRONTEND_SESSION_ATTACHED;
+}
+
 static cdin_frontend_gui_sdl_status recreate_renderer(cdin_frontend_gui_sdl *gui)
 {
     if (gui == NULL || gui->window == NULL) {
@@ -377,6 +386,17 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
         return CDIN_FRONTEND_GUI_SDL_INVALID_ARGUMENT;
     }
     while (SDL_PollEvent(&event)) {
+        if (!gui_session_attached(gui)) {
+            /* Drop queued input for a detached Session, but preserve the
+             * native close path so the Composition Root can still exit. */
+            if (event.type == SDL_EVENT_QUIT) {
+                gui->quit_requested = 1;
+            } else if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
+                       event_matches_window(gui, event.window.windowID)) {
+                gui->quit_requested = 1;
+            }
+            continue;
+        }
         switch (event.type) {
             case SDL_EVENT_QUIT:
                 gui->quit_requested = 1;
@@ -544,6 +564,9 @@ static cdin_frontend_gui_sdl_status request_line_window(
     if (gui == NULL || view_id == NULL || view_id[0] == '\0' || version == 0u) {
         return CDIN_FRONTEND_GUI_SDL_INVALID_ARGUMENT;
     }
+    if (!gui_session_attached(gui)) {
+        return CDIN_FRONTEND_GUI_SDL_INVALID_STATE;
+    }
     view = cdin_frontend_gui_sdl_model_find_view_const(&gui->model, view_id);
     if (view == NULL || view->semantic.version != version) {
         return CDIN_FRONTEND_GUI_SDL_INVALID_STATE;
@@ -605,6 +628,9 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_apply_message(
     if (gui == NULL || message == NULL || out_committed == NULL) {
         return CDIN_FRONTEND_GUI_SDL_INVALID_ARGUMENT;
     }
+    if (!gui_session_attached(gui)) {
+        return CDIN_FRONTEND_GUI_SDL_INVALID_STATE;
+    }
     model_status = cdin_frontend_gui_sdl_model_apply(
         &gui->model, message, &action);
     if (model_status == CDIN_FRONTEND_GUI_SDL_MODEL_STALE) {
@@ -656,6 +682,9 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_render(
     cdin_frontend_gui_sdl_render_status render_status;
     if (gui == NULL || gui->renderer == NULL) {
         return CDIN_FRONTEND_GUI_SDL_INVALID_ARGUMENT;
+    }
+    if (!gui_session_attached(gui)) {
+        return CDIN_FRONTEND_GUI_SDL_INVALID_STATE;
     }
     (void)SDL_SetRenderDrawColor(gui->renderer, 22u, 25u, 31u, 255u);
     (void)SDL_RenderClear(gui->renderer);
