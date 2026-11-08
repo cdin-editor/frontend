@@ -513,6 +513,29 @@ int main(void)
         }
     }
 
+    /* If the renderer cannot be recreated after device loss/reset, the
+     * adapter reports an SDL error and remains non-renderable until destroy. */
+    gui = NULL;
+    assert(cdin_frontend_gui_sdl_create(&config, &gui) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    assert(gui != NULL);
+    assert(SDL_SetHintWithPriority("SDL_RENDER_DRIVER",
+                                    "cdin_nonexistent_renderer",
+                                    SDL_HINT_OVERRIDE));
+    memset(&event, 0, sizeof(event));
+    event.type = SDL_EVENT_RENDER_DEVICE_RESET;
+    event.render.type = SDL_EVENT_RENDER_DEVICE_RESET;
+    event.render.windowID = 0u;
+    assert(SDL_PushEvent(&event));
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_SDL_ERROR);
+    SDL_ResetHint("SDL_RENDER_DRIVER");
+    assert(cdin_frontend_gui_sdl_render(gui) ==
+           CDIN_FRONTEND_GUI_SDL_INVALID_ARGUMENT);
+    cdin_frontend_gui_sdl_destroy(gui);
+    gui = NULL;
+    assert((SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO) == 0u);
+
     /* The GUI borrows Session lifetime. After detach, cached frames must not
      * render, inbound flushes must not be ACKed, and queued input is discarded.
      * The native quit event must still be delivered to the host loop. */
