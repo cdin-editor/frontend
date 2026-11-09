@@ -27,6 +27,10 @@ int main(void)
     assert(cdin_frontend_capability_name(CDIN_FRONTEND_CAP_MOUSE) != NULL);
     assert(strcmp(cdin_frontend_capability_name(CDIN_FRONTEND_CAP_DRIVER_ROLE_EVENTS),
                   "driver-role-events/1") == 0);
+    assert(strcmp(cdin_frontend_capability_name(CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE),
+                  "pane-splitter-resize/1") == 0);
+    assert(cdin_frontend_capability_from_name("pane-splitter-resize/1", &capability));
+    assert(capability == CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE);
     assert(cdin_frontend_capability_from_name("mouse", &capability));
     assert(capability == CDIN_FRONTEND_CAP_MOUSE);
     assert(cdin_frontend_capabilities_parse_names(names, 3u, &parsed) ==
