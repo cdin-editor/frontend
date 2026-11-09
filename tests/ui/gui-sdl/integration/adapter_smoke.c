@@ -1007,19 +1007,43 @@ int main(void)
     assert(cdin_frontend_gui_sdl_test_ime_id(gui) == 3u);
     assert(cdin_frontend_gui_sdl_test_ime_preedit_length(gui) == 0u);
 
-    /* Backend-forced cancellation clears only the matching local composition. */
+    /* Backend-forced cancellation is received through Core Session and
+     * clears only the matching local composition identifier. */
     {
+        static const uint8_t stale_cancel_payload[] = {
+            0xa2u, 0x62u, 'i','d', 0x63u, 0x18u, 0x63u,
+            0x66u, 'r','e','a','s','o','n', 0x6cu,
+            'v','i','e','w','_','c','h','a','n','g','e','d'
+        };
         static const uint8_t backend_cancel_payload[] = {
             0xa2u, 0x62u, 'i','d', 0x03u,
             0x66u, 'r','e','a','s','o','n', 0x6cu,
             'v','i','e','w','_','c','h','a','n','g','e','d'
         };
-        cdin_frontend_protocol_message_view cancel_message =
-            smoke_message(CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL,
-                           backend_cancel_payload, sizeof(backend_cancel_payload));
+        cdin_frontend_protocol_message_view cancel_message;
+        cdin_frontend_protocol_message_view received;
         int committed = 0;
+        cancel_message = smoke_message(CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL,
+            stale_cancel_payload, sizeof(stale_cancel_payload));
         cancel_message.name_space = "ime";
-        assert(cdin_frontend_gui_sdl_apply_message(gui, &cancel_message, &committed) ==
+        cancel_message.sequence = 4u;
+        smoke_queue_inbound(&stream, &cancel_message);
+        assert(cdin_frontend_session_receive(&session, &received) ==
+               CDIN_FRONTEND_PROTOCOL_OK);
+        assert(strcmp(received.name_space, "ime") == 0);
+        assert(cdin_frontend_gui_sdl_apply_message(gui, &received, &committed) ==
+               CDIN_FRONTEND_GUI_SDL_OK);
+        assert(cdin_frontend_gui_sdl_test_ime_active(gui));
+        assert(cdin_frontend_gui_sdl_test_ime_id(gui) == 3u);
+
+        cancel_message = smoke_message(CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL,
+            backend_cancel_payload, sizeof(backend_cancel_payload));
+        cancel_message.name_space = "ime";
+        cancel_message.sequence = 5u;
+        smoke_queue_inbound(&stream, &cancel_message);
+        assert(cdin_frontend_session_receive(&session, &received) ==
+               CDIN_FRONTEND_PROTOCOL_OK);
+        assert(cdin_frontend_gui_sdl_apply_message(gui, &received, &committed) ==
                CDIN_FRONTEND_GUI_SDL_OK);
         assert(!cdin_frontend_gui_sdl_test_ime_active(gui));
     }
