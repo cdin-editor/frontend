@@ -19,7 +19,23 @@ struct cdin_frontend_gui_sdl {
     uint32_t height;
     int owns_video;
     int mouse_enabled;
+    int pane_splitter_enabled;
     int quit_requested;
+    int splitter_pointer_captured;
+    int splitter_drag_active;
+    int splitter_preview_active;
+    int splitter_waiting_result;
+    int splitter_result_applied;
+    uint64_t next_splitter_request_id;
+    uint64_t splitter_pointer_id;
+    uint64_t splitter_request_id;
+    uint64_t splitter_layout_revision;
+    uint64_t splitter_result_revision;
+    uint32_t splitter_axis_origin;
+    uint32_t splitter_axis_extent;
+    uint16_t splitter_preview_ratio_bp;
+    char splitter_id[CDIN_FRONTEND_GUI_SDL_LAYOUT_MAX_ID_BYTES + 1u];
+    cdin_frontend_gui_sdl_layout splitter_preview_layout;
     char title[256];
 };
 
@@ -86,7 +102,12 @@ static cdin_frontend_gui_sdl_status recreate_renderer(cdin_frontend_gui_sdl *gui
 
 cdin_frontend_capability_mask cdin_frontend_gui_sdl_supported_capabilities(void)
 {
-    return CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_MOUSE);
+    cdin_frontend_capability_mask supported =
+        CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_MOUSE);
+#if defined(CDIN_FRONTEND_GUI_SDL_ENABLE_PANE_SPLITTER)
+    supported |= CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE);
+#endif
+    return supported;
 }
 
 cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_create(
@@ -115,6 +136,14 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_create(
     gui->mouse_enabled = cdin_frontend_capability_has(
         cdin_frontend_session_accepted_capabilities(config->session),
         CDIN_FRONTEND_CAP_MOUSE);
+    gui->next_splitter_request_id = 1u;
+#if defined(CDIN_FRONTEND_GUI_SDL_ENABLE_PANE_SPLITTER)
+    gui->pane_splitter_enabled = cdin_frontend_capability_has(
+        cdin_frontend_session_accepted_capabilities(config->session),
+        CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE);
+#else
+    gui->pane_splitter_enabled = 0;
+#endif
     gui->owns_video = (SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO) == 0u;
     if (config->window_title == NULL) {
         gui->title[0] = '\0';
@@ -737,6 +766,8 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
                  * targets; the next render() rebuilds the complete frame. */
                 break;
             case SDL_EVENT_FINGER_CANCELED:
+            case SDL_EVENT_MOUSE_REMOVED:
+            case SDL_EVENT_WINDOW_HIDDEN:
                 cancel_splitter_interaction(gui);
                 break;
             case SDL_EVENT_WINDOW_FOCUS_GAINED:
@@ -898,6 +929,14 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_apply_message(
         if (gui->splitter_waiting_result) {
             if (gui->splitter_result_applied &&
                 gui->model.layout.revision == gui->splitter_result_revision) {
+                size_t split_index = find_splitter_node(
+                    &gui->model.layout, gui->splitter_id);
+                if (split_index == SIZE_MAX ||
+                    gui->model.layout.nodes[split_index].ratio_bp !=
+                        gui->splitter_preview_ratio_bp) {
+                    cancel_splitter_interaction(gui);
+                    return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+                }
                 cancel_splitter_interaction(gui);
             } else if (gui->model.layout.revision != gui->splitter_layout_revision) {
                 cancel_splitter_interaction(gui);
