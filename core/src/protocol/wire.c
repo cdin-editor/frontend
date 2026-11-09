@@ -377,6 +377,8 @@ const char *cdin_frontend_protocol_message_name(cdin_frontend_protocol_message_t
         case CDIN_FRONTEND_PROTOCOL_HELLO_ACK: return "hello_ack";
         case CDIN_FRONTEND_PROTOCOL_DETACH_ACK: return "detach_ack";
         case CDIN_FRONTEND_PROTOCOL_DRIVER_ROLE_CHANGED: return "driver.role_changed";
+        case CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESULT: return "pane.splitter.result";
+        case CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE: return "pane.splitter.resize";
         case CDIN_FRONTEND_PROTOCOL_HELLO: return "hello";
         case CDIN_FRONTEND_PROTOCOL_ATTACH: return "attach";
         case CDIN_FRONTEND_PROTOCOL_DETACH: return "detach";
@@ -399,14 +401,14 @@ const char *cdin_frontend_protocol_message_name(cdin_frontend_protocol_message_t
 static cdin_frontend_protocol_message_type message_from_name(const uint8_t *name, size_t length)
 {
     int value;
-    for (value = 1; value <= 19; value++) {
+    for (value = 1; value <= 20; value++) {
         const char *candidate = cdin_frontend_protocol_message_name(
             (cdin_frontend_protocol_message_type)value);
         if (strlen(candidate) == length && memcmp(candidate, name, length) == 0) {
             return (cdin_frontend_protocol_message_type)value;
         }
     }
-    for (value = 64; value <= 78; value++) {
+    for (value = 64; value <= 79; value++) {
         const char *candidate = cdin_frontend_protocol_message_name(
             (cdin_frontend_protocol_message_type)value);
         if (strlen(candidate) == length && memcmp(candidate, name, length) == 0) {
@@ -418,7 +420,7 @@ static cdin_frontend_protocol_message_type message_from_name(const uint8_t *name
 
 int cdin_frontend_protocol_message_is_inbound(cdin_frontend_protocol_message_type type)
 {
-    return type >= CDIN_FRONTEND_PROTOCOL_HELLO && type <= CDIN_FRONTEND_PROTOCOL_ACK;
+    return type >= CDIN_FRONTEND_PROTOCOL_HELLO && type <= CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE;
 }
 
 int cdin_frontend_protocol_message_requires_driver(cdin_frontend_protocol_message_type type)
@@ -432,6 +434,7 @@ int cdin_frontend_protocol_message_requires_driver(cdin_frontend_protocol_messag
         case CDIN_FRONTEND_PROTOCOL_FOCUS:
         case CDIN_FRONTEND_PROTOCOL_VIEW_SET_POSITION:
         case CDIN_FRONTEND_PROTOCOL_REQUEST_COMMAND:
+        case CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE:
             return 1;
         default:
             return 0;
@@ -682,6 +685,14 @@ cdin_frontend_protocol_status cdin_frontend_protocol_validate_payload(
         RULE_OPTIONAL("selected", FIELD_TEXT)
     };
     static const payload_field_rule ack[] = { RULE_REQUIRED("sequence", FIELD_UINT) };
+    static const payload_field_rule pane_splitter_resize[] = {
+        RULE_REQUIRED("ratio_bp", FIELD_UINT), RULE_REQUIRED("split_id", FIELD_TEXT),
+        RULE_REQUIRED("request_id", FIELD_UINT), RULE_REQUIRED("layout_revision", FIELD_UINT)
+    };
+    static const payload_field_rule pane_splitter_result[] = {
+        RULE_REQUIRED("status", FIELD_TEXT), RULE_REQUIRED("request_id", FIELD_UINT),
+        RULE_REQUIRED("layout_revision", FIELD_UINT)
+    };
     static const payload_field_rule hello_ack[] = {
         RULE_REQUIRED("major", FIELD_UINT), RULE_REQUIRED("minor", FIELD_UINT),
         RULE_REQUIRED("session_id", FIELD_UINT), RULE_REQUIRED("client_id", FIELD_UINT),
@@ -757,6 +768,8 @@ cdin_frontend_protocol_status cdin_frontend_protocol_validate_payload(
         case CDIN_FRONTEND_PROTOCOL_RESPONSE_CLIPBOARD: USE_RULES(response_clipboard); break;
         case CDIN_FRONTEND_PROTOCOL_RESPONSE_DIALOG: USE_RULES(response_dialog); break;
         case CDIN_FRONTEND_PROTOCOL_ACK: USE_RULES(ack); break;
+        case CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE: USE_RULES(pane_splitter_resize); break;
+        case CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESULT: USE_RULES(pane_splitter_result); break;
         case CDIN_FRONTEND_PROTOCOL_HELLO_ACK: USE_RULES(hello_ack); break;
         case CDIN_FRONTEND_PROTOCOL_DRIVER_ROLE_CHANGED: USE_RULES(driver_role_changed); break;
         case CDIN_FRONTEND_PROTOCOL_UI_OPTIONS: USE_RULES(revision_theme); break;
@@ -782,6 +795,36 @@ cdin_frontend_protocol_status cdin_frontend_protocol_validate_payload(
     if (count != 0u) {
         status = validate_payload_rules(payload, payload_length, rules, count);
         if (status != CDIN_FRONTEND_PROTOCOL_OK) return status;
+    }
+    if (type == CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE) {
+        uint64_t request_id = 0u, layout_revision = 0u, ratio_bp = 0u;
+        char split_id[129];
+        size_t split_id_length = 0u;
+        if (cdin_frontend_protocol_payload_get_uint(payload, payload_length, "request_id", &request_id) != CDIN_FRONTEND_PROTOCOL_OK ||
+            cdin_frontend_protocol_payload_get_uint(payload, payload_length, "layout_revision", &layout_revision) != CDIN_FRONTEND_PROTOCOL_OK ||
+            cdin_frontend_protocol_payload_get_uint(payload, payload_length, "ratio_bp", &ratio_bp) != CDIN_FRONTEND_PROTOCOL_OK ||
+            cdin_frontend_protocol_payload_get_text(payload, payload_length, "split_id", split_id, sizeof(split_id), &split_id_length) != CDIN_FRONTEND_PROTOCOL_OK ||
+            request_id == 0u || layout_revision == 0u || ratio_bp < 1000u || ratio_bp > 8999u ||
+            split_id_length == 0u || split_id_length > 128u) return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
+    }
+    if (type == CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESULT) {
+        static const char *const result_statuses[] = {
+            "applied", "stale_revision", "not_found", "invalid_ratio",
+            "not_driver", "unsupported", "busy"
+        };
+        char result_status[32];
+        size_t result_status_length = 0u, status_index;
+        uint64_t request_id = 0u, layout_revision = 0u;
+        int known_status = 0;
+        if (cdin_frontend_protocol_payload_get_uint(payload, payload_length, "request_id", &request_id) != CDIN_FRONTEND_PROTOCOL_OK ||
+            cdin_frontend_protocol_payload_get_uint(payload, payload_length, "layout_revision", &layout_revision) != CDIN_FRONTEND_PROTOCOL_OK ||
+            cdin_frontend_protocol_payload_get_text(payload, payload_length, "status", result_status, sizeof(result_status), &result_status_length) != CDIN_FRONTEND_PROTOCOL_OK ||
+            request_id == 0u) return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
+        for (status_index = 0u; status_index < sizeof(result_statuses) / sizeof(result_statuses[0]); ++status_index) {
+            if (strcmp(result_status, result_statuses[status_index]) == 0) known_status = 1;
+        }
+        if (!known_status) return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
+        (void)layout_revision;
     }
     if (type == CDIN_FRONTEND_PROTOCOL_DRIVER_ROLE_CHANGED) {
         uint64_t epoch = 0u;
@@ -961,6 +1004,12 @@ cdin_frontend_protocol_status cdin_frontend_protocol_array_get_text(
     return CDIN_FRONTEND_PROTOCOL_OK;
 }
 
+static int is_pane_message(cdin_frontend_protocol_message_type type)
+{
+    return type == CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESULT ||
+           type == CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE;
+}
+
 static size_t uint_encoded_size(uint64_t value)
 {
     if (value < 24u) return 1u;
@@ -1014,7 +1063,9 @@ cdin_frontend_protocol_status cdin_frontend_protocol_encode_frame(
         message->minor != CDIN_FRONTEND_PROTOCOL_VERSION_MINOR) {
         return CDIN_FRONTEND_PROTOCOL_VERSION_MISMATCH;
     }
-    if (strcmp(message->name_space, "core") != 0) return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
+    if ((strcmp(message->name_space, "core") != 0 && strcmp(message->name_space, "pane") != 0) ||
+        (is_pane_message(message->type) != 0) != (strcmp(message->name_space, "pane") == 0))
+        return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
     if (message->sequence == 0u) return CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT;
     if (cdin_frontend_protocol_validate_payload(message->type,
                                                  message->payload,
@@ -1045,7 +1096,7 @@ cdin_frontend_protocol_status cdin_frontend_protocol_encode_frame(
     write_uint(output, &body_position, 0u, message->major);
     write_uint(output, &body_position, 0u, message->minor);
     write_text(output, &body_position, "ns", 2u);
-    write_text(output, &body_position, "core", 4u);
+    write_text(output, &body_position, message->name_space, strlen(message->name_space));
     write_text(output, &body_position, "seq", 3u);
     write_uint(output, &body_position, 0u, message->sequence);
     write_text(output, &body_position, "type", 4u);
@@ -1081,6 +1132,7 @@ cdin_frontend_protocol_status cdin_frontend_protocol_decode_frame(
     const uint8_t *text;
     size_t value_length;
     size_t text_length;
+    int pane_namespace = 0;
     uint64_t major;
     uint64_t minor;
     uint64_t sequence;
@@ -1128,10 +1180,11 @@ cdin_frontend_protocol_status cdin_frontend_protocol_decode_frame(
     minor = head.value;
     status = get_envelope_value(frame + 4u, body_length, "ns", &value, &value_length);
     if (status != CDIN_FRONTEND_PROTOCOL_OK ||
-        parse_text_value(value, value_length, &text, &text_length) != CDIN_FRONTEND_PROTOCOL_OK ||
-        text_length != 4u || memcmp(text, "core", 4u) != 0) {
+        parse_text_value(value, value_length, &text, &text_length) != CDIN_FRONTEND_PROTOCOL_OK) {
         return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
     }
+    if (text_length == 4u && memcmp(text, "pane", 4u) == 0) pane_namespace = 1;
+    else if (text_length != 4u || memcmp(text, "core", 4u) != 0) return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
     status = get_envelope_value(frame + 4u, body_length, "seq", &value, &value_length);
     if (status != CDIN_FRONTEND_PROTOCOL_OK ||
         parse_uint_value(value, value_length, &sequence) != CDIN_FRONTEND_PROTOCOL_OK || sequence == 0u) {
@@ -1144,6 +1197,7 @@ cdin_frontend_protocol_status cdin_frontend_protocol_decode_frame(
     }
     type = message_from_name(text, text_length);
     if ((int)type == 0) return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
+    if ((is_pane_message(type) != 0) != (pane_namespace != 0)) return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
     status = get_envelope_value(frame + 4u, body_length, "payload", &payload, &value_length);
     if (status != CDIN_FRONTEND_PROTOCOL_OK ||
         cdin_frontend_protocol_validate_payload(type, payload, value_length) != CDIN_FRONTEND_PROTOCOL_OK) {
@@ -1153,7 +1207,7 @@ cdin_frontend_protocol_status cdin_frontend_protocol_decode_frame(
     out_message->minor = minor > UINT32_MAX ? UINT32_MAX : (uint32_t)minor;
     out_message->sequence = sequence;
     out_message->type = type;
-    out_message->name_space = "core";
+    out_message->name_space = pane_namespace != 0 ? "pane" : "core";
     out_message->payload = payload;
     out_message->payload_length = value_length;
     return CDIN_FRONTEND_PROTOCOL_OK;
