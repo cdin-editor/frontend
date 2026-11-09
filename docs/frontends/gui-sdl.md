@@ -218,10 +218,14 @@ The option defaults to **OFF**; ordinary package and product builds do not
 advertise it until the Composition Root pins compatible component candidates
 and the live CDIN IME matrix passes.
 
-Composition IDs are monotonically allocated by the Core Session and scoped to
-that attached client connection, not to the lifetime of a GUI window/adapter.
-Recreating the GUI adapter while the same Session remains attached therefore
-cannot reuse an ID already sent on that connection.
+Composition IDs use the Core Client's existing monotonic outbound
+Protocol sequence, scoped to that connection rather than to a GUI window or
+Session object. The ID is sampled immediately before `ime.composition.start`,
+whose envelope consumes the same sequence. This avoids adding composition
+allocator state to the public Session struct ABI. Recreating the GUI adapter
+while the same Client remains attached therefore cannot reuse an ID already
+sent on that connection; an exhausted sequence returns zero instead of
+wrapping.
 
 SDL 3.2+ `SDL_EVENT_TEXT_EDITING` is handled as transient preedit. SDL reports
 the start and selected length in UTF-8 character positions; Core Session
