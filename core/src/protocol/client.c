@@ -51,8 +51,9 @@ void cdin_frontend_client_set_logger(cdin_frontend_client *client,
     if (client != NULL && client->initialized) client->logger = logger;
 }
 
-cdin_frontend_protocol_status cdin_frontend_client_send(
+cdin_frontend_protocol_status cdin_frontend_client_send_namespaced(
     cdin_frontend_client *client,
+    const char *name_space,
     cdin_frontend_protocol_message_type type,
     const uint8_t *payload,
     size_t payload_length)
@@ -60,7 +61,8 @@ cdin_frontend_protocol_status cdin_frontend_client_send(
     cdin_frontend_protocol_message_view message;
     cdin_frontend_protocol_status status;
     size_t frame_length = 0u;
-    if (client == NULL || !client->initialized || payload == NULL || payload_length == 0u) {
+    if (client == NULL || !client->initialized || name_space == NULL ||
+        payload == NULL || payload_length == 0u) {
         return CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT;
     }
     if (!cdin_frontend_protocol_message_is_inbound(type)) {
@@ -81,7 +83,7 @@ cdin_frontend_protocol_status cdin_frontend_client_send(
     message.minor = CDIN_FRONTEND_PROTOCOL_VERSION_MINOR;
     message.sequence = client->next_tx_sequence;
     message.type = type;
-    message.name_space = "core";
+    message.name_space = name_space;
     message.payload = payload;
     message.payload_length = payload_length;
 
@@ -105,6 +107,16 @@ cdin_frontend_protocol_status cdin_frontend_client_send(
     }
     client->next_tx_sequence++;
     return CDIN_FRONTEND_PROTOCOL_OK;
+}
+
+cdin_frontend_protocol_status cdin_frontend_client_send(
+    cdin_frontend_client *client,
+    cdin_frontend_protocol_message_type type,
+    const uint8_t *payload,
+    size_t payload_length)
+{
+    return cdin_frontend_client_send_namespaced(
+        client, "core", type, payload, payload_length);
 }
 
 cdin_frontend_protocol_status cdin_frontend_client_receive(
