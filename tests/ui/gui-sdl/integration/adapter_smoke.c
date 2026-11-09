@@ -239,6 +239,7 @@ static size_t smoke_two_view_layout(
     return writer.length;
 }
 
+#ifdef CDIN_FRONTEND_GUI_SDL_TESTING
 static size_t smoke_ime_cancel_payload(
     uint8_t *output, size_t capacity, uint64_t composition_id,
     const char *reason)
@@ -251,6 +252,7 @@ static size_t smoke_ime_cancel_payload(
     smoke_cbor_text(&writer, reason);
     return writer.length;
 }
+#endif
 
 static size_t smoke_view_cursor(
     uint8_t *output, size_t capacity, const char *view_id,
