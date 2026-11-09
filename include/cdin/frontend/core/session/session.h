@@ -36,8 +36,6 @@ typedef struct cdin_frontend_session {
     uint32_t width;
     uint32_t height;
     const char *units;
-    /* Appended for layout compatibility with existing Session fields. */
-    uint64_t next_ime_composition_id;
 } cdin_frontend_session;
 
 void cdin_frontend_session_init(cdin_frontend_session *session,
