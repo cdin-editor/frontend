@@ -825,10 +825,11 @@ int main(void)
     session.accepted_capabilities =
         cdin_frontend_gui_sdl_supported_capabilities() |
         CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE);
-    assert(cdin_frontend_capability_has(
-        session.accepted_capabilities, CDIN_FRONTEND_CAP_IME_COMPOSITION));
     (void)snprintf(session.view_id, sizeof(session.view_id), "%s", "smoke-view");
 
+#ifdef CDIN_FRONTEND_GUI_SDL_TESTING
+    assert(cdin_frontend_capability_has(
+        session.accepted_capabilities, CDIN_FRONTEND_CAP_IME_COMPOSITION));
     {
         static const uint8_t preedit[] = { 0xc3u, 0xa9u };
         static const uint8_t committed[] = { 0xc3u, 0xa9u };
@@ -857,6 +858,7 @@ int main(void)
             &session, 1u, "selection_changed") ==
             CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
     }
+#endif /* CDIN_FRONTEND_GUI_SDL_TESTING */
 
     memset(&config, 0, sizeof(config));
     config.session = &session;
