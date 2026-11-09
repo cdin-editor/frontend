@@ -76,7 +76,7 @@ int main(void)
         0x6bu, 'a','c','t','i','v','e','_','l','e','a','f', 0x66u, 'l','e','a','f','-','1',
         0x68u, 'r','e','v','i','s','i','o','n', 0x01u
     };
-    uint8_t frame[128];
+    uint8_t frame[256];
     size_t frame_length = 0u;
     cdin_frontend_protocol_message_view input;
     cdin_frontend_protocol_message_view output;
