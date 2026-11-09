@@ -106,6 +106,43 @@ static size_t output_count_type(
     return count;
 }
 
+
+static int output_find_message(
+    const fake_stream *stream,
+    cdin_frontend_protocol_message_type expected_type,
+    size_t occurrence,
+    cdin_frontend_protocol_message_view *out_message)
+{
+    size_t offset = 0u;
+    size_t seen = 0u;
+    if (stream == NULL || out_message == NULL) return 0;
+    while (offset <= stream->output_length &&
+           stream->output_length - offset >= CDIN_FRONTEND_PROTOCOL_FRAME_PREFIX_BYTES) {
+        const uint8_t *frame = stream->output + offset;
+        uint32_t body_length = ((uint32_t)frame[0] << 24u) |
+                               ((uint32_t)frame[1] << 16u) |
+                               ((uint32_t)frame[2] << 8u) |
+                               (uint32_t)frame[3];
+        size_t frame_length;
+        cdin_frontend_protocol_message_view message;
+        if (body_length == 0u ||
+            (size_t)body_length > stream->output_length - offset -
+                                  CDIN_FRONTEND_PROTOCOL_FRAME_PREFIX_BYTES) return 0;
+        frame_length = CDIN_FRONTEND_PROTOCOL_FRAME_PREFIX_BYTES + (size_t)body_length;
+        if (cdin_frontend_protocol_decode_frame(
+                frame, frame_length, &message, 4096u) != CDIN_FRONTEND_PROTOCOL_OK) return 0;
+        if (message.type == expected_type) {
+            if (seen == occurrence) {
+                *out_message = message;
+                return 1;
+            }
+            seen++;
+        }
+        offset += frame_length;
+    }
+    return 0;
+}
+
 typedef struct smoke_cbor_writer {
     uint8_t *data;
     size_t capacity;
@@ -793,6 +830,166 @@ int main(void)
     assert(stream.output_length != 0u);
     assert(output_contains_expected_mouse(&stream));
     trace_step("mouse protocol frame verified");
+
+
+    /* Native SDL preedit stays local to the GUI and uses exact UTF-8 byte
+     * offsets on the wire. SDL reports UTF-8 character indices instead. */
+    {
+        size_t starts_before = output_count_type(
+            &stream, CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_START);
+        size_t updates_before = output_count_type(
+            &stream, CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_UPDATE);
+        cdin_frontend_protocol_message_view output_message;
+        uint64_t composition_id = 0u;
+        memset(&event, 0, sizeof(event));
+        event.type = SDL_EVENT_TEXT_EDITING;
+        event.edit.type = SDL_EVENT_TEXT_EDITING;
+        event.edit.text = "éب";
+        event.edit.start = 1;
+        event.edit.length = 1;
+        assert(SDL_PushEvent(&event));
+        assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+               CDIN_FRONTEND_GUI_SDL_OK);
+        assert(cdin_frontend_gui_sdl_test_ime_active(gui));
+        assert(cdin_frontend_gui_sdl_test_ime_id(gui) == 1u);
+        assert(cdin_frontend_gui_sdl_test_ime_preedit_length(gui) == 4u);
+        assert(cdin_frontend_gui_sdl_test_ime_cursor_byte(gui) == 2u);
+        assert(cdin_frontend_gui_sdl_test_ime_selection_end_byte(gui) == 4u);
+        assert(output_count_type(&stream, CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_START) ==
+               starts_before + 1u);
+        assert(output_count_type(&stream, CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_UPDATE) ==
+               updates_before + 1u);
+        assert(cdin_frontend_gui_sdl_render(gui) == CDIN_FRONTEND_GUI_SDL_OK);
+
+        memset(&event, 0, sizeof(event));
+        event.type = SDL_EVENT_TEXT_INPUT;
+        event.text.type = SDL_EVENT_TEXT_INPUT;
+        event.text.text = "éب";
+        assert(SDL_PushEvent(&event));
+        assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+               CDIN_FRONTEND_GUI_SDL_OK);
+        assert(!cdin_frontend_gui_sdl_test_ime_active(gui));
+        assert(output_find_message(&stream, CDIN_FRONTEND_PROTOCOL_INPUT_TEXT, 0u,
+                                   &output_message));
+        assert(cdin_frontend_protocol_payload_get_uint(
+            output_message.payload, output_message.payload_length,
+            "composition_id", &composition_id) == CDIN_FRONTEND_PROTOCOL_OK);
+        assert(composition_id == 1u);
+    }
+
+    /* Combining marks remain byte-addressable even though SDL reports
+     * character positions, not grapheme-cluster positions. Escape cancels. */
+    {
+        size_t cancels_before = output_count_type(
+            &stream, CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL);
+        cdin_frontend_protocol_message_view output_message;
+        char reason[32];
+        size_t reason_length = 0u;
+        memset(&event, 0, sizeof(event));
+        event.type = SDL_EVENT_TEXT_EDITING;
+        event.edit.type = SDL_EVENT_TEXT_EDITING;
+        event.edit.text = "é";
+        event.edit.start = 1;
+        event.edit.length = 1;
+        assert(SDL_PushEvent(&event));
+        assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+               CDIN_FRONTEND_GUI_SDL_OK);
+        assert(cdin_frontend_gui_sdl_test_ime_active(gui));
+        assert(cdin_frontend_gui_sdl_test_ime_id(gui) == 2u);
+        assert(cdin_frontend_gui_sdl_test_ime_cursor_byte(gui) == 1u);
+        assert(cdin_frontend_gui_sdl_test_ime_selection_end_byte(gui) == 3u);
+
+        memset(&event, 0, sizeof(event));
+        event.type = SDL_EVENT_KEY_DOWN;
+        event.key.type = SDL_EVENT_KEY_DOWN;
+        event.key.key = SDLK_ESCAPE;
+        event.key.down = true;
+        assert(SDL_PushEvent(&event));
+        assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+               CDIN_FRONTEND_GUI_SDL_OK);
+        assert(!cdin_frontend_gui_sdl_test_ime_active(gui));
+        assert(output_count_type(&stream, CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL) ==
+               cancels_before + 1u);
+        assert(output_find_message(&stream, CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL,
+                                   cancels_before, &output_message));
+        assert(cdin_frontend_protocol_payload_get_text(
+            output_message.payload, output_message.payload_length, "reason",
+            reason, sizeof(reason), &reason_length) == CDIN_FRONTEND_PROTOCOL_OK);
+        assert(strcmp(reason, "ime_cancelled") == 0);
+    }
+
+    /* An empty preedit is a valid update, not a commit or a cancellation. */
+    memset(&event, 0, sizeof(event));
+    event.type = SDL_EVENT_TEXT_EDITING;
+    event.edit.type = SDL_EVENT_TEXT_EDITING;
+    event.edit.text = "";
+    event.edit.start = 0;
+    event.edit.length = 0;
+    assert(SDL_PushEvent(&event));
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    assert(cdin_frontend_gui_sdl_test_ime_active(gui));
+    assert(cdin_frontend_gui_sdl_test_ime_id(gui) == 3u);
+    assert(cdin_frontend_gui_sdl_test_ime_preedit_length(gui) == 0u);
+
+    /* Backend-forced cancellation clears only the matching local composition. */
+    {
+        static const uint8_t backend_cancel_payload[] = {
+            0xa2u, 0x62u, 'i','d', 0x03u,
+            0x66u, 'r','e','a','s','o','n', 0x6cu,
+            'v','i','e','w','_','c','h','a','n','g','e','d'
+        };
+        cdin_frontend_protocol_message_view cancel_message =
+            smoke_message(CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL,
+                           backend_cancel_payload, sizeof(backend_cancel_payload));
+        int committed = 0;
+        cancel_message.name_space = "ime";
+        assert(cdin_frontend_gui_sdl_apply_message(gui, &cancel_message, &committed) ==
+               CDIN_FRONTEND_GUI_SDL_OK);
+        assert(!cdin_frontend_gui_sdl_test_ime_active(gui));
+    }
+
+    /* Focus loss sends the Frontend-owned cancellation reason before focus(false). */
+    {
+        size_t cancels_before = output_count_type(
+            &stream, CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL);
+        cdin_frontend_protocol_message_view output_message;
+        char reason[32];
+        size_t reason_length = 0u;
+        memset(&event, 0, sizeof(event));
+        event.type = SDL_EVENT_TEXT_EDITING;
+        event.edit.type = SDL_EVENT_TEXT_EDITING;
+        event.edit.text = "focus";
+        event.edit.start = 2;
+        event.edit.length = 1;
+        assert(SDL_PushEvent(&event));
+        assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+               CDIN_FRONTEND_GUI_SDL_OK);
+        assert(cdin_frontend_gui_sdl_test_ime_active(gui));
+
+        memset(&event, 0, sizeof(event));
+        event.type = SDL_EVENT_WINDOW_FOCUS_LOST;
+        event.window.type = SDL_EVENT_WINDOW_FOCUS_LOST;
+        assert(SDL_PushEvent(&event));
+        assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+               CDIN_FRONTEND_GUI_SDL_OK);
+        assert(!cdin_frontend_gui_sdl_test_ime_active(gui));
+        assert(output_count_type(&stream, CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL) ==
+               cancels_before + 1u);
+        assert(output_find_message(&stream, CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL,
+                                   cancels_before, &output_message));
+        assert(cdin_frontend_protocol_payload_get_text(
+            output_message.payload, output_message.payload_length, "reason",
+            reason, sizeof(reason), &reason_length) == CDIN_FRONTEND_PROTOCOL_OK);
+        assert(strcmp(reason, "focus_lost") == 0);
+        /* Restore the Driver focus before the existing committed-text smoke. */
+        memset(&event, 0, sizeof(event));
+        event.type = SDL_EVENT_WINDOW_FOCUS_GAINED;
+        event.window.type = SDL_EVENT_WINDOW_FOCUS_GAINED;
+        assert(SDL_PushEvent(&event));
+        assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+               CDIN_FRONTEND_GUI_SDL_OK);
+    }
 
     /* Exercise the same SDL queue path used by the CDIN composition smoke.
      * A committed text event and a Ctrl+S key-down must become separate
