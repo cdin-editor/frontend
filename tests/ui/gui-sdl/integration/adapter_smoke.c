@@ -542,6 +542,30 @@ static void smoke_test_splitter_lifecycle(
            CDIN_FRONTEND_GUI_SDL_OK);
     assert(output_count_type(stream, CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE) ==
            pane_count + 1u);
+
+    /* If the platform cannot capture the pointer, the adapter must not send
+     * a speculative resize; it falls back to the ordinary mouse stream. */
+    {
+        size_t mouse_before = output_count_type(
+            stream, CDIN_FRONTEND_PROTOCOL_INPUT_MOUSE);
+        cdin_frontend_gui_sdl_test_set_capture_available(0);
+        smoke_push_mouse_button(SDL_EVENT_MOUSE_BUTTON_DOWN, SDL_BUTTON_LEFT,
+                                (SDL_MouseID)46, 440.0f, 100.0f);
+        assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+               CDIN_FRONTEND_GUI_SDL_OK);
+        smoke_push_mouse_motion((SDL_MouseID)46, 460.0f, 100.0f);
+        assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+               CDIN_FRONTEND_GUI_SDL_OK);
+        smoke_push_mouse_button(SDL_EVENT_MOUSE_BUTTON_UP, SDL_BUTTON_LEFT,
+                                (SDL_MouseID)46, 460.0f, 100.0f);
+        assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+               CDIN_FRONTEND_GUI_SDL_OK);
+        assert(output_count_type(stream, CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE) ==
+               pane_count + 1u);
+        assert(output_count_type(stream, CDIN_FRONTEND_PROTOCOL_INPUT_MOUSE) >=
+               mouse_before + 3u);
+        cdin_frontend_gui_sdl_test_set_capture_available(1);
+    }
 }
 
 static void smoke_apply_two_view_snapshot(
