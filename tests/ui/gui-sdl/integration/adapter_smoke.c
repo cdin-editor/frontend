@@ -237,6 +237,21 @@ static size_t smoke_two_view_layout(
     return writer.length;
 }
 
+static size_t smoke_view_cursor(
+    uint8_t *output, size_t capacity, const char *view_id,
+    uint64_t version, uint64_t position)
+{
+    smoke_cbor_writer writer = { output, capacity, 0u };
+    smoke_cbor_map(&writer, 3u);
+    smoke_cbor_text(&writer, "version");
+    smoke_cbor_uint(&writer, version);
+    smoke_cbor_text(&writer, "view_id");
+    smoke_cbor_text(&writer, view_id);
+    smoke_cbor_text(&writer, "position");
+    smoke_cbor_uint(&writer, position);
+    return writer.length;
+}
+
 static size_t smoke_snapshot_flush(
     uint8_t *output, size_t capacity, uint64_t revision, uint64_t sequence)
 {
@@ -628,15 +643,29 @@ static void smoke_apply_two_view_snapshot(
     message.sequence = 1u;
     smoke_queue_inbound(stream, &message);
 
+    payload_length = smoke_view_cursor(
+        payload, sizeof(payload), "view-left", 1u, 0u);
+    message = smoke_message(CDIN_FRONTEND_PROTOCOL_UI_CURSOR,
+                            payload, payload_length);
+    message.sequence = 2u;
+    smoke_queue_inbound(stream, &message);
+
     payload_length = smoke_snapshot_flush(payload, sizeof(payload), 1u, 1u);
     message = smoke_message(CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
                             payload, payload_length);
-    message.sequence = 2u;
+    message.sequence = 3u;
     smoke_queue_inbound(stream, &message);
 
     assert(cdin_frontend_session_receive(session, &received) ==
            CDIN_FRONTEND_PROTOCOL_OK);
     assert(received.type == CDIN_FRONTEND_PROTOCOL_UI_LAYOUT);
+    assert(cdin_frontend_gui_sdl_apply_message(gui, &received, &committed) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    assert(committed == 0);
+
+    assert(cdin_frontend_session_receive(session, &received) ==
+           CDIN_FRONTEND_PROTOCOL_OK);
+    assert(received.type == CDIN_FRONTEND_PROTOCOL_UI_CURSOR);
     assert(cdin_frontend_gui_sdl_apply_message(gui, &received, &committed) ==
            CDIN_FRONTEND_GUI_SDL_OK);
     assert(committed == 0);
@@ -750,6 +779,8 @@ int main(void)
     session.accepted_capabilities =
         cdin_frontend_gui_sdl_supported_capabilities() |
         CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE);
+    assert(cdin_frontend_capability_has(
+        session.accepted_capabilities, CDIN_FRONTEND_CAP_IME_COMPOSITION));
     (void)snprintf(session.view_id, sizeof(session.view_id), "%s", "smoke-view");
 
     {
