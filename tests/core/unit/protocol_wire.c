@@ -121,6 +121,25 @@ int main(void)
         CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE,
         pane_resize_bad_ratio, sizeof(pane_resize_bad_ratio)) ==
         CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA);
+    {
+        uint8_t boundary_payload[sizeof(pane_resize_payload)];
+        memcpy(boundary_payload, pane_resize_payload, sizeof(boundary_payload));
+        boundary_payload[11] = 0x03u;
+        boundary_payload[12] = 0xe8u; /* 1000: inclusive minimum */
+        assert(cdin_frontend_protocol_validate_payload(
+            CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE,
+            boundary_payload, sizeof(boundary_payload)) == CDIN_FRONTEND_PROTOCOL_OK);
+        boundary_payload[11] = 0x23u;
+        boundary_payload[12] = 0x27u; /* 8999: inclusive maximum */
+        assert(cdin_frontend_protocol_validate_payload(
+            CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE,
+            boundary_payload, sizeof(boundary_payload)) == CDIN_FRONTEND_PROTOCOL_OK);
+        boundary_payload[12] = 0x28u; /* 9000: rejected */
+        assert(cdin_frontend_protocol_validate_payload(
+            CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE,
+            boundary_payload, sizeof(boundary_payload)) ==
+            CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA);
+    }
     assert(cdin_frontend_protocol_validate_payload(
         CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESULT,
         pane_result_payload, sizeof(pane_result_payload)) == CDIN_FRONTEND_PROTOCOL_OK);

@@ -315,7 +315,7 @@ static void smoke_apply_inbound(
 }
 
 static void smoke_push_mouse_button(
-    uint32_t type, uint8_t button, SDL_MouseID which, float x, float y)
+    SDL_EventType type, uint8_t button, SDL_MouseID which, float x, float y)
 {
     SDL_Event event;
     memset(&event, 0, sizeof(event));
@@ -339,6 +339,32 @@ static void smoke_push_mouse_motion(SDL_MouseID which, float x, float y)
     event.motion.x = x;
     event.motion.y = y;
     assert(SDL_PushEvent(&event));
+}
+
+static void smoke_test_no_splitter_capability(
+    cdin_frontend_gui_sdl *gui,
+    fake_stream *stream)
+{
+    int quit_requested = 0;
+    size_t pane_count;
+    if (cdin_frontend_capability_has(
+            cdin_frontend_gui_sdl_supported_capabilities(),
+            CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE)) return;
+    pane_count = output_count_type(
+        stream, CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE);
+    smoke_push_mouse_button(SDL_EVENT_MOUSE_BUTTON_DOWN, SDL_BUTTON_LEFT,
+                            (SDL_MouseID)41, 400.0f, 100.0f);
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    smoke_push_mouse_motion((SDL_MouseID)41, 460.0f, 100.0f);
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    smoke_push_mouse_button(SDL_EVENT_MOUSE_BUTTON_UP, SDL_BUTTON_LEFT,
+                            (SDL_MouseID)41, 460.0f, 100.0f);
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    assert(output_count_type(stream, CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE) ==
+           pane_count);
 }
 
 static void smoke_test_splitter_lifecycle(
@@ -465,6 +491,27 @@ static void smoke_test_splitter_lifecycle(
     event.type = SDL_EVENT_WINDOW_FOCUS_GAINED;
     event.window.type = SDL_EVENT_WINDOW_FOCUS_GAINED;
     assert(SDL_PushEvent(&event));
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    assert(output_count_type(stream, CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE) ==
+           pane_count + 1u);
+
+    /* SDL touch cancellation maps to the same local cancel transition. */
+    smoke_push_mouse_button(SDL_EVENT_MOUSE_BUTTON_DOWN, SDL_BUTTON_LEFT,
+                            (SDL_MouseID)46, 480.0f, 100.0f);
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    smoke_push_mouse_motion((SDL_MouseID)46, 520.0f, 100.0f);
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    memset(&event, 0, sizeof(event));
+    event.type = SDL_EVENT_FINGER_CANCELED;
+    event.tfinger.type = SDL_EVENT_FINGER_CANCELED;
+    assert(SDL_PushEvent(&event));
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    smoke_push_mouse_button(SDL_EVENT_MOUSE_BUTTON_UP, SDL_BUTTON_LEFT,
+                            (SDL_MouseID)46, 520.0f, 100.0f);
     assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
            CDIN_FRONTEND_GUI_SDL_OK);
     assert(output_count_type(stream, CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE) ==
@@ -671,6 +718,9 @@ int main(void)
 
     trace_step("verify splitter pointer lifecycle");
     smoke_test_splitter_lifecycle(gui, &session, &stream);
+
+    trace_step("verify non-negotiated splitter fallback");
+    smoke_test_no_splitter_capability(gui, &stream);
 
     /* A device-loss notification must recreate the renderer and leave the
      * adapter usable. The next frame is rebuilt from the presentation model. */
