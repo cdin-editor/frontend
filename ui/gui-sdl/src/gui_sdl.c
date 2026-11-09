@@ -66,6 +66,10 @@ struct cdin_frontend_gui_sdl {
     char ime_view_id[CDIN_FRONTEND_GUI_SDL_LAYOUT_MAX_ID_BYTES + 1u];
     uint8_t ime_preedit[4097];
     size_t ime_preedit_length;
+    int ime_last_commit_valid;
+    uint64_t ime_last_commit_timestamp;
+    uint64_t ime_last_commit_hash;
+    size_t ime_last_commit_length;
     char title[256];
 };
 
@@ -204,6 +208,7 @@ static cdin_frontend_gui_sdl_status update_ime_from_sdl(
         if (status != CDIN_FRONTEND_PROTOCOL_OK) return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
     }
     if (!gui->ime_active) {
+        gui->ime_last_commit_valid = 0;
         uint64_t composition_id =
             cdin_frontend_session_next_ime_composition_id(gui->session);
         size_t view_length = strlen(view->semantic.view_id);
@@ -266,6 +271,40 @@ uint64_t cdin_frontend_gui_sdl_test_ime_selection_end_byte(const cdin_frontend_g
     return gui != NULL ? gui->ime_selection_end_byte : 0u;
 }
 #endif
+
+
+static uint64_t ime_text_hash(const uint8_t *bytes, size_t length)
+{
+    uint64_t hash = UINT64_C(14695981039346656037);
+    size_t index;
+    for (index = 0u; index < length; ++index) {
+        hash ^= (uint64_t)bytes[index];
+        hash *= UINT64_C(1099511628211);
+    }
+    return hash;
+}
+
+static int ime_text_is_duplicate(
+    const cdin_frontend_gui_sdl *gui, const SDL_TextInputEvent *event,
+    const uint8_t *bytes, size_t length)
+{
+    return gui != NULL && event != NULL && bytes != NULL &&
+           gui->ime_last_commit_valid &&
+           gui->ime_last_commit_timestamp == event->timestamp &&
+           gui->ime_last_commit_length == length &&
+           gui->ime_last_commit_hash == ime_text_hash(bytes, length);
+}
+
+static void remember_ime_commit(
+    cdin_frontend_gui_sdl *gui, const SDL_TextInputEvent *event,
+    const uint8_t *bytes, size_t length)
+{
+    if (gui == NULL || event == NULL || bytes == NULL) return;
+    gui->ime_last_commit_timestamp = event->timestamp;
+    gui->ime_last_commit_length = length;
+    gui->ime_last_commit_hash = ime_text_hash(bytes, length);
+    gui->ime_last_commit_valid = 1;
+}
 
 static cdin_frontend_gui_sdl_status map_model_status(
     cdin_frontend_gui_sdl_model_status status)
@@ -989,20 +1028,31 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
             case SDL_EVENT_TEXT_INPUT:
                 if (!event_matches_window(gui, event.text.windowID)) break;
                 if (event.text.text != NULL && event.text.text[0] != '\0') {
-                    cdin_frontend_protocol_status status =
-                        gui->ime_active
-                        ? cdin_frontend_session_ime_commit(
-                            gui->session, gui->ime_id,
-                            (const uint8_t *)event.text.text,
-                            SDL_strlen(event.text.text))
-                        : cdin_frontend_session_send_text(
-                            gui->session,
-                            (const uint8_t *)event.text.text,
-                            SDL_strlen(event.text.text));
+                    const uint8_t *text_bytes = (const uint8_t *)event.text.text;
+                    size_t text_length = SDL_strlen(event.text.text);
+                    cdin_frontend_protocol_status status;
+                    if (gui->ime_active) {
+                        status = cdin_frontend_session_ime_commit(
+                            gui->session, gui->ime_id, text_bytes, text_length);
+                        if (status == CDIN_FRONTEND_PROTOCOL_OK) {
+                            remember_ime_commit(gui, &event.text, text_bytes, text_length);
+                            clear_ime_composition(gui);
+                        }
+                    } else if (ime_text_is_duplicate(gui, &event.text,
+                                                     text_bytes, text_length)) {
+                        /* Some platform backends can repeat the final text
+                         * event for one IME commit. Suppress only an identical
+                         * payload with the same SDL event timestamp. */
+                        gui->ime_last_commit_valid = 0;
+                        break;
+                    } else {
+                        gui->ime_last_commit_valid = 0;
+                        status = cdin_frontend_session_send_text(
+                            gui->session, text_bytes, text_length);
+                    }
                     if (status != CDIN_FRONTEND_PROTOCOL_OK) {
                         return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
                     }
-                    if (gui->ime_active) clear_ime_composition(gui);
                 } else if (gui->ime_active) {
                     if (cancel_ime_composition(gui, "ime_cancelled", 1) !=
                         CDIN_FRONTEND_PROTOCOL_OK) {
