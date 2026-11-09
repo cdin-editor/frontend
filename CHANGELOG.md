@@ -13,11 +13,14 @@ tag or GitHub Release. The Frontend Protocol wire contract remains `1.0.0`.
 - Add optional `pane-splitter-resize/1` capability and typed `pane.splitter.resize` / `pane.splitter.result` messages in the independent `pane` namespace.
 - Add Driver- and capability-gated Session request API, stable split/revision validation, pointer capture, pixel-only preview, one release commit, and cancellation on stale layout, Escape, focus loss, detach and Driver loss.
 - Keep committed PaneTree state unchanged until the matching Backend result and atomic `ui.layout` / `ui.flush` snapshot commit; test the lifecycle with SDL dummy and sanitizer coverage.
+- Add the accepted `ime-composition/1` capability, typed `ime.composition.start/update/cancel` frames and Core Session methods for byte-accurate UTF-8 preedit and composition-tagged commits.
+- Capture SDL3 `SDL_EVENT_TEXT_EDITING` locally, convert SDL codepoint offsets to Protocol UTF-8 byte offsets, and render a local-only preedit/caret/selection overlay without publishing preedit in document or snapshot state.
+- Cancel local composition on Escape, native focus loss, view/version change, detach and matching Backend cancellation; preserve committed-only `input.text` fallback for peers without capability acceptance.
 
 ### Release limitations
 
 - GUI-SDL still uses SDL debug-text rendering and lacks full Unicode shaping, bidi, font fallback and semantic widget/panel rendering.
-- SDL text preedit/IME lifecycle remains incomplete. Splitter drag/commit is implemented and component-tested, but the optional capability remains disabled by default until CDIN pins compatible immutable candidates and passes its live product matrix.
+- SDL text preedit/IME lifecycle now has an opt-in component implementation and SDL dummy-driver tests. The debug renderer displays non-ASCII preedit as one placeholder per UTF-8 codepoint; real glyph shaping/font fallback remain Frontend #15 gates. The IME capability remains OFF by default until CDIN pins compatible immutable candidates and passes its live IME product matrix. Splitter resize remains subject to the matching CDIN live product gate too.
 - Interactive TUI/GUI product acceptance and reconnect gates remain separate from this component candidate. The formal 1.1.0 component candidate remains separate from the full Frontend product release gate by production GUI and product integration requirements.
 
 ## [1.0.0] - 2026-11-04
