@@ -72,6 +72,14 @@ cdin_frontend_protocol_status cdin_frontend_session_request_lines(
  * `path` is an optional UTF-8 argument for document lifecycle commands. */
 cdin_frontend_protocol_status cdin_frontend_session_request_command(
     cdin_frontend_session *session, const char *name, const char *path);
+/* ADR-0024: send the semantic resize request only after the pane capability
+ * has been accepted and while this Session still owns the Driver lease. */
+cdin_frontend_protocol_status cdin_frontend_session_send_pane_splitter_resize(
+    cdin_frontend_session *session,
+    uint64_t request_id,
+    const char *split_id,
+    uint64_t layout_revision,
+    uint16_t ratio_bp);
 cdin_frontend_protocol_status cdin_frontend_session_send_key(
     cdin_frontend_session *session,
     const char *key,

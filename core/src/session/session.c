@@ -339,6 +339,50 @@ cdin_frontend_protocol_status cdin_frontend_session_request_lines(
     return send_payload(session, CDIN_FRONTEND_PROTOCOL_VIEW_REQUEST_LINES, &writer);
 }
 
+cdin_frontend_protocol_status cdin_frontend_session_send_pane_splitter_resize(
+    cdin_frontend_session *session,
+    uint64_t request_id,
+    const char *split_id,
+    uint64_t layout_revision,
+    uint16_t ratio_bp)
+{
+    payload_writer writer;
+    size_t split_id_length;
+    cdin_frontend_protocol_status status;
+    if (session == NULL || session->client == NULL ||
+        session->state != CDIN_FRONTEND_SESSION_ATTACHED || !session->driver ||
+        !cdin_frontend_capability_has(session->accepted_capabilities,
+                                      CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE) ||
+        request_id == 0u || layout_revision == 0u ||
+        split_id == NULL || split_id[0] == '\0' ||
+        ratio_bp < 1000u || ratio_bp > 8999u) {
+        return CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT;
+    }
+    split_id_length = strlen(split_id);
+    if (split_id_length > 128u ||
+        !valid_utf8((const uint8_t *)split_id, split_id_length)) {
+        return CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT;
+    }
+    memset(&writer, 0, sizeof(writer));
+    /* Deterministic CBOR key order: ratio_bp, split_id, request_id,
+     * layout_revision (encoded key length, then bytewise lexical order). */
+    write_head(&writer, 5u, 4u);
+    write_key(&writer, "ratio_bp"); write_uint(&writer, ratio_bp);
+    write_key(&writer, "split_id"); write_text(&writer, split_id, split_id_length);
+    write_key(&writer, "request_id"); write_uint(&writer, request_id);
+    write_key(&writer, "layout_revision"); write_uint(&writer, layout_revision);
+    if (writer.failed) return CDIN_FRONTEND_PROTOCOL_LIMIT_EXCEEDED;
+    status = cdin_frontend_client_send_namespaced(
+        session->client, "pane", CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE,
+        writer.bytes, writer.length);
+    if (status != CDIN_FRONTEND_PROTOCOL_OK && session->logger != NULL) {
+        CDIN_FRONTEND_ERROR(session->logger, "SESSION",
+            "send pane.splitter.resize failed: %s",
+            cdin_frontend_protocol_status_name(status));
+    }
+    return status;
+}
+
 cdin_frontend_protocol_status cdin_frontend_session_send_key(
     cdin_frontend_session *session, const char *key, uint32_t modifiers, const char *action)
 {
