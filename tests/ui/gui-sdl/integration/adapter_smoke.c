@@ -786,7 +786,13 @@ int main(void)
     {
         static const uint8_t preedit[] = { 0xc3u, 0xa9u };
         static const uint8_t committed[] = { 0xc3u, 0xa9u };
+        uint8_t oversized_preedit[4097];
         cdin_frontend_session legacy_session = session;
+        memset(oversized_preedit, 'x', sizeof(oversized_preedit));
+        assert(cdin_frontend_session_ime_update(
+            &session, 1u, oversized_preedit, sizeof(oversized_preedit),
+            sizeof(oversized_preedit), 0u, sizeof(oversized_preedit)) ==
+            CDIN_FRONTEND_PROTOCOL_LIMIT_EXCEEDED);
         legacy_session.accepted_capabilities &=
             ~CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_IME_COMPOSITION);
         assert(cdin_frontend_session_ime_start(
