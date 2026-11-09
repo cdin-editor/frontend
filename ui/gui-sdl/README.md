@@ -15,11 +15,13 @@ and SDL input addressed to other windows is ignored. The GUI does not retain
 Runtime-owned selection state. It does not link Backend, Runtime, Kernel or the
 TUI adapter.
 
-The current renderer is deliberately an ASCII/debug-text baseline. It does
+The renderer currently uses SDL's ASCII/debug-text primitive, but it
+does render the committed multi-pane PaneTree with per-leaf clipping. It does
 not claim production font fallback, grapheme shaping, bidi, IME composition,
-pane-tree rendering, panels or plugin canvas support. The GUI advertises its
-implemented mouse capability only; further rendering, recovery and native SDL
-CI remain release gates.
+panels or plugin canvas support. Mouse input is advertised when implemented;
+the optional splitter capability is advertised only when the explicit
+`CDIN_FRONTEND_GUI_SDL_ENABLE_PANE_SPLITTER` build option is enabled and
+the peer accepts the capability.
 
 Build the preview (which also builds the production adapter library) with
 `make build-gui`; SDL3 3.2+ is required. Applications must include `cdin_frontend_gui_sdl_supported_capabilities()` in
