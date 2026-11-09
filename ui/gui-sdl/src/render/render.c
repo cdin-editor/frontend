@@ -50,12 +50,11 @@ static void draw_ime_overlay(
 {
     char text[512];
     size_t index = 0u, offset = 0u, cursor_column, selection_start, selection_end;
-    size_t cursor = 0u;
     float text_x = (float)rect->x + 36.0f;
     float text_y = (float)rect->y + (float)rect->height - 18.0f;
     SDL_FRect selection;
     if (ime == NULL || ime->view_id == NULL || ime->preedit == NULL ||
-        ime->preedit_length == 0u || rect->width < 72u || rect->height < 40u) return;
+        rect->width < 72u || rect->height < 40u) return;
     while (offset < ime->preedit_length && index + 1u < sizeof(text) &&
            index < 56u) {
         uint8_t first = ime->preedit[offset];
@@ -90,7 +89,6 @@ static void draw_ime_overlay(
     (void)SDL_RenderLine(renderer, text_x + (float)cursor_column * 8.0f,
                          text_y - 1.0f, text_x + (float)cursor_column * 8.0f,
                          text_y + 10.0f);
-    (void)cursor;
 }
 
 static cdin_frontend_gui_sdl_render_status draw_view_pane(
