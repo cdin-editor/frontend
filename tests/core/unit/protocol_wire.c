@@ -37,14 +37,14 @@ int main(void)
         0x67u, 'p','r','e','e','d','i','t', 0x62u, 0xc3u, 0xa9u,
         0x6bu, 'c','u','r','s','o','r','_','b','y','t','e', 0x02u,
         0x72u, 's','e','l','e','c','t','i','o','n','_','e','n','d','_','b','y','t','e', 0x02u,
-        0x73u, 's','e','l','e','c','t','i','o','n','_','s','t','a','r','t','_','b','y','t','e', 0x00u
+        0x74u, 's','e','l','e','c','t','i','o','n','_','s','t','a','r','t','_','b','y','t','e', 0x00u
     };
     static const uint8_t ime_update_bad_boundary[] = {
         0xa5u, 0x62u, 'i','d', 0x01u,
         0x67u, 'p','r','e','e','d','i','t', 0x62u, 0xc3u, 0xa9u,
         0x6bu, 'c','u','r','s','o','r','_','b','y','t','e', 0x01u,
         0x72u, 's','e','l','e','c','t','i','o','n','_','e','n','d','_','b','y','t','e', 0x02u,
-        0x73u, 's','e','l','e','c','t','i','o','n','_','s','t','a','r','t','_','b','y','t','e', 0x00u
+        0x74u, 's','e','l','e','c','t','i','o','n','_','s','t','a','r','t','_','b','y','t','e', 0x00u
     };
     static const uint8_t ime_cancel_payload[] = {
         0xa2u, 0x62u, 'i','d', 0x01u,
