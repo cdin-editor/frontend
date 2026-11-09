@@ -206,3 +206,39 @@ Backend/Runtime startup, a complete editing session, reconnect, installer
 behavior or release-grade Unicode text rendering. Keep the GUI-SDL adapter
 opt-in until the CDIN live-session smoke and the remaining rendering/recovery
 gates pass.
+
+## Negotiated native IME composition
+
+GUI-SDL supports the accepted optional `ime-composition/1` lifecycle when
+built with `CDIN_FRONTEND_GUI_SDL_ENABLE_IME_COMPOSITION=ON` and the attached
+Core Session confirms that capability in `hello_ack.accepted_capabilities`.
+The option defaults to **OFF**; ordinary package and product builds do not
+advertise it until the Composition Root pins compatible component candidates
+and the live CDIN IME matrix passes.
+
+SDL 3.2+ `SDL_EVENT_TEXT_EDITING` is handled as transient preedit. SDL reports
+the start and selected length in UTF-8 character positions; Core Session
+converts those positions to UTF-8 byte offsets at code-point boundaries before
+sending `ime.composition.update`. Preedit bytes, caret and selection remain
+inside the originating GUI adapter. They are not added to the semantic model,
+document cache, Runtime, Kernel, `ui.flush` snapshots or Observer sessions.
+The initial debug renderer shows one placeholder per preedit code point and
+marks its local selected range/caret; production font shaping, grapheme-aware
+visual placement, bidi and Persian/Arabic rendering remain separate Frontend
+#15 gates.
+
+On the matching SDL committed-text event, GUI-SDL sends one
+`core/input.text` with `composition_id`; ordinary committed text remains
+unchanged when the optional capability was not accepted. Native cancel,
+Escape, focus loss, hidden-window transitions, view/document changes, Driver
+loss and Backend-forced cancellation clear the matching local composition.
+An empty preedit update is valid; an empty final string cancels rather than
+creating a document edit. Detach discards transient state and never resumes
+it after reattach.
+
+The Core Protocol codec validates the optional namespace, monotonic non-zero
+IDs at the Backend boundary, the 4096-byte preedit bound, UTF-8 validity and
+byte-boundary offsets. The Frontend Session enforces capability acceptance,
+Driver role and the Frontend/Backend-specific cancellation reason sets. The
+GUI-SDL capability remains opt-in until CDIN #118 proves the exact immutable
+Frontend/Backend/Runtime stack end-to-end.
