@@ -77,6 +77,7 @@ int main(void)
         0x68u, 'r','e','v','i','s','i','o','n', 0x01u
     };
     uint8_t frame[256];
+    uint8_t oversized_frame[8192];
     size_t frame_length = 0u;
     cdin_frontend_protocol_message_view input;
     cdin_frontend_protocol_message_view output;
@@ -213,6 +214,65 @@ int main(void)
         assert(cdin_frontend_protocol_validate_payload(
             CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_UPDATE,
             oversized_update, position) == CDIN_FRONTEND_PROTOCOL_LIMIT_EXCEEDED);
+
+        input.major = CDIN_FRONTEND_PROTOCOL_VERSION_MAJOR;
+        input.minor = CDIN_FRONTEND_PROTOCOL_VERSION_MINOR;
+        input.sequence = 4u;
+        input.type = CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_UPDATE;
+        input.name_space = "ime";
+        input.payload = oversized_update;
+        input.payload_length = position;
+        assert(cdin_frontend_protocol_encode_frame(
+            &input, oversized_frame, sizeof(oversized_frame),
+            &frame_length, sizeof(oversized_frame)) ==
+            CDIN_FRONTEND_PROTOCOL_LIMIT_EXCEEDED);
+
+        /* Simulate a valid peer frame: encode_frame intentionally rejects
+         * oversized local payloads, but decode_frame must preserve the
+         * contract LIMIT_EXCEEDED result for a received over-limit update. */
+        {
+            size_t frame_position = CDIN_FRONTEND_PROTOCOL_FRAME_PREFIX_BYTES;
+            size_t body_length;
+            oversized_frame[frame_position++] = 0xa5u;
+            oversized_frame[frame_position++] = 0x61u;
+            oversized_frame[frame_position++] = 'v';
+            oversized_frame[frame_position++] = 0x82u;
+            oversized_frame[frame_position++] = 0x01u;
+            oversized_frame[frame_position++] = 0x00u;
+            oversized_frame[frame_position++] = 0x62u;
+            oversized_frame[frame_position++] = 'n';
+            oversized_frame[frame_position++] = 's';
+            oversized_frame[frame_position++] = 0x63u;
+            oversized_frame[frame_position++] = 'i';
+            oversized_frame[frame_position++] = 'm';
+            oversized_frame[frame_position++] = 'e';
+            oversized_frame[frame_position++] = 0x63u;
+            oversized_frame[frame_position++] = 's';
+            oversized_frame[frame_position++] = 'e';
+            oversized_frame[frame_position++] = 'q';
+            oversized_frame[frame_position++] = 0x01u;
+            oversized_frame[frame_position++] = 0x64u;
+            memcpy(oversized_frame + frame_position, "type", 4u);
+            frame_position += 4u;
+            oversized_frame[frame_position++] = 0x76u;
+            memcpy(oversized_frame + frame_position,
+                   "ime.composition.update", 22u);
+            frame_position += 22u;
+            oversized_frame[frame_position++] = 0x67u;
+            memcpy(oversized_frame + frame_position, "payload", 7u);
+            frame_position += 7u;
+            memcpy(oversized_frame + frame_position, oversized_update, position);
+            frame_position += position;
+            body_length = frame_position -
+                CDIN_FRONTEND_PROTOCOL_FRAME_PREFIX_BYTES;
+            oversized_frame[0] = (uint8_t)(body_length >> 24u);
+            oversized_frame[1] = (uint8_t)(body_length >> 16u);
+            oversized_frame[2] = (uint8_t)(body_length >> 8u);
+            oversized_frame[3] = (uint8_t)body_length;
+            assert(cdin_frontend_protocol_decode_frame(
+                oversized_frame, frame_position, &output,
+                sizeof(oversized_frame)) == CDIN_FRONTEND_PROTOCOL_LIMIT_EXCEEDED);
+        }
     }
     assert(cdin_frontend_protocol_validate_payload(
         CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL,
