@@ -28,7 +28,6 @@ typedef struct cdin_frontend_session {
     uint64_t session_id;
     uint64_t client_id;
     uint64_t last_flush_sequence;
-    uint64_t next_ime_composition_id;
     cdin_frontend_capability_mask requested_capabilities;
     cdin_frontend_capability_mask accepted_capabilities;
     int driver;
@@ -37,6 +36,8 @@ typedef struct cdin_frontend_session {
     uint32_t width;
     uint32_t height;
     const char *units;
+    /* Appended for layout compatibility with existing Session fields. */
+    uint64_t next_ime_composition_id;
 } cdin_frontend_session;
 
 void cdin_frontend_session_init(cdin_frontend_session *session,
