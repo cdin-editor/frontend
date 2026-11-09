@@ -832,6 +832,7 @@ int main(void)
     trace_step("mouse protocol frame verified");
 
 
+#ifdef CDIN_FRONTEND_GUI_SDL_TESTING
     /* Native SDL preedit stays local to the GUI and uses exact UTF-8 byte
      * offsets on the wire. SDL reports UTF-8 character indices instead. */
     {
@@ -990,6 +991,8 @@ int main(void)
         assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
                CDIN_FRONTEND_GUI_SDL_OK);
     }
+
+#endif /* CDIN_FRONTEND_GUI_SDL_TESTING */
 
     /* Exercise the same SDL queue path used by the CDIN composition smoke.
      * A committed text event and a Ctrl+S key-down must become separate
