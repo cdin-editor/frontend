@@ -177,6 +177,43 @@ int main(void)
         CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_UPDATE,
         ime_update_bad_boundary, sizeof(ime_update_bad_boundary)) ==
         CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA);
+    {
+        uint8_t oversized_update[4200];
+        size_t position = 0u;
+        oversized_update[position++] = 0xa5u;
+        oversized_update[position++] = 0x62u;
+        oversized_update[position++] = 'i';
+        oversized_update[position++] = 'd';
+        oversized_update[position++] = 0x01u;
+        oversized_update[position++] = 0x67u;
+        memcpy(oversized_update + position, "preedit", 7u);
+        position += 7u;
+        oversized_update[position++] = 0x79u;
+        oversized_update[position++] = 0x10u;
+        oversized_update[position++] = 0x01u;
+        memset(oversized_update + position, 'x', 4097u);
+        position += 4097u;
+        oversized_update[position++] = 0x6bu;
+        memcpy(oversized_update + position, "cursor_byte", 11u);
+        position += 11u;
+        oversized_update[position++] = 0x19u;
+        oversized_update[position++] = 0x10u;
+        oversized_update[position++] = 0x01u;
+        oversized_update[position++] = 0x72u;
+        memcpy(oversized_update + position, "selection_end_byte", 18u);
+        position += 18u;
+        oversized_update[position++] = 0x19u;
+        oversized_update[position++] = 0x10u;
+        oversized_update[position++] = 0x01u;
+        oversized_update[position++] = 0x74u;
+        memcpy(oversized_update + position, "selection_start_byte", 20u);
+        position += 20u;
+        oversized_update[position++] = 0x00u;
+        assert(position <= sizeof(oversized_update));
+        assert(cdin_frontend_protocol_validate_payload(
+            CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_UPDATE,
+            oversized_update, position) == CDIN_FRONTEND_PROTOCOL_LIMIT_EXCEEDED);
+    }
     assert(cdin_frontend_protocol_validate_payload(
         CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL,
         ime_cancel_payload, sizeof(ime_cancel_payload)) == CDIN_FRONTEND_PROTOCOL_OK);
