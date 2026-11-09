@@ -1,20 +1,24 @@
-## Unreleased — Registry integration candidate 1.0.2
+## Unreleased — Registry integration candidate 1.1.0
 
-The CMake/package version is now `1.0.2` for the next immutable TUI and
-GUI-SDL Registry source identities. This is a Registry integration candidate,
-not a formal `v1.0.2` tag or GitHub Release.
+The CMake/package version is now `1.1.0` for the next immutable TUI and
+GUI-SDL Registry source identities. This additive package candidate includes
+the optional typed PaneTree splitter resize API; it is not a formal `v1.1.0`
+tag or GitHub Release. The Frontend Protocol wire contract remains `1.0.0`.
 
 ### Added
 
 - Add stable split-node identity, nested PaneTree geometry and divider hit-testing to the SDL-independent GUI-SDL presentation foundation.
 - Add reversible UTF-8 display mapping primitives with source-byte mapping for non-ASCII text.
 - Harden borrowed Session detach and fail-closed adapter lifecycle handling, including repeated detach and renderer-recreation failure coverage.
+- Add optional `pane-splitter-resize/1` capability and typed `pane.splitter.resize` / `pane.splitter.result` messages in the independent `pane` namespace.
+- Add Driver- and capability-gated Session request API, stable split/revision validation, pointer capture, pixel-only preview, one release commit, and cancellation on stale layout, Escape, focus loss, detach and Driver loss.
+- Keep committed PaneTree state unchanged until the matching Backend result and atomic `ui.layout` / `ui.flush` snapshot commit; test the lifecycle with SDL dummy and sanitizer coverage.
 
 ### Release limitations
 
 - GUI-SDL still uses SDL debug-text rendering and lacks full Unicode shaping, bidi, font fallback and semantic widget/panel rendering.
-- SDL text preedit/IME lifecycle and splitter drag/commit are not implemented; neither capability may be advertised yet.
-- Interactive TUI/GUI product acceptance and reconnect gates remain separate from this component candidate. The formal 1.0.2 release stays gated by production GUI and product integration requirements.
+- SDL text preedit/IME lifecycle remains incomplete. Splitter drag/commit is implemented and component-tested, but the optional capability remains disabled by default until CDIN pins compatible immutable candidates and passes its live product matrix.
+- Interactive TUI/GUI product acceptance and reconnect gates remain separate from this component candidate. The formal 1.1.0 component candidate remains separate from the full Frontend product release gate by production GUI and product integration requirements.
 
 ## [1.0.0] - 2026-11-04
 
