@@ -595,16 +595,18 @@ cdin_frontend_protocol_status cdin_frontend_session_ime_update(
 {
     payload_writer writer;
     if (session == NULL || session->state != CDIN_FRONTEND_SESSION_ATTACHED ||
-        !session->driver || composition_id == 0u || preedit == NULL ||
-        preedit_length > 4096u || !valid_utf8(preedit, preedit_length) ||
+        !session->driver || composition_id == 0u || preedit == NULL)
+        return CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT;
+    if (!cdin_frontend_capability_has(session->accepted_capabilities,
+                                      CDIN_FRONTEND_CAP_IME_COMPOSITION))
+        return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
+    if (preedit_length > 4096u) return CDIN_FRONTEND_PROTOCOL_LIMIT_EXCEEDED;
+    if (!valid_utf8(preedit, preedit_length) ||
         selection_start_byte > selection_end_byte ||
         !utf8_byte_boundary(preedit, preedit_length, cursor_byte) ||
         !utf8_byte_boundary(preedit, preedit_length, selection_start_byte) ||
         !utf8_byte_boundary(preedit, preedit_length, selection_end_byte))
         return CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT;
-    if (!cdin_frontend_capability_has(session->accepted_capabilities,
-                                      CDIN_FRONTEND_CAP_IME_COMPOSITION))
-        return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
     memset(&writer, 0, sizeof(writer));
     write_head(&writer, 5u, 5u);
     write_key(&writer, "id"); write_uint(&writer, composition_id);
