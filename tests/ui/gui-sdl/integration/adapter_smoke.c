@@ -876,6 +876,10 @@ int main(void)
                CDIN_FRONTEND_GUI_SDL_OK);
         assert(cdin_frontend_gui_sdl_test_ime_active(gui));
         assert(cdin_frontend_gui_sdl_test_ime_id(gui) == 1u);
+        assert(cdin_frontend_session_next_ime_composition_id(&session) == 2u);
+        assert(cdin_frontend_session_ime_start(
+            &session, 1u, "smoke-view", 1u) ==
+            CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
         assert(cdin_frontend_gui_sdl_test_ime_preedit_length(gui) == 4u);
         assert(cdin_frontend_gui_sdl_test_ime_cursor_byte(gui) == 2u);
         assert(cdin_frontend_gui_sdl_test_ime_selection_end_byte(gui) == 4u);
