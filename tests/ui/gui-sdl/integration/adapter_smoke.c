@@ -242,6 +242,258 @@ static void smoke_queue_inbound(
     stream->input_length += frame_length;
 }
 
+
+static int smoke_output_find_type(
+    const fake_stream *stream,
+    cdin_frontend_protocol_message_type expected_type,
+    cdin_frontend_protocol_message_view *out_message)
+{
+    size_t offset = 0u;
+    if (stream == NULL || out_message == NULL) return 0;
+    while (offset <= stream->output_length &&
+           stream->output_length - offset >= CDIN_FRONTEND_PROTOCOL_FRAME_PREFIX_BYTES) {
+        const uint8_t *frame = stream->output + offset;
+        uint32_t body_length = ((uint32_t)frame[0] << 24u) |
+                               ((uint32_t)frame[1] << 16u) |
+                               ((uint32_t)frame[2] << 8u) |
+                               (uint32_t)frame[3];
+        size_t frame_length;
+        cdin_frontend_protocol_message_view message;
+        if (body_length == 0u ||
+            (size_t)body_length > stream->output_length - offset -
+                                  CDIN_FRONTEND_PROTOCOL_FRAME_PREFIX_BYTES) return 0;
+        frame_length = CDIN_FRONTEND_PROTOCOL_FRAME_PREFIX_BYTES + (size_t)body_length;
+        if (cdin_frontend_protocol_decode_frame(
+                frame, frame_length, &message, 4096u) != CDIN_FRONTEND_PROTOCOL_OK) return 0;
+        if (message.type == expected_type) {
+            *out_message = message;
+            return 1;
+        }
+        offset += frame_length;
+    }
+    return 0;
+}
+
+static size_t smoke_pane_result_payload(uint8_t *output, size_t capacity)
+{
+    smoke_cbor_writer writer = { output, capacity, 0u };
+    smoke_cbor_map(&writer, 3u);
+    smoke_cbor_text(&writer, "status");
+    smoke_cbor_text(&writer, "applied");
+    smoke_cbor_text(&writer, "request_id");
+    smoke_cbor_uint(&writer, 1u);
+    smoke_cbor_text(&writer, "layout_revision");
+    smoke_cbor_uint(&writer, 2u);
+    return writer.length;
+}
+
+static void smoke_apply_inbound(
+    cdin_frontend_gui_sdl *gui,
+    cdin_frontend_session *session,
+    fake_stream *stream,
+    cdin_frontend_protocol_message_type type,
+    const char *name_space,
+    const uint8_t *payload,
+    size_t payload_length,
+    uint64_t envelope_sequence,
+    int expected_committed)
+{
+    cdin_frontend_protocol_message_view message = smoke_message(
+        type, payload, payload_length);
+    cdin_frontend_protocol_message_view received;
+    int committed = 0;
+    message.name_space = name_space;
+    message.sequence = envelope_sequence;
+    smoke_queue_inbound(stream, &message);
+    assert(cdin_frontend_session_receive(session, &received) ==
+           CDIN_FRONTEND_PROTOCOL_OK);
+    assert(received.type == type);
+    assert(strcmp(received.name_space, name_space) == 0);
+    assert(cdin_frontend_gui_sdl_apply_message(gui, &received, &committed) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    assert(committed == expected_committed);
+}
+
+static void smoke_push_mouse_button(
+    uint32_t type, uint8_t button, SDL_MouseID which, float x, float y)
+{
+    SDL_Event event;
+    memset(&event, 0, sizeof(event));
+    event.type = type;
+    event.button.type = type;
+    event.button.button = button;
+    event.button.which = which;
+    event.button.down = type == SDL_EVENT_MOUSE_BUTTON_DOWN;
+    event.button.x = x;
+    event.button.y = y;
+    assert(SDL_PushEvent(&event));
+}
+
+static void smoke_push_mouse_motion(SDL_MouseID which, float x, float y)
+{
+    SDL_Event event;
+    memset(&event, 0, sizeof(event));
+    event.type = SDL_EVENT_MOUSE_MOTION;
+    event.motion.type = SDL_EVENT_MOUSE_MOTION;
+    event.motion.which = which;
+    event.motion.x = x;
+    event.motion.y = y;
+    assert(SDL_PushEvent(&event));
+}
+
+static void smoke_test_splitter_lifecycle(
+    cdin_frontend_gui_sdl *gui,
+    cdin_frontend_session *session,
+    fake_stream *stream)
+{
+    SDL_Event event;
+    cdin_frontend_protocol_message_view request;
+    size_t pane_count;
+    uint8_t payload[512];
+    size_t payload_length;
+    uint64_t request_id = 0u;
+    uint64_t revision = 0u;
+    uint64_t ratio_bp = 0u;
+    char split_id[129];
+    size_t split_id_length = 0u;
+    int quit_requested = 0;
+
+    if (!cdin_frontend_capability_has(
+            cdin_frontend_gui_sdl_supported_capabilities(),
+            CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE)) return;
+
+    pane_count = output_count_type(
+        stream, CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE);
+
+    /* The divider begins at x=400 in the 800-pixel drawable viewport. */
+    smoke_push_mouse_button(SDL_EVENT_MOUSE_BUTTON_DOWN, SDL_BUTTON_LEFT,
+                            (SDL_MouseID)42, 400.0f, 100.0f);
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    assert(output_count_type(stream, CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE) ==
+           pane_count);
+
+    smoke_push_mouse_motion((SDL_MouseID)42, 480.0f, 100.0f);
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    assert(output_count_type(stream, CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE) ==
+           pane_count);
+    assert(cdin_frontend_gui_sdl_render(gui) == CDIN_FRONTEND_GUI_SDL_OK);
+
+    smoke_push_mouse_button(SDL_EVENT_MOUSE_BUTTON_UP, SDL_BUTTON_LEFT,
+                            (SDL_MouseID)42, 480.0f, 100.0f);
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    assert(output_count_type(stream, CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE) ==
+           pane_count + 1u);
+    assert(smoke_output_find_type(
+        stream, CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE, &request));
+    assert(strcmp(request.name_space, "pane") == 0);
+    assert(cdin_frontend_protocol_payload_get_uint(
+        request.payload, request.payload_length, "request_id",
+        &request_id) == CDIN_FRONTEND_PROTOCOL_OK);
+    assert(cdin_frontend_protocol_payload_get_uint(
+        request.payload, request.payload_length, "layout_revision",
+        &revision) == CDIN_FRONTEND_PROTOCOL_OK);
+    assert(cdin_frontend_protocol_payload_get_uint(
+        request.payload, request.payload_length, "ratio_bp",
+        &ratio_bp) == CDIN_FRONTEND_PROTOCOL_OK);
+    assert(cdin_frontend_protocol_payload_get_text(
+        request.payload, request.payload_length, "split_id",
+        split_id, sizeof(split_id), &split_id_length) ==
+        CDIN_FRONTEND_PROTOCOL_OK);
+    assert(request_id == 1u && revision == 1u && ratio_bp == 6000u);
+    assert(split_id_length == 10u && strcmp(split_id, "split-main") == 0);
+
+    /* Result alone does not commit the local model. Commit requires the
+     * following complete semantic layout and matching snapshot flush. */
+    payload_length = smoke_pane_result_payload(payload, sizeof(payload));
+    smoke_apply_inbound(gui, session, stream,
+        CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESULT, "pane",
+        payload, payload_length, 3u, 0);
+    payload_length = smoke_two_view_layout(payload, sizeof(payload), 6000u, 2u);
+    smoke_apply_inbound(gui, session, stream,
+        CDIN_FRONTEND_PROTOCOL_UI_LAYOUT, "core",
+        payload, payload_length, 4u, 0);
+    payload_length = smoke_snapshot_flush(payload, sizeof(payload), 2u, 2u);
+    smoke_apply_inbound(gui, session, stream,
+        CDIN_FRONTEND_PROTOCOL_UI_FLUSH, "core",
+        payload, payload_length, 5u, 1);
+
+    /* Escape cancels preview and must prevent a second pane request. */
+    smoke_push_mouse_button(SDL_EVENT_MOUSE_BUTTON_DOWN, SDL_BUTTON_LEFT,
+                            (SDL_MouseID)43, 480.0f, 100.0f);
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    smoke_push_mouse_motion((SDL_MouseID)43, 520.0f, 100.0f);
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    memset(&event, 0, sizeof(event));
+    event.type = SDL_EVENT_KEY_DOWN;
+    event.key.type = SDL_EVENT_KEY_DOWN;
+    event.key.key = SDLK_ESCAPE;
+    event.key.down = true;
+    assert(SDL_PushEvent(&event));
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    smoke_push_mouse_button(SDL_EVENT_MOUSE_BUTTON_UP, SDL_BUTTON_LEFT,
+                            (SDL_MouseID)43, 520.0f, 100.0f);
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    assert(output_count_type(stream, CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE) ==
+           pane_count + 1u);
+
+    /* Focus loss cancels the next drag; regain focus before continuing. */
+    smoke_push_mouse_button(SDL_EVENT_MOUSE_BUTTON_DOWN, SDL_BUTTON_LEFT,
+                            (SDL_MouseID)44, 480.0f, 100.0f);
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    smoke_push_mouse_motion((SDL_MouseID)44, 520.0f, 100.0f);
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    memset(&event, 0, sizeof(event));
+    event.type = SDL_EVENT_WINDOW_FOCUS_LOST;
+    event.window.type = SDL_EVENT_WINDOW_FOCUS_LOST;
+    assert(SDL_PushEvent(&event));
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    smoke_push_mouse_button(SDL_EVENT_MOUSE_BUTTON_UP, SDL_BUTTON_LEFT,
+                            (SDL_MouseID)44, 520.0f, 100.0f);
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    memset(&event, 0, sizeof(event));
+    event.type = SDL_EVENT_WINDOW_FOCUS_GAINED;
+    event.window.type = SDL_EVENT_WINDOW_FOCUS_GAINED;
+    assert(SDL_PushEvent(&event));
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    assert(output_count_type(stream, CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE) ==
+           pane_count + 1u);
+
+    /* A changed committed revision cancels an in-progress preview. */
+    smoke_push_mouse_button(SDL_EVENT_MOUSE_BUTTON_DOWN, SDL_BUTTON_LEFT,
+                            (SDL_MouseID)45, 480.0f, 100.0f);
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    smoke_push_mouse_motion((SDL_MouseID)45, 520.0f, 100.0f);
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    payload_length = smoke_two_view_layout(payload, sizeof(payload), 5500u, 3u);
+    smoke_apply_inbound(gui, session, stream,
+        CDIN_FRONTEND_PROTOCOL_UI_LAYOUT, "core",
+        payload, payload_length, 6u, 0);
+    payload_length = smoke_snapshot_flush(payload, sizeof(payload), 3u, 3u);
+    smoke_apply_inbound(gui, session, stream,
+        CDIN_FRONTEND_PROTOCOL_UI_FLUSH, "core",
+        payload, payload_length, 7u, 1);
+    smoke_push_mouse_button(SDL_EVENT_MOUSE_BUTTON_UP, SDL_BUTTON_LEFT,
+                            (SDL_MouseID)45, 440.0f, 100.0f);
+    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+           CDIN_FRONTEND_GUI_SDL_OK);
+    assert(output_count_type(stream, CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE) ==
+           pane_count + 1u);
+}
+
 static void smoke_apply_two_view_snapshot(
     cdin_frontend_gui_sdl *gui,
     cdin_frontend_session *session,
@@ -416,6 +668,9 @@ int main(void)
     assert(cdin_frontend_gui_sdl_render(gui) == CDIN_FRONTEND_GUI_SDL_OK);
     trace_step("apply two-view semantic snapshot");
     smoke_apply_two_view_snapshot(gui, &session, &stream);
+
+    trace_step("verify splitter pointer lifecycle");
+    smoke_test_splitter_lifecycle(gui, &session, &stream);
 
     /* A device-loss notification must recreate the renderer and leave the
      * adapter usable. The next frame is rebuilt from the presentation model. */
