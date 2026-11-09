@@ -1361,7 +1361,7 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_render(
         render_status = cdin_frontend_gui_sdl_render_panes_with_layout(
             gui->renderer, &gui->model,
             gui->splitter_preview_active ? &gui->splitter_preview_layout : NULL,
-            NULL, &content, &stats);
+            &content, &stats);
     }
     if (render_status == CDIN_FRONTEND_GUI_SDL_RENDER_SDL_ERROR) {
         log_sdl_error(gui, "render PaneTree");
