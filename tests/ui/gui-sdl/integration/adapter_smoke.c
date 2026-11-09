@@ -1011,7 +1011,7 @@ int main(void)
      * clears only the matching local composition identifier. */
     {
         static const uint8_t stale_cancel_payload[] = {
-            0xa2u, 0x62u, 'i','d', 0x63u, 0x18u, 0x63u,
+            0xa2u, 0x62u, 'i','d', 0x18u, 0x63u,
             0x66u, 'r','e','a','s','o','n', 0x6cu,
             'v','i','e','w','_','c','h','a','n','g','e','d'
         };
