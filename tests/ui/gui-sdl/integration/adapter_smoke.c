@@ -170,7 +170,7 @@ static void smoke_cbor_leaf(
 }
 
 static size_t smoke_two_view_layout(
-    uint8_t *output, size_t capacity)
+    uint8_t *output, size_t capacity, uint64_t ratio_bp, uint64_t revision)
 {
     smoke_cbor_writer writer = { output, capacity, 0u };
     smoke_cbor_map(&writer, 2u);
@@ -189,25 +189,25 @@ static size_t smoke_two_view_layout(
     smoke_cbor_text(&writer, "second");
     smoke_cbor_leaf(&writer, "leaf-right", "view-right");
     smoke_cbor_text(&writer, "ratio_bp");
-    smoke_cbor_uint(&writer, 5000u);
+    smoke_cbor_uint(&writer, ratio_bp);
     smoke_cbor_text(&writer, "active_leaf");
     smoke_cbor_text(&writer, "leaf-left");
     smoke_cbor_text(&writer, "revision");
-    smoke_cbor_uint(&writer, 1u);
+    smoke_cbor_uint(&writer, revision);
     return writer.length;
 }
 
 static size_t smoke_snapshot_flush(
-    uint8_t *output, size_t capacity)
+    uint8_t *output, size_t capacity, uint64_t revision, uint64_t sequence)
 {
     smoke_cbor_writer writer = { output, capacity, 0u };
     smoke_cbor_map(&writer, 3u);
     smoke_cbor_text(&writer, "scope");
     smoke_cbor_text(&writer, "snapshot");
     smoke_cbor_text(&writer, "revision");
-    smoke_cbor_uint(&writer, 1u);
+    smoke_cbor_uint(&writer, revision);
     smoke_cbor_text(&writer, "sequence");
-    smoke_cbor_uint(&writer, 1u);
+    smoke_cbor_uint(&writer, sequence);
     return writer.length;
 }
 
@@ -253,13 +253,13 @@ static void smoke_apply_two_view_snapshot(
     cdin_frontend_protocol_message_view received;
     int committed = 0;
 
-    payload_length = smoke_two_view_layout(payload, sizeof(payload));
+    payload_length = smoke_two_view_layout(payload, sizeof(payload), 5000u, 1u);
     message = smoke_message(CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
                             payload, payload_length);
     message.sequence = 1u;
     smoke_queue_inbound(stream, &message);
 
-    payload_length = smoke_snapshot_flush(payload, sizeof(payload));
+    payload_length = smoke_snapshot_flush(payload, sizeof(payload), 1u, 1u);
     message = smoke_message(CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
                             payload, payload_length);
     message.sequence = 2u;
@@ -374,7 +374,8 @@ int main(void)
     session.width = 800u;
     session.height = 600u;
     session.accepted_capabilities =
-        cdin_frontend_gui_sdl_supported_capabilities();
+        cdin_frontend_gui_sdl_supported_capabilities() |
+        CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE);
     (void)snprintf(session.view_id, sizeof(session.view_id), "%s", "smoke-view");
 
     memset(&config, 0, sizeof(config));
