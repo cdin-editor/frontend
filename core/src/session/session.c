@@ -198,7 +198,6 @@ void cdin_frontend_session_init(cdin_frontend_session *session,
     session->client = client;
     session->logger = logger;
     session->state = CDIN_FRONTEND_SESSION_INITIAL;
-    session->next_ime_composition_id = 1u;
     if (copy_string(session->frontend_name, sizeof(session->frontend_name), frontend_name) != 0) {
         (void)snprintf(session->frontend_name, sizeof(session->frontend_name), "%s", "cdin-frontend");
     }
@@ -551,7 +550,14 @@ cdin_frontend_protocol_status cdin_frontend_session_send_mouse(
 uint64_t cdin_frontend_session_next_ime_composition_id(
     const cdin_frontend_session *session)
 {
-    return session != NULL ? session->next_ime_composition_id : 0u;
+    uint64_t next_sequence;
+    if (session == NULL || session->client == NULL ||
+        !session->client->initialized) return 0u;
+    next_sequence = session->client->next_tx_sequence;
+    /* Client refuses to send sequence UINT64_MAX because it cannot advance
+     * without wrapping. Reserve zero as the allocator's exhausted sentinel. */
+    return next_sequence == 0u || next_sequence == UINT64_MAX
+        ? 0u : next_sequence;
 }
 
 cdin_frontend_protocol_status cdin_frontend_session_ime_start(
@@ -562,8 +568,7 @@ cdin_frontend_protocol_status cdin_frontend_session_ime_start(
     size_t view_length;
     if (session == NULL || session->state != CDIN_FRONTEND_SESSION_ATTACHED ||
         !session->driver || composition_id == 0u ||
-        session->next_ime_composition_id == 0u ||
-        composition_id < session->next_ime_composition_id ||
+        composition_id != cdin_frontend_session_next_ime_composition_id(session) ||
         view_id == NULL || view_id[0] == '\0')
         return CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT;
     if (!cdin_frontend_capability_has(session->accepted_capabilities,
@@ -577,15 +582,8 @@ cdin_frontend_protocol_status cdin_frontend_session_ime_start(
     write_key(&writer, "id"); write_uint(&writer, composition_id);
     write_key(&writer, "view_id"); write_text(&writer, view_id, view_length);
     write_key(&writer, "document_version"); write_uint(&writer, document_version);
-    {
-        cdin_frontend_protocol_status status = send_namespaced_payload(
-            session, "ime", CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_START, &writer);
-        if (status == CDIN_FRONTEND_PROTOCOL_OK) {
-            session->next_ime_composition_id =
-                composition_id == UINT64_MAX ? 0u : composition_id + 1u;
-        }
-        return status;
-    }
+    return send_namespaced_payload(
+        session, "ime", CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_START, &writer);
 }
 
 cdin_frontend_protocol_status cdin_frontend_session_ime_update(
