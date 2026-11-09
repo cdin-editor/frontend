@@ -71,6 +71,8 @@ struct cdin_frontend_gui_sdl {
 };
 
 
+static int gui_session_attached(const cdin_frontend_gui_sdl *gui);
+
 static void clear_ime_composition(cdin_frontend_gui_sdl *gui)
 {
     if (gui == NULL) return;
