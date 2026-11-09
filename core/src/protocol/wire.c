@@ -379,6 +379,9 @@ const char *cdin_frontend_protocol_message_name(cdin_frontend_protocol_message_t
         case CDIN_FRONTEND_PROTOCOL_DRIVER_ROLE_CHANGED: return "driver.role_changed";
         case CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESULT: return "pane.splitter.result";
         case CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE: return "pane.splitter.resize";
+        case CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_START: return "ime.composition.start";
+        case CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_UPDATE: return "ime.composition.update";
+        case CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL: return "ime.composition.cancel";
         case CDIN_FRONTEND_PROTOCOL_HELLO: return "hello";
         case CDIN_FRONTEND_PROTOCOL_ATTACH: return "attach";
         case CDIN_FRONTEND_PROTOCOL_DETACH: return "detach";
@@ -408,7 +411,7 @@ static cdin_frontend_protocol_message_type message_from_name(const uint8_t *name
             return (cdin_frontend_protocol_message_type)value;
         }
     }
-    for (value = 64; value <= 79; value++) {
+    for (value = 64; value <= 82; value++) {
         const char *candidate = cdin_frontend_protocol_message_name(
             (cdin_frontend_protocol_message_type)value);
         if (strlen(candidate) == length && memcmp(candidate, name, length) == 0) {
@@ -420,7 +423,7 @@ static cdin_frontend_protocol_message_type message_from_name(const uint8_t *name
 
 int cdin_frontend_protocol_message_is_inbound(cdin_frontend_protocol_message_type type)
 {
-    return type >= CDIN_FRONTEND_PROTOCOL_HELLO && type <= CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE;
+    return type >= CDIN_FRONTEND_PROTOCOL_HELLO && type <= CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL;
 }
 
 int cdin_frontend_protocol_message_requires_driver(cdin_frontend_protocol_message_type type)
@@ -435,6 +438,9 @@ int cdin_frontend_protocol_message_requires_driver(cdin_frontend_protocol_messag
         case CDIN_FRONTEND_PROTOCOL_VIEW_SET_POSITION:
         case CDIN_FRONTEND_PROTOCOL_REQUEST_COMMAND:
         case CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE:
+        case CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_START:
+        case CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_UPDATE:
+        case CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL:
             return 1;
         default:
             return 0;
@@ -640,6 +646,27 @@ static cdin_frontend_protocol_status validate_payload_rules(
     return CDIN_FRONTEND_PROTOCOL_OK;
 }
 
+
+static int ime_utf8_boundary(const uint8_t *bytes, size_t length, uint64_t offset)
+{
+    if (offset > (uint64_t)length) return 0;
+    if (offset == 0u || offset == (uint64_t)length) return 1;
+    return (bytes[(size_t)offset] & 0xc0u) != 0x80u;
+}
+
+static int ime_cancel_reason_valid(const char *reason)
+{
+    static const char *const reasons[] = {
+        "ime_cancelled", "focus_lost", "view_changed", "stale_document",
+        "selection_changed", "view_removed", "driver_revoked", "session_reset"
+    };
+    size_t i;
+    if (reason == NULL) return 0;
+    for (i = 0u; i < sizeof(reasons) / sizeof(reasons[0]); ++i)
+        if (strcmp(reason, reasons[i]) == 0) return 1;
+    return 0;
+}
+
 cdin_frontend_protocol_status cdin_frontend_protocol_validate_payload(
     cdin_frontend_protocol_message_type type, const uint8_t *payload, size_t payload_length)
 {
@@ -659,7 +686,21 @@ cdin_frontend_protocol_status cdin_frontend_protocol_validate_payload(
         RULE_REQUIRED("key", FIELD_TEXT), RULE_REQUIRED("action", FIELD_TEXT),
         RULE_REQUIRED("modifiers", FIELD_ARRAY), RULE_OPTIONAL("scancode", FIELD_UINT)
     };
-    static const payload_field_rule input_text[] = { RULE_REQUIRED("text", FIELD_TEXT) };
+    static const payload_field_rule input_text[] = {
+        RULE_REQUIRED("text", FIELD_TEXT), RULE_OPTIONAL("composition_id", FIELD_UINT)
+    };
+    static const payload_field_rule ime_start[] = {
+        RULE_REQUIRED("id", FIELD_UINT), RULE_REQUIRED("view_id", FIELD_TEXT),
+        RULE_REQUIRED("document_version", FIELD_UINT)
+    };
+    static const payload_field_rule ime_update[] = {
+        RULE_REQUIRED("id", FIELD_UINT), RULE_REQUIRED("preedit", FIELD_TEXT),
+        RULE_REQUIRED("cursor_byte", FIELD_UINT), RULE_REQUIRED("selection_start_byte", FIELD_UINT),
+        RULE_REQUIRED("selection_end_byte", FIELD_UINT)
+    };
+    static const payload_field_rule ime_cancel[] = {
+        RULE_REQUIRED("id", FIELD_UINT), RULE_REQUIRED("reason", FIELD_TEXT)
+    };
     static const payload_field_rule input_mouse[] = {
         RULE_REQUIRED("action", FIELD_TEXT), RULE_REQUIRED("button", FIELD_TEXT),
         RULE_REQUIRED("modifiers", FIELD_ARRAY), RULE_OPTIONAL("target", FIELD_TEXT),
@@ -770,6 +811,9 @@ cdin_frontend_protocol_status cdin_frontend_protocol_validate_payload(
         case CDIN_FRONTEND_PROTOCOL_ACK: USE_RULES(ack); break;
         case CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE: USE_RULES(pane_splitter_resize); break;
         case CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESULT: USE_RULES(pane_splitter_result); break;
+        case CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_START: USE_RULES(ime_start); break;
+        case CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_UPDATE: USE_RULES(ime_update); break;
+        case CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL: USE_RULES(ime_cancel); break;
         case CDIN_FRONTEND_PROTOCOL_HELLO_ACK: USE_RULES(hello_ack); break;
         case CDIN_FRONTEND_PROTOCOL_DRIVER_ROLE_CHANGED: USE_RULES(driver_role_changed); break;
         case CDIN_FRONTEND_PROTOCOL_UI_OPTIONS: USE_RULES(revision_theme); break;
@@ -795,6 +839,66 @@ cdin_frontend_protocol_status cdin_frontend_protocol_validate_payload(
     if (count != 0u) {
         status = validate_payload_rules(payload, payload_length, rules, count);
         if (status != CDIN_FRONTEND_PROTOCOL_OK) return status;
+    }
+
+    if (type == CDIN_FRONTEND_PROTOCOL_INPUT_TEXT) {
+        uint64_t composition_id = 0u;
+        size_t text_length = 0u;
+        status = cdin_frontend_protocol_payload_get_uint(
+            payload, payload_length, "composition_id", &composition_id);
+        if (status == CDIN_FRONTEND_PROTOCOL_OK) {
+            char committed_text[4097];
+            if (composition_id == 0u ||
+                cdin_frontend_protocol_payload_get_text(
+                    payload, payload_length, "text", committed_text, sizeof(committed_text),
+                    &text_length) != CDIN_FRONTEND_PROTOCOL_OK ||
+                text_length == 0u) return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
+        } else if (status != CDIN_FRONTEND_PROTOCOL_UNSUPPORTED) {
+            return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
+        }
+    }
+    if (type == CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_START) {
+        uint64_t id = 0u;
+        char view_id[129];
+        size_t view_length = 0u;
+        if (cdin_frontend_protocol_payload_get_uint(payload, payload_length, "id", &id) !=
+                CDIN_FRONTEND_PROTOCOL_OK || id == 0u ||
+            cdin_frontend_protocol_payload_get_text(payload, payload_length, "view_id",
+                view_id, sizeof(view_id), &view_length) != CDIN_FRONTEND_PROTOCOL_OK ||
+            view_length == 0u || view_length > 128u) return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
+    }
+    if (type == CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_UPDATE) {
+        uint64_t id = 0u, cursor_byte = 0u, selection_start = 0u, selection_end = 0u;
+        char preedit[4097];
+        size_t preedit_length = 0u;
+        if (cdin_frontend_protocol_payload_get_uint(payload, payload_length, "id", &id) !=
+                CDIN_FRONTEND_PROTOCOL_OK || id == 0u ||
+            cdin_frontend_protocol_payload_get_text(payload, payload_length, "preedit",
+                preedit, sizeof(preedit), &preedit_length) != CDIN_FRONTEND_PROTOCOL_OK ||
+            preedit_length > 4096u ||
+            !valid_utf8((const uint8_t *)preedit, preedit_length) ||
+            cdin_frontend_protocol_payload_get_uint(payload, payload_length, "cursor_byte",
+                &cursor_byte) != CDIN_FRONTEND_PROTOCOL_OK ||
+            cdin_frontend_protocol_payload_get_uint(payload, payload_length, "selection_start_byte",
+                &selection_start) != CDIN_FRONTEND_PROTOCOL_OK ||
+            cdin_frontend_protocol_payload_get_uint(payload, payload_length, "selection_end_byte",
+                &selection_end) != CDIN_FRONTEND_PROTOCOL_OK ||
+            selection_start > selection_end ||
+            !ime_utf8_boundary((const uint8_t *)preedit, preedit_length, cursor_byte) ||
+            !ime_utf8_boundary((const uint8_t *)preedit, preedit_length, selection_start) ||
+            !ime_utf8_boundary((const uint8_t *)preedit, preedit_length, selection_end)) {
+            return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
+        }
+    }
+    if (type == CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL) {
+        uint64_t id = 0u;
+        char reason[32];
+        size_t reason_length = 0u;
+        if (cdin_frontend_protocol_payload_get_uint(payload, payload_length, "id", &id) !=
+                CDIN_FRONTEND_PROTOCOL_OK || id == 0u ||
+            cdin_frontend_protocol_payload_get_text(payload, payload_length, "reason",
+                reason, sizeof(reason), &reason_length) != CDIN_FRONTEND_PROTOCOL_OK ||
+            !ime_cancel_reason_valid(reason)) return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
     }
     if (type == CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE) {
         uint64_t request_id = 0u, layout_revision = 0u, ratio_bp = 0u;
@@ -1010,6 +1114,13 @@ static int is_pane_message(cdin_frontend_protocol_message_type type)
            type == CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE;
 }
 
+static int is_ime_message(cdin_frontend_protocol_message_type type)
+{
+    return type == CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_START ||
+           type == CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_UPDATE ||
+           type == CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL;
+}
+
 static size_t uint_encoded_size(uint64_t value)
 {
     if (value < 24u) return 1u;
@@ -1063,9 +1174,10 @@ cdin_frontend_protocol_status cdin_frontend_protocol_encode_frame(
         message->minor != CDIN_FRONTEND_PROTOCOL_VERSION_MINOR) {
         return CDIN_FRONTEND_PROTOCOL_VERSION_MISMATCH;
     }
-    if ((strcmp(message->name_space, "core") != 0 && strcmp(message->name_space, "pane") != 0) ||
-        (is_pane_message(message->type) != 0) != (strcmp(message->name_space, "pane") == 0))
-        return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
+    if ((is_pane_message(message->type) && strcmp(message->name_space, "pane") != 0) ||
+        (is_ime_message(message->type) && strcmp(message->name_space, "ime") != 0) ||
+        (!is_pane_message(message->type) && !is_ime_message(message->type) &&
+         strcmp(message->name_space, "core") != 0)) return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
     if (message->sequence == 0u) return CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT;
     if (cdin_frontend_protocol_validate_payload(message->type,
                                                  message->payload,
@@ -1133,6 +1245,7 @@ cdin_frontend_protocol_status cdin_frontend_protocol_decode_frame(
     size_t value_length;
     size_t text_length;
     int pane_namespace = 0;
+    int ime_namespace = 0;
     uint64_t major;
     uint64_t minor;
     uint64_t sequence;
@@ -1184,6 +1297,7 @@ cdin_frontend_protocol_status cdin_frontend_protocol_decode_frame(
         return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
     }
     if (text_length == 4u && memcmp(text, "pane", 4u) == 0) pane_namespace = 1;
+    else if (text_length == 3u && memcmp(text, "ime", 3u) == 0) ime_namespace = 1;
     else if (text_length != 4u || memcmp(text, "core", 4u) != 0) return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
     status = get_envelope_value(frame + 4u, body_length, "seq", &value, &value_length);
     if (status != CDIN_FRONTEND_PROTOCOL_OK ||
@@ -1197,7 +1311,8 @@ cdin_frontend_protocol_status cdin_frontend_protocol_decode_frame(
     }
     type = message_from_name(text, text_length);
     if ((int)type == 0) return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
-    if ((is_pane_message(type) != 0) != (pane_namespace != 0)) return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
+    if ((is_pane_message(type) != 0) != (pane_namespace != 0) ||
+        (is_ime_message(type) != 0) != (ime_namespace != 0)) return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
     status = get_envelope_value(frame + 4u, body_length, "payload", &payload, &value_length);
     if (status != CDIN_FRONTEND_PROTOCOL_OK ||
         cdin_frontend_protocol_validate_payload(type, payload, value_length) != CDIN_FRONTEND_PROTOCOL_OK) {
@@ -1207,7 +1322,8 @@ cdin_frontend_protocol_status cdin_frontend_protocol_decode_frame(
     out_message->minor = minor > UINT32_MAX ? UINT32_MAX : (uint32_t)minor;
     out_message->sequence = sequence;
     out_message->type = type;
-    out_message->name_space = pane_namespace != 0 ? "pane" : "core";
+    out_message->name_space = pane_namespace != 0 ? "pane" :
+                              (ime_namespace != 0 ? "ime" : "core");
     out_message->payload = payload;
     out_message->payload_length = value_length;
     return CDIN_FRONTEND_PROTOCOL_OK;
