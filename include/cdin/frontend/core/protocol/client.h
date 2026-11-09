@@ -34,6 +34,15 @@ void cdin_frontend_client_set_logger(cdin_frontend_client *client,
                                      cdin_frontend_logger *logger);
 
 /* payload is a validated, definite-length CBOR map and remains caller-owned. */
+cdin_frontend_protocol_status cdin_frontend_client_send_namespaced(
+    cdin_frontend_client *client,
+    const char *name_space,
+    cdin_frontend_protocol_message_type type,
+    const uint8_t *payload,
+    size_t payload_length);
+
+/* The codec rejects message/namespace mismatches. Capability checks and
+ * authorization remain the Session layer's responsibility. */
 cdin_frontend_protocol_status cdin_frontend_client_send(
     cdin_frontend_client *client,
     cdin_frontend_protocol_message_type type,
