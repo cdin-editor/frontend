@@ -239,6 +239,19 @@ static size_t smoke_two_view_layout(
     return writer.length;
 }
 
+static size_t smoke_ime_cancel_payload(
+    uint8_t *output, size_t capacity, uint64_t composition_id,
+    const char *reason)
+{
+    smoke_cbor_writer writer = { output, capacity, 0u };
+    smoke_cbor_map(&writer, 2u);
+    smoke_cbor_text(&writer, "id");
+    smoke_cbor_uint(&writer, composition_id);
+    smoke_cbor_text(&writer, "reason");
+    smoke_cbor_text(&writer, reason);
+    return writer.length;
+}
+
 static size_t smoke_view_cursor(
     uint8_t *output, size_t capacity, const char *view_id,
     uint64_t version, uint64_t position)
@@ -903,7 +916,11 @@ int main(void)
         size_t updates_before = output_count_type(
             &stream, CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_UPDATE);
         cdin_frontend_protocol_message_view output_message;
+        cdin_frontend_protocol_message_view start_message;
         uint64_t composition_id = 0u;
+        uint64_t expected_composition_id =
+            cdin_frontend_session_next_ime_composition_id(&session);
+        assert(expected_composition_id != 0u);
         memset(&event, 0, sizeof(event));
         event.type = SDL_EVENT_TEXT_EDITING;
         event.edit.type = SDL_EVENT_TEXT_EDITING;
@@ -914,11 +931,15 @@ int main(void)
         assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
                CDIN_FRONTEND_GUI_SDL_OK);
         assert(cdin_frontend_gui_sdl_test_ime_active(gui));
-        assert(cdin_frontend_gui_sdl_test_ime_id(gui) == 1u);
-        assert(cdin_frontend_session_next_ime_composition_id(&session) == 2u);
+        assert(cdin_frontend_gui_sdl_test_ime_id(gui) == expected_composition_id);
+        assert(cdin_frontend_session_next_ime_composition_id(&session) >
+               expected_composition_id);
         assert(cdin_frontend_session_ime_start(
-            &session, 1u, "smoke-view", 1u) ==
+            &session, expected_composition_id, "smoke-view", 1u) ==
             CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
+        assert(output_find_message(&stream, CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_START,
+                                   starts_before, &start_message));
+        assert(start_message.sequence == expected_composition_id);
         assert(cdin_frontend_gui_sdl_test_ime_preedit_length(gui) == 4u);
         assert(cdin_frontend_gui_sdl_test_ime_cursor_byte(gui) == 2u);
         assert(cdin_frontend_gui_sdl_test_ime_selection_end_byte(gui) == 4u);
@@ -942,7 +963,7 @@ int main(void)
         assert(cdin_frontend_protocol_payload_get_uint(
             output_message.payload, output_message.payload_length,
             "composition_id", &composition_id) == CDIN_FRONTEND_PROTOCOL_OK);
-        assert(composition_id == 1u);
+        assert(composition_id == expected_composition_id);
 
         {
             size_t text_frames_after_commit = output_count_type(
@@ -970,6 +991,9 @@ int main(void)
         cdin_frontend_protocol_message_view output_message;
         char reason[32];
         size_t reason_length = 0u;
+        uint64_t combining_composition_id =
+            cdin_frontend_session_next_ime_composition_id(&session);
+        assert(combining_composition_id != 0u);
         memset(&event, 0, sizeof(event));
         event.type = SDL_EVENT_TEXT_EDITING;
         event.edit.type = SDL_EVENT_TEXT_EDITING;
@@ -980,7 +1004,7 @@ int main(void)
         assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
                CDIN_FRONTEND_GUI_SDL_OK);
         assert(cdin_frontend_gui_sdl_test_ime_active(gui));
-        assert(cdin_frontend_gui_sdl_test_ime_id(gui) == 2u);
+        assert(cdin_frontend_gui_sdl_test_ime_id(gui) == combining_composition_id);
         assert(cdin_frontend_gui_sdl_test_ime_cursor_byte(gui) == 1u);
         assert(cdin_frontend_gui_sdl_test_ime_selection_end_byte(gui) == 3u);
 
@@ -1011,38 +1035,39 @@ int main(void)
         assert(strcmp(reason, "ime_cancelled") == 0);
     }
 
-    /* An empty preedit is a valid update, not a commit or a cancellation. */
-    memset(&event, 0, sizeof(event));
-    event.type = SDL_EVENT_TEXT_EDITING;
-    event.edit.type = SDL_EVENT_TEXT_EDITING;
-    event.edit.text = "";
-    event.edit.start = 0;
-    event.edit.length = 0;
-    assert(SDL_PushEvent(&event));
-    assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
-           CDIN_FRONTEND_GUI_SDL_OK);
-    assert(cdin_frontend_gui_sdl_test_ime_active(gui));
-    assert(cdin_frontend_gui_sdl_test_ime_id(gui) == 3u);
-    assert(cdin_frontend_gui_sdl_test_ime_preedit_length(gui) == 0u);
-
-    /* Backend-forced cancellation is received through Core Session and
-     * clears only the matching local composition identifier. */
+    /* Empty preedit remains a live local composition. Backend cancellation
+     * must match the connection-scoped composition ID exactly. */
     {
-        static const uint8_t stale_cancel_payload[] = {
-            0xa2u, 0x62u, 'i','d', 0x18u, 0x63u,
-            0x66u, 'r','e','a','s','o','n', 0x6cu,
-            'v','i','e','w','_','c','h','a','n','g','e','d'
-        };
-        static const uint8_t backend_cancel_payload[] = {
-            0xa2u, 0x62u, 'i','d', 0x03u,
-            0x66u, 'r','e','a','s','o','n', 0x6cu,
-            'v','i','e','w','_','c','h','a','n','g','e','d'
-        };
+        uint64_t empty_composition_id =
+            cdin_frontend_session_next_ime_composition_id(&session);
+        uint8_t stale_cancel_payload[128];
+        uint8_t backend_cancel_payload[128];
+        size_t stale_cancel_length;
+        size_t backend_cancel_length;
         cdin_frontend_protocol_message_view cancel_message;
         cdin_frontend_protocol_message_view received;
         int committed = 0;
+        assert(empty_composition_id != 0u);
+        memset(&event, 0, sizeof(event));
+        event.type = SDL_EVENT_TEXT_EDITING;
+        event.edit.type = SDL_EVENT_TEXT_EDITING;
+        event.edit.text = "";
+        event.edit.start = 0;
+        event.edit.length = 0;
+        assert(SDL_PushEvent(&event));
+        assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+               CDIN_FRONTEND_GUI_SDL_OK);
+        assert(cdin_frontend_gui_sdl_test_ime_active(gui));
+        assert(cdin_frontend_gui_sdl_test_ime_id(gui) == empty_composition_id);
+        assert(cdin_frontend_gui_sdl_test_ime_preedit_length(gui) == 0u);
+        stale_cancel_length = smoke_ime_cancel_payload(
+            stale_cancel_payload, sizeof(stale_cancel_payload),
+            empty_composition_id + 1u, "view_changed");
+        backend_cancel_length = smoke_ime_cancel_payload(
+            backend_cancel_payload, sizeof(backend_cancel_payload),
+            empty_composition_id, "view_changed");
         cancel_message = smoke_message(CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL,
-            stale_cancel_payload, sizeof(stale_cancel_payload));
+            stale_cancel_payload, stale_cancel_length);
         cancel_message.name_space = "ime";
         cancel_message.sequence = 9u;
         smoke_queue_inbound(&stream, &cancel_message);
@@ -1052,10 +1077,10 @@ int main(void)
         assert(cdin_frontend_gui_sdl_apply_message(gui, &received, &committed) ==
                CDIN_FRONTEND_GUI_SDL_OK);
         assert(cdin_frontend_gui_sdl_test_ime_active(gui));
-        assert(cdin_frontend_gui_sdl_test_ime_id(gui) == 3u);
+        assert(cdin_frontend_gui_sdl_test_ime_id(gui) == empty_composition_id);
 
         cancel_message = smoke_message(CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL,
-            backend_cancel_payload, sizeof(backend_cancel_payload));
+            backend_cancel_payload, backend_cancel_length);
         cancel_message.name_space = "ime";
         cancel_message.sequence = 10u;
         smoke_queue_inbound(&stream, &cancel_message);
