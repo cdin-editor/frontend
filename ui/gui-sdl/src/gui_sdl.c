@@ -58,7 +58,6 @@ struct cdin_frontend_gui_sdl {
     uint16_t splitter_preview_ratio_bp;
     char splitter_id[CDIN_FRONTEND_GUI_SDL_LAYOUT_MAX_ID_BYTES + 1u];
     cdin_frontend_gui_sdl_layout splitter_preview_layout;
-    uint64_t next_ime_id;
     uint64_t ime_id;
     uint64_t ime_document_version;
     uint64_t ime_cursor_byte;
@@ -205,7 +204,8 @@ static cdin_frontend_gui_sdl_status update_ime_from_sdl(
         if (status != CDIN_FRONTEND_PROTOCOL_OK) return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
     }
     if (!gui->ime_active) {
-        uint64_t composition_id = gui->next_ime_id;
+        uint64_t composition_id =
+            cdin_frontend_session_next_ime_composition_id(gui->session);
         size_t view_length = strlen(view->semantic.view_id);
         if (composition_id == 0u) return CDIN_FRONTEND_GUI_SDL_LIMIT_EXCEEDED;
         status = cdin_frontend_session_ime_start(
@@ -213,7 +213,6 @@ static cdin_frontend_gui_sdl_status update_ime_from_sdl(
             view->semantic.version);
         if (status != CDIN_FRONTEND_PROTOCOL_OK)
             return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
-        gui->next_ime_id = composition_id == UINT64_MAX ? 0u : composition_id + 1u;
         gui->ime_active = 1;
         gui->ime_id = composition_id;
         gui->ime_document_version = view->semantic.version;
@@ -369,7 +368,6 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_create(
         cdin_frontend_session_accepted_capabilities(config->session),
         CDIN_FRONTEND_CAP_MOUSE);
     gui->next_splitter_request_id = 1u;
-    gui->next_ime_id = 1u;
     gui->ime_composition_enabled = cdin_frontend_capability_has(
         cdin_frontend_session_accepted_capabilities(config->session),
         CDIN_FRONTEND_CAP_IME_COMPOSITION);
