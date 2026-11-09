@@ -75,6 +75,7 @@ jobs:
             -DCDIN_FRONTEND_BUILD_APPS=ON \
             -DCDIN_FRONTEND_BUILD_EXAMPLES=OFF \
             -DCDIN_FRONTEND_GUI_SDL_ENABLE_PANE_SPLITTER=ON \
+            -DCDIN_FRONTEND_GUI_SDL_TEST_CAPTURE_OVERRIDE=ON \
             -DBUILD_TESTING=ON
       - name: Build and run GUI-SDL tests under AddressSanitizer
         env:
