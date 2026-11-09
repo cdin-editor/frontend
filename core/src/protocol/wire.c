@@ -873,14 +873,18 @@ cdin_frontend_protocol_status cdin_frontend_protocol_validate_payload(
     }
     if (type == CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_UPDATE) {
         uint64_t id = 0u, cursor_byte = 0u, selection_start = 0u, selection_end = 0u;
-        char preedit[4097];
-        size_t preedit_length = 0u;
+        const uint8_t *raw_preedit = NULL, *preedit = NULL;
+        size_t raw_preedit_length = 0u, preedit_length = 0u;
         if (cdin_frontend_protocol_payload_get_uint(payload, payload_length, "id", &id) !=
                 CDIN_FRONTEND_PROTOCOL_OK || id == 0u ||
-            cdin_frontend_protocol_payload_get_text(payload, payload_length, "preedit",
-                preedit, sizeof(preedit), &preedit_length) != CDIN_FRONTEND_PROTOCOL_OK ||
-            preedit_length > 4096u ||
-            !valid_utf8((const uint8_t *)preedit, preedit_length) ||
+            find_value(payload, payload_length, "preedit",
+                &raw_preedit, &raw_preedit_length) != CDIN_FRONTEND_PROTOCOL_OK ||
+            parse_text_value(raw_preedit, raw_preedit_length,
+                &preedit, &preedit_length) != CDIN_FRONTEND_PROTOCOL_OK) {
+            return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
+        }
+        if (preedit_length > 4096u) return CDIN_FRONTEND_PROTOCOL_LIMIT_EXCEEDED;
+        if (!valid_utf8(preedit, preedit_length) ||
             cdin_frontend_protocol_payload_get_uint(payload, payload_length, "cursor_byte",
                 &cursor_byte) != CDIN_FRONTEND_PROTOCOL_OK ||
             cdin_frontend_protocol_payload_get_uint(payload, payload_length, "selection_start_byte",
@@ -888,9 +892,9 @@ cdin_frontend_protocol_status cdin_frontend_protocol_validate_payload(
             cdin_frontend_protocol_payload_get_uint(payload, payload_length, "selection_end_byte",
                 &selection_end) != CDIN_FRONTEND_PROTOCOL_OK ||
             selection_start > selection_end ||
-            !ime_utf8_boundary((const uint8_t *)preedit, preedit_length, cursor_byte) ||
-            !ime_utf8_boundary((const uint8_t *)preedit, preedit_length, selection_start) ||
-            !ime_utf8_boundary((const uint8_t *)preedit, preedit_length, selection_end)) {
+            !ime_utf8_boundary(preedit, preedit_length, cursor_byte) ||
+            !ime_utf8_boundary(preedit, preedit_length, selection_start) ||
+            !ime_utf8_boundary(preedit, preedit_length, selection_end)) {
             return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
         }
     }
