@@ -752,6 +752,29 @@ int main(void)
         CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE);
     (void)snprintf(session.view_id, sizeof(session.view_id), "%s", "smoke-view");
 
+    {
+        static const uint8_t preedit[] = { 0xc3u, 0xa9u };
+        static const uint8_t committed[] = { 0xc3u, 0xa9u };
+        cdin_frontend_session legacy_session = session;
+        legacy_session.accepted_capabilities &=
+            ~CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_IME_COMPOSITION);
+        assert(cdin_frontend_session_ime_start(
+            &legacy_session, 1u, "smoke-view", 1u) ==
+            CDIN_FRONTEND_PROTOCOL_UNSUPPORTED);
+        assert(cdin_frontend_session_ime_update(
+            &legacy_session, 1u, preedit, sizeof(preedit), 2u, 0u, 2u) ==
+            CDIN_FRONTEND_PROTOCOL_UNSUPPORTED);
+        assert(cdin_frontend_session_ime_cancel(
+            &legacy_session, 1u, "ime_cancelled") ==
+            CDIN_FRONTEND_PROTOCOL_UNSUPPORTED);
+        assert(cdin_frontend_session_ime_commit(
+            &legacy_session, 1u, committed, sizeof(committed)) ==
+            CDIN_FRONTEND_PROTOCOL_UNSUPPORTED);
+        assert(cdin_frontend_session_ime_cancel(
+            &session, 1u, "selection_changed") ==
+            CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
+    }
+
     memset(&config, 0, sizeof(config));
     config.session = &session;
     config.window_title = "CDIN GUI-SDL adapter smoke";
