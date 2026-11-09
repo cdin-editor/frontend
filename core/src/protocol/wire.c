@@ -1173,6 +1173,7 @@ cdin_frontend_protocol_status cdin_frontend_protocol_encode_frame(
     size_t body_position;
     size_t body_length;
     size_t required;
+    cdin_frontend_protocol_status status;
     const char *type_name;
     if (message == NULL || output == NULL || out_length == NULL || message->payload == NULL ||
         message->payload_length == 0u || message->name_space == NULL) {
