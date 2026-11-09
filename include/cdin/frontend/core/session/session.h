@@ -28,6 +28,7 @@ typedef struct cdin_frontend_session {
     uint64_t session_id;
     uint64_t client_id;
     uint64_t last_flush_sequence;
+    uint64_t next_ime_composition_id;
     cdin_frontend_capability_mask requested_capabilities;
     cdin_frontend_capability_mask accepted_capabilities;
     int driver;
@@ -97,6 +98,8 @@ cdin_frontend_protocol_status cdin_frontend_session_send_mouse(
     uint32_t y,
     int has_position);
 /* ADR-0023: negotiated IME lifecycle. Offsets are UTF-8 byte offsets. */
+uint64_t cdin_frontend_session_next_ime_composition_id(
+    const cdin_frontend_session *session);
 cdin_frontend_protocol_status cdin_frontend_session_ime_start(
     cdin_frontend_session *session, uint64_t composition_id,
     const char *view_id, uint64_t document_version);
