@@ -491,15 +491,15 @@ static void smoke_test_splitter_lifecycle(
     payload_length = smoke_pane_result_payload(payload, sizeof(payload));
     smoke_apply_inbound(gui, session, stream,
         CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESULT, "pane",
-        payload, payload_length, 3u, 0);
+        payload, payload_length, 4u, 0);
     payload_length = smoke_two_view_layout(payload, sizeof(payload), 6000u, 2u);
     smoke_apply_inbound(gui, session, stream,
         CDIN_FRONTEND_PROTOCOL_UI_LAYOUT, "core",
-        payload, payload_length, 4u, 0);
+        payload, payload_length, 5u, 0);
     payload_length = smoke_snapshot_flush(payload, sizeof(payload), 2u, 2u);
     smoke_apply_inbound(gui, session, stream,
         CDIN_FRONTEND_PROTOCOL_UI_FLUSH, "core",
-        payload, payload_length, 5u, 1);
+        payload, payload_length, 6u, 1);
 
     /* Escape cancels preview and must prevent a second pane request. */
     smoke_push_mouse_button(SDL_EVENT_MOUSE_BUTTON_DOWN, SDL_BUTTON_LEFT,
@@ -583,11 +583,11 @@ static void smoke_test_splitter_lifecycle(
     payload_length = smoke_two_view_layout(payload, sizeof(payload), 5500u, 3u);
     smoke_apply_inbound(gui, session, stream,
         CDIN_FRONTEND_PROTOCOL_UI_LAYOUT, "core",
-        payload, payload_length, 6u, 0);
+        payload, payload_length, 7u, 0);
     payload_length = smoke_snapshot_flush(payload, sizeof(payload), 3u, 3u);
     smoke_apply_inbound(gui, session, stream,
         CDIN_FRONTEND_PROTOCOL_UI_FLUSH, "core",
-        payload, payload_length, 7u, 1);
+        payload, payload_length, 8u, 1);
     smoke_push_mouse_button(SDL_EVENT_MOUSE_BUTTON_UP, SDL_BUTTON_LEFT,
                             (SDL_MouseID)45, 440.0f, 100.0f);
     assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
@@ -1042,7 +1042,7 @@ int main(void)
         cancel_message = smoke_message(CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL,
             stale_cancel_payload, sizeof(stale_cancel_payload));
         cancel_message.name_space = "ime";
-        cancel_message.sequence = 4u;
+        cancel_message.sequence = 9u;
         smoke_queue_inbound(&stream, &cancel_message);
         assert(cdin_frontend_session_receive(&session, &received) ==
                CDIN_FRONTEND_PROTOCOL_OK);
@@ -1055,7 +1055,7 @@ int main(void)
         cancel_message = smoke_message(CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL,
             backend_cancel_payload, sizeof(backend_cancel_payload));
         cancel_message.name_space = "ime";
-        cancel_message.sequence = 5u;
+        cancel_message.sequence = 10u;
         smoke_queue_inbound(&stream, &cancel_message);
         assert(cdin_frontend_session_receive(&session, &received) ==
                CDIN_FRONTEND_PROTOCOL_OK);
