@@ -893,6 +893,7 @@ int main(void)
         event.type = SDL_EVENT_TEXT_INPUT;
         event.text.type = SDL_EVENT_TEXT_INPUT;
         event.text.text = "éب";
+        event.text.timestamp = 424242u;
         assert(SDL_PushEvent(&event));
         assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
                CDIN_FRONTEND_GUI_SDL_OK);
@@ -903,6 +904,21 @@ int main(void)
             output_message.payload, output_message.payload_length,
             "composition_id", &composition_id) == CDIN_FRONTEND_PROTOCOL_OK);
         assert(composition_id == 1u);
+
+        {
+            size_t text_frames_after_commit = output_count_type(
+                &stream, CDIN_FRONTEND_PROTOCOL_INPUT_TEXT);
+            memset(&event, 0, sizeof(event));
+            event.type = SDL_EVENT_TEXT_INPUT;
+            event.text.type = SDL_EVENT_TEXT_INPUT;
+            event.text.text = "éب";
+            event.text.timestamp = 424242u;
+            assert(SDL_PushEvent(&event));
+            assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+                   CDIN_FRONTEND_GUI_SDL_OK);
+            assert(output_count_type(&stream, CDIN_FRONTEND_PROTOCOL_INPUT_TEXT) ==
+                   text_frames_after_commit);
+        }
     }
 
     /* Combining marks remain byte-addressable even though SDL reports
