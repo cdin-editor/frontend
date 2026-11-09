@@ -216,6 +216,11 @@ The option defaults to **OFF**; ordinary package and product builds do not
 advertise it until the Composition Root pins compatible component candidates
 and the live CDIN IME matrix passes.
 
+Composition IDs are monotonically allocated by the Core Session and scoped to
+that attached client connection, not to the lifetime of a GUI window/adapter.
+Recreating the GUI adapter while the same Session remains attached therefore
+cannot reuse an ID already sent on that connection.
+
 SDL 3.2+ `SDL_EVENT_TEXT_EDITING` is handled as transient preedit. SDL reports
 the start and selected length in UTF-8 character positions; Core Session
 converts those positions to UTF-8 byte offsets at code-point boundaries before
