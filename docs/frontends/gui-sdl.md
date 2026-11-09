@@ -151,12 +151,14 @@ locally.
 
 The adapter advertises the mouse capability and forwards negotiated pointer
 and wheel input. It advertises `pane-splitter-resize/1` only when the explicit
-build option is enabled; normal package builds keep that option off. It does
-not advertise IME, dialogs, clipboard-provider, images, canvas or rich-text
-capabilities. SDL text composition/IME, full
-grapheme mapping, fallback fonts, shaping, bidi and Persian/Arabic rendering
-remain open. Selection messages are currently not cached or rendered; Runtime
-remains the owner of selection semantics.
+build option is enabled; normal package builds keep that option off. The
+accepted `ime-composition/1` capability is also opt-in through
+`CDIN_FRONTEND_GUI_SDL_ENABLE_IME_COMPOSITION`; normal package builds keep it
+off until CDIN's live IME matrix passes. Dialogs, clipboard-provider, images,
+canvas and rich-text remain unadvertised. Full grapheme mapping, fallback
+fonts, shaping, bidi and Persian/Arabic rendering remain open. Selection
+messages are currently not cached or rendered; Runtime remains the owner of
+selection semantics.
 
 The proposed FreeType/HarfBuzz/FriBidi stack is not a finalized contract and
 is not silently added as a dependency. SDL3 itself remains an optional build
@@ -241,9 +243,13 @@ An empty preedit update is valid; an empty final string cancels rather than
 creating a document edit. Detach discards transient state and never resumes
 it after reattach.
 
-The Core Protocol codec validates the optional namespace, monotonic non-zero
-IDs at the Backend boundary, the 4096-byte preedit bound, UTF-8 validity and
-byte-boundary offsets. The Frontend Session enforces capability acceptance,
-Driver role and the Frontend/Backend-specific cancellation reason sets. The
-GUI-SDL capability remains opt-in until CDIN #118 proves the exact immutable
+The Core Protocol codec validates the optional namespace, non-zero IDs,
+the 4096-byte preedit bound, UTF-8 validity and byte-boundary offsets. Core
+Session allocates strictly increasing IDs for the attached client connection
+and enforces capability acceptance, Driver role and the
+Frontend/Backend-specific cancellation reason sets. The Backend remains
+responsible for per-connection lifecycle state, replay rejection and atomic
+commit admission; Runtime remains responsible for revalidating the captured
+view/version/selection before applying committed text. The GUI-SDL capability
+remains opt-in until CDIN #118 proves the exact immutable
 Frontend/Backend/Runtime stack end-to-end.
