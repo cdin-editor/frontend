@@ -146,7 +146,8 @@ cdin_frontend_protocol_status cdin_frontend_client_receive(
         log_failure(client, "protocol version", CDIN_FRONTEND_PROTOCOL_VERSION_MISMATCH);
         return CDIN_FRONTEND_PROTOCOL_VERSION_MISMATCH;
     }
-    if (cdin_frontend_protocol_message_is_inbound(message.type)) {
+    if (cdin_frontend_protocol_message_is_inbound(message.type) &&
+        message.type != CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL) {
         log_failure(client, "inbound message direction", CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA);
         return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
     }
