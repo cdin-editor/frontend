@@ -543,6 +543,7 @@ static void smoke_test_splitter_lifecycle(
     assert(output_count_type(stream, CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE) ==
            pane_count + 1u);
 
+#ifdef CDIN_FRONTEND_GUI_SDL_TESTING
     /* If the platform cannot capture the pointer, the adapter must not send
      * a speculative resize; it falls back to the ordinary mouse stream. */
     {
@@ -566,6 +567,7 @@ static void smoke_test_splitter_lifecycle(
                mouse_before + 3u);
         cdin_frontend_gui_sdl_test_set_capture_available(1);
     }
+#endif
 }
 
 static void smoke_apply_two_view_snapshot(
