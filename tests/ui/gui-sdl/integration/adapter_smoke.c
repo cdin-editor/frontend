@@ -549,7 +549,9 @@ static void smoke_test_splitter_lifecycle(
     {
         size_t mouse_before = output_count_type(
             stream, CDIN_FRONTEND_PROTOCOL_INPUT_MOUSE);
+#ifdef CDIN_FRONTEND_GUI_SDL_TESTING
         cdin_frontend_gui_sdl_test_set_capture_available(0);
+#endif
         smoke_push_mouse_button(SDL_EVENT_MOUSE_BUTTON_DOWN, SDL_BUTTON_LEFT,
                                 (SDL_MouseID)46, 440.0f, 100.0f);
         assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
@@ -565,7 +567,9 @@ static void smoke_test_splitter_lifecycle(
                pane_count + 1u);
         assert(output_count_type(stream, CDIN_FRONTEND_PROTOCOL_INPUT_MOUSE) >=
                mouse_before + 3u);
+#ifdef CDIN_FRONTEND_GUI_SDL_TESTING
         cdin_frontend_gui_sdl_test_set_capture_available(1);
+#endif
     }
 #endif
 }
