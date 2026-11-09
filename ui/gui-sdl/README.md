@@ -29,3 +29,15 @@ rollback, pixel-unit validation, foreign-window event isolation and
 `input.mouse` forwarding. Applications consuming the library
 enable `CDIN_FRONTEND_BUILD_UI_SDL=ON` and link
 `cdin::frontend_ui_gui_sdl`. See [GUI-SDL architecture](../../docs/frontends/gui-sdl.md).
+
+## PaneTree splitter resize
+
+GUI-SDL implements pointer capture, pixel-only preview and one typed
+`pane.splitter.resize` commit request per release. It does not update the
+committed model locally: the preview is retained until the matching
+`pane.splitter.result` and subsequent atomic `ui.layout`/`ui.flush` commit.
+Escape, focus loss, detach, Driver loss and a changed committed layout
+revision discard the preview. The capability request is deliberately gated:
+`CDIN_FRONTEND_GUI_SDL_ENABLE_PANE_SPLITTER` defaults to `OFF`. CDIN must enable
+it only after the compatible Backend/Runtime/Frontend releases are pinned and
+the live product matrix in CDIN issue #118 passes.

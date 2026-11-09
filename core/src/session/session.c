@@ -200,6 +200,11 @@ cdin_frontend_protocol_status cdin_frontend_session_receive(
     if (session == NULL || session->client == NULL || out_message == NULL) return CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT;
     status = cdin_frontend_client_receive(session->client, out_message);
     if (status != CDIN_FRONTEND_PROTOCOL_OK) return status;
+    if (strcmp(out_message->name_space, "pane") == 0 &&
+        !cdin_frontend_capability_has(session->accepted_capabilities,
+                                      CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE)) {
+        return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
+    }
     if (out_message->type == CDIN_FRONTEND_PROTOCOL_HELLO_ACK) {
         if (session->state != CDIN_FRONTEND_SESSION_HELLO_SENT) return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
         if (cdin_frontend_protocol_payload_get_uint(out_message->payload, out_message->payload_length,

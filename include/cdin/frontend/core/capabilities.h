@@ -24,7 +24,6 @@ typedef enum cdin_frontend_capability {
     CDIN_FRONTEND_CAP_TRUECOLOR,
     CDIN_FRONTEND_CAP_IME,
     CDIN_FRONTEND_CAP_DRIVER_ROLE_EVENTS,
-    CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE,
     CDIN_FRONTEND_CAP_COUNT
 } cdin_frontend_capability;
 
