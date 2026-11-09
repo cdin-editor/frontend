@@ -9,6 +9,7 @@ option(CDIN_FRONTEND_USE_LOG_STUB "Use the test-only logger ABI shim (never for 
 option(CDIN_FRONTEND_BUILD_UI_TUI "Build the interactive terminal UI adapter" ON)
 option(CDIN_FRONTEND_BUILD_UI_SDL "Build the production GUI-SDL adapter and preview" OFF)
 option(CDIN_FRONTEND_GUI_SDL_ENABLE_PANE_SPLITTER "Allow GUI-SDL to request pane-splitter-resize/1 (keep OFF until CDIN product E2E passes)" OFF)
+option(CDIN_FRONTEND_GUI_SDL_TEST_CAPTURE_OVERRIDE "Enable the deterministic GUI-SDL pointer-capture test seam" OFF)
 option(CDIN_FRONTEND_BUILD_APPS "Build runnable adapter preview applications" ON)
 option(CDIN_FRONTEND_BUILD_UI_HEADLESS "Build the display-free reference recorder/replayer" ON)
 option(CDIN_FRONTEND_BUILD_EXAMPLES "Build small Frontend examples" ON)
@@ -131,7 +132,7 @@ if(CDIN_FRONTEND_BUILD_UI_SDL)
         target_compile_definitions(cdin_frontend_ui_gui_sdl PRIVATE
             CDIN_FRONTEND_GUI_SDL_ENABLE_PANE_SPLITTER=1)
     endif()
-    if(BUILD_TESTING)
+    if(CDIN_FRONTEND_GUI_SDL_TEST_CAPTURE_OVERRIDE)
         target_compile_definitions(cdin_frontend_ui_gui_sdl PRIVATE
             CDIN_FRONTEND_GUI_SDL_TESTING=1)
     endif()
@@ -236,10 +237,12 @@ if(BUILD_TESTING)
             tests/ui/gui-sdl/integration/adapter_smoke.c)
         target_link_libraries(cdin_frontend_gui_sdl_adapter_smoke PRIVATE
             cdin::frontend_ui_gui_sdl SDL3::SDL3)
-        target_include_directories(cdin_frontend_gui_sdl_adapter_smoke PRIVATE
-            "${CMAKE_CURRENT_SOURCE_DIR}/ui/gui-sdl/src")
-        target_compile_definitions(cdin_frontend_gui_sdl_adapter_smoke PRIVATE
-            CDIN_FRONTEND_GUI_SDL_TESTING=1)
+        if(CDIN_FRONTEND_GUI_SDL_TEST_CAPTURE_OVERRIDE)
+            target_include_directories(cdin_frontend_gui_sdl_adapter_smoke PRIVATE
+                "${CMAKE_CURRENT_SOURCE_DIR}/ui/gui-sdl/src")
+            target_compile_definitions(cdin_frontend_gui_sdl_adapter_smoke PRIVATE
+                CDIN_FRONTEND_GUI_SDL_TESTING=1)
+        endif()
         target_compile_features(cdin_frontend_gui_sdl_adapter_smoke PRIVATE c_std_11)
         cdin_frontend_enable_test_strict(cdin_frontend_gui_sdl_adapter_smoke)
         add_test(NAME cdin_frontend_gui_sdl_adapter_smoke
