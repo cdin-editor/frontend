@@ -843,16 +843,20 @@ cdin_frontend_protocol_status cdin_frontend_protocol_validate_payload(
 
     if (type == CDIN_FRONTEND_PROTOCOL_INPUT_TEXT) {
         uint64_t composition_id = 0u;
+        const uint8_t *raw_text = NULL;
+        const uint8_t *committed_text = NULL;
+        size_t raw_text_length = 0u;
         size_t text_length = 0u;
         status = cdin_frontend_protocol_payload_get_uint(
             payload, payload_length, "composition_id", &composition_id);
         if (status == CDIN_FRONTEND_PROTOCOL_OK) {
-            char committed_text[16385];
             if (composition_id == 0u ||
-                cdin_frontend_protocol_payload_get_text(
-                    payload, payload_length, "text", committed_text, sizeof(committed_text),
-                    &text_length) != CDIN_FRONTEND_PROTOCOL_OK ||
+                find_value(payload, payload_length, "text",
+                           &raw_text, &raw_text_length) != CDIN_FRONTEND_PROTOCOL_OK ||
+                parse_text_value(raw_text, raw_text_length,
+                                 &committed_text, &text_length) != CDIN_FRONTEND_PROTOCOL_OK ||
                 text_length == 0u) return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
+            (void)committed_text;
         } else if (status != CDIN_FRONTEND_PROTOCOL_UNSUPPORTED) {
             return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
         }
