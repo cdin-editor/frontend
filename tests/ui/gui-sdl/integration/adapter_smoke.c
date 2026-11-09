@@ -107,6 +107,7 @@ static size_t output_count_type(
 }
 
 
+#ifdef CDIN_FRONTEND_GUI_SDL_TESTING
 static int output_find_message(
     const fake_stream *stream,
     cdin_frontend_protocol_message_type expected_type,
@@ -142,6 +143,7 @@ static int output_find_message(
     }
     return 0;
 }
+#endif
 
 typedef struct smoke_cbor_writer {
     uint8_t *data;
