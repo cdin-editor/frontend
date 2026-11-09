@@ -23,6 +23,15 @@ typedef struct cdin_frontend_gui_sdl_render_stats {
 /* Render the editor content area from the committed PaneTree. Each leaf is
  * clipped to its deterministic pixel rectangle; only that leaf's active
  * Runtime view is drawn. The function does not clear or present the target. */
+/* Render the committed model using an optional local-only preview layout.
+ * The override is never written back to the model or sent to Runtime. */
+cdin_frontend_gui_sdl_render_status cdin_frontend_gui_sdl_render_panes_with_layout(
+    SDL_Renderer *renderer,
+    const cdin_frontend_gui_sdl_model *model,
+    const cdin_frontend_gui_sdl_layout *layout_override,
+    const cdin_frontend_gui_sdl_rect *viewport,
+    cdin_frontend_gui_sdl_render_stats *out_stats);
+
 cdin_frontend_gui_sdl_render_status cdin_frontend_gui_sdl_render_panes(
     SDL_Renderer *renderer,
     const cdin_frontend_gui_sdl_model *model,

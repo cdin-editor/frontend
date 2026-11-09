@@ -135,6 +135,7 @@ static const cdin_frontend_gui_sdl_view *find_focused_view(
 static cdin_frontend_gui_sdl_render_status draw_layout(
     SDL_Renderer *renderer,
     const cdin_frontend_gui_sdl_model *model,
+    const cdin_frontend_gui_sdl_layout *layout,
     const cdin_frontend_gui_sdl_rect *viewport,
     cdin_frontend_gui_sdl_render_stats *stats)
 {
@@ -143,7 +144,7 @@ static cdin_frontend_gui_sdl_render_status draw_layout(
     size_t index;
 
     geometry_status = cdin_frontend_gui_sdl_geometry_compute(
-        &model->layout, viewport, rectangles,
+        layout, viewport, rectangles,
         CDIN_FRONTEND_GUI_SDL_LAYOUT_MAX_NODES);
     if (geometry_status == CDIN_FRONTEND_GUI_SDL_GEOMETRY_LIMIT) {
         const cdin_frontend_gui_sdl_view *focused = find_focused_view(model);
@@ -155,11 +156,11 @@ static cdin_frontend_gui_sdl_render_status draw_layout(
         return CDIN_FRONTEND_GUI_SDL_RENDER_INVALID_LAYOUT;
     }
 
-    for (index = 0u; index < model->layout.node_count; ++index) {
-        const cdin_frontend_gui_sdl_layout_node *node = &model->layout.nodes[index];
+    for (index = 0u; index < layout->node_count; ++index) {
+        const cdin_frontend_gui_sdl_layout_node *node = &layout->nodes[index];
         const cdin_frontend_gui_sdl_view *view = NULL;
         const char *view_id = NULL;
-        int focused = index == model->layout.active_leaf_index;
+        int focused = index == layout->active_leaf_index;
         if (node->kind != CDIN_FRONTEND_GUI_SDL_LAYOUT_LEAF) continue;
         if (node->has_active_view != 0) {
             if ((size_t)node->active_view_index >= model->layout.view_count) {
@@ -177,9 +178,10 @@ static cdin_frontend_gui_sdl_render_status draw_layout(
     return CDIN_FRONTEND_GUI_SDL_RENDER_OK;
 }
 
-cdin_frontend_gui_sdl_render_status cdin_frontend_gui_sdl_render_panes(
+cdin_frontend_gui_sdl_render_status cdin_frontend_gui_sdl_render_panes_with_layout(
     SDL_Renderer *renderer,
     const cdin_frontend_gui_sdl_model *model,
+    const cdin_frontend_gui_sdl_layout *layout_override,
     const cdin_frontend_gui_sdl_rect *viewport,
     cdin_frontend_gui_sdl_render_stats *out_stats)
 {
@@ -193,8 +195,10 @@ cdin_frontend_gui_sdl_render_status cdin_frontend_gui_sdl_render_panes(
     }
     memset(&stats, 0, sizeof(stats));
     if (model->has_layout != 0) {
-        if (model->layout.has_root != 0) {
-            status = draw_layout(renderer, model, viewport, &stats);
+        const cdin_frontend_gui_sdl_layout *layout =
+            layout_override != NULL ? layout_override : &model->layout;
+        if (layout->has_root != 0) {
+            status = draw_layout(renderer, model, layout, viewport, &stats);
         } else {
             /* A committed empty PaneTree has no panes; do not invent a
              * viewport for a view that Runtime removed from the layout. */
@@ -209,4 +213,14 @@ cdin_frontend_gui_sdl_render_status cdin_frontend_gui_sdl_render_panes(
     }
     *out_stats = stats;
     return status;
+}
+
+cdin_frontend_gui_sdl_render_status cdin_frontend_gui_sdl_render_panes(
+    SDL_Renderer *renderer,
+    const cdin_frontend_gui_sdl_model *model,
+    const cdin_frontend_gui_sdl_rect *viewport,
+    cdin_frontend_gui_sdl_render_stats *out_stats)
+{
+    return cdin_frontend_gui_sdl_render_panes_with_layout(
+        renderer, model, NULL, viewport, out_stats);
 }

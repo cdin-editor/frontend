@@ -8,6 +8,7 @@ include(CTest)
 option(CDIN_FRONTEND_USE_LOG_STUB "Use the test-only logger ABI shim (never for release)" OFF)
 option(CDIN_FRONTEND_BUILD_UI_TUI "Build the interactive terminal UI adapter" ON)
 option(CDIN_FRONTEND_BUILD_UI_SDL "Build the production GUI-SDL adapter and preview" OFF)
+option(CDIN_FRONTEND_GUI_SDL_ENABLE_PANE_SPLITTER "Allow GUI-SDL to request pane-splitter-resize/1 (keep OFF until CDIN product E2E passes)" OFF)
 option(CDIN_FRONTEND_BUILD_APPS "Build runnable adapter preview applications" ON)
 option(CDIN_FRONTEND_BUILD_UI_HEADLESS "Build the display-free reference recorder/replayer" ON)
 option(CDIN_FRONTEND_BUILD_EXAMPLES "Build small Frontend examples" ON)
@@ -126,6 +127,10 @@ if(CDIN_FRONTEND_BUILD_UI_SDL)
     target_link_libraries(cdin_frontend_ui_gui_sdl
         PUBLIC cdin::frontend_core
         PRIVATE SDL3::SDL3)
+    if(CDIN_FRONTEND_GUI_SDL_ENABLE_PANE_SPLITTER)
+        target_compile_definitions(cdin_frontend_ui_gui_sdl PRIVATE
+            CDIN_FRONTEND_GUI_SDL_ENABLE_PANE_SPLITTER=1)
+    endif()
     cdin_frontend_enable_strict(cdin_frontend_ui_gui_sdl)
 
     if(CDIN_FRONTEND_BUILD_APPS)
