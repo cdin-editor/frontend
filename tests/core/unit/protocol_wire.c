@@ -27,6 +27,30 @@ int main(void)
         0x6au, 'r','e','q','u','e','s','t','_','i','d', 0x01u,
         0x6fu, 'l','a','y','o','u','t','_','r','e','v','i','s','i','o','n', 0x02u
     };
+    static const uint8_t ime_start_payload[] = {
+        0xa3u, 0x62u, 'i','d', 0x01u,
+        0x67u, 'v','i','e','w','_','i','d', 0x64u, 'v','i','e','w',
+        0x70u, 'd','o','c','u','m','e','n','t','_','v','e','r','s','i','o','n', 0x01u
+    };
+    static const uint8_t ime_update_payload[] = {
+        0xa5u, 0x62u, 'i','d', 0x01u,
+        0x67u, 'p','r','e','e','d','i','t', 0x62u, 0xc3u, 0xa9u,
+        0x6bu, 'c','u','r','s','o','r','_','b','y','t','e', 0x02u,
+        0x72u, 's','e','l','e','c','t','i','o','n','_','e','n','d','_','b','y','t','e', 0x02u,
+        0x73u, 's','e','l','e','c','t','i','o','n','_','s','t','a','r','t','_','b','y','t','e', 0x00u
+    };
+    static const uint8_t ime_update_bad_boundary[] = {
+        0xa5u, 0x62u, 'i','d', 0x01u,
+        0x67u, 'p','r','e','e','d','i','t', 0x62u, 0xc3u, 0xa9u,
+        0x6bu, 'c','u','r','s','o','r','_','b','y','t','e', 0x01u,
+        0x72u, 's','e','l','e','c','t','i','o','n','_','e','n','d','_','b','y','t','e', 0x02u,
+        0x73u, 's','e','l','e','c','t','i','o','n','_','s','t','a','r','t','_','b','y','t','e', 0x00u
+    };
+    static const uint8_t ime_cancel_payload[] = {
+        0xa2u, 0x62u, 'i','d', 0x01u,
+        0x66u, 'r','e','a','s','o','n', 0x6du,
+        'i','m','e','_','c','a','n','c','e','l','l','e','d'
+    };
     static const uint8_t ack_payload[] = { 0xa1u, 0x68u, 's','e','q','u','e','n','c','e', 0x01u };
     static const uint8_t invalid_payload[] = { 0xa1u, 0x68u, 's','e','q','u','e','n','c','e', 0x18u, 0x01u };
     static const uint8_t ui_options_v1[] = {
@@ -143,6 +167,19 @@ int main(void)
     assert(cdin_frontend_protocol_validate_payload(
         CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESULT,
         pane_result_payload, sizeof(pane_result_payload)) == CDIN_FRONTEND_PROTOCOL_OK);
+    assert(cdin_frontend_protocol_validate_payload(
+        CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_START,
+        ime_start_payload, sizeof(ime_start_payload)) == CDIN_FRONTEND_PROTOCOL_OK);
+    assert(cdin_frontend_protocol_validate_payload(
+        CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_UPDATE,
+        ime_update_payload, sizeof(ime_update_payload)) == CDIN_FRONTEND_PROTOCOL_OK);
+    assert(cdin_frontend_protocol_validate_payload(
+        CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_UPDATE,
+        ime_update_bad_boundary, sizeof(ime_update_bad_boundary)) ==
+        CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA);
+    assert(cdin_frontend_protocol_validate_payload(
+        CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL,
+        ime_cancel_payload, sizeof(ime_cancel_payload)) == CDIN_FRONTEND_PROTOCOL_OK);
 
     input.major = CDIN_FRONTEND_PROTOCOL_VERSION_MAJOR;
     input.minor = CDIN_FRONTEND_PROTOCOL_VERSION_MINOR;
@@ -164,6 +201,19 @@ int main(void)
     input.name_space = "core";
     assert(cdin_frontend_protocol_encode_frame(&input, frame, sizeof(frame),
         &frame_length, 1024u) == CDIN_FRONTEND_PROTOCOL_UNSUPPORTED);
+    input.type = CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_UPDATE;
+    input.name_space = "ime";
+    input.sequence = 3u;
+    input.payload = ime_update_payload;
+    input.payload_length = sizeof(ime_update_payload);
+    assert(cdin_frontend_protocol_encode_frame(&input, frame, sizeof(frame),
+        &frame_length, 1024u) == CDIN_FRONTEND_PROTOCOL_OK);
+    assert(cdin_frontend_protocol_decode_frame(frame, frame_length, &output, 1024u) ==
+        CDIN_FRONTEND_PROTOCOL_OK);
+    assert(output.type == CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_UPDATE);
+    assert(strcmp(output.name_space, "ime") == 0);
+    assert(cdin_frontend_protocol_message_is_inbound(CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_START));
+    assert(cdin_frontend_protocol_message_is_inbound(CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL));
     input.type = CDIN_FRONTEND_PROTOCOL_ACK;
     input.payload = ack_payload;
     input.payload_length = sizeof(ack_payload);
