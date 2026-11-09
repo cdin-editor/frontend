@@ -73,8 +73,9 @@ int main(void)
         0x6au, 's','e','s','s','i','o','n','_','i','d', 0x07u,
         0x71u, 'd','r','i','v','e','r','_','r','o','l','e','_','e','p','o','c','h', 0x01u,
         0x75u, 'a','c','c','e','p','t','e','d','_','c','a','p','a','b','i','l','i','t','i','e','s',
-        0x82u, 0x65u, 'm','o','u','s','e',
-        0x74u, 'd','r','i','v','e','r','-','r','o','l','e','-','e','v','e','n','t','s','/','1'
+        0x83u, 0x65u, 'm','o','u','s','e',
+        0x74u, 'd','r','i','v','e','r','-','r','o','l','e','-','e','v','e','n','t','s','/','1',
+        0x76u, 'p','a','n','e','-','s','p','l','i','t','t','e','r','-','r','e','s','i','z','e','/','1'
     };
     static const uint8_t snapshot_flush[] = {
         0xa3u,
@@ -153,7 +154,8 @@ int main(void)
     cdin_frontend_session_init(&session, &client, NULL, "tui");
     assert(cdin_frontend_session_set_capabilities(
         &session, CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_MOUSE) |
-                  CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_DRIVER_ROLE_EVENTS)) ==
+                  CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_DRIVER_ROLE_EVENTS) |
+                  CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE)) ==
         CDIN_FRONTEND_PROTOCOL_OK);
     assert(cdin_frontend_session_hello(&session) == CDIN_FRONTEND_PROTOCOL_OK);
     assert(cdin_frontend_session_set_capabilities(&session, 0u) == CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
@@ -167,7 +169,8 @@ int main(void)
     assert(!cdin_frontend_session_is_driver(&session));
     assert(cdin_frontend_session_accepted_capabilities(&session) ==
            (CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_MOUSE) |
-            CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_DRIVER_ROLE_EVENTS)));
+            CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_DRIVER_ROLE_EVENTS) |
+            CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE)));
     assert(cdin_frontend_session_attach(&session, "view-1", "cells", 80u, 24u) ==
            CDIN_FRONTEND_PROTOCOL_OK);
     assert(session.state == CDIN_FRONTEND_SESSION_ATTACH_SENT);
@@ -180,6 +183,32 @@ int main(void)
     assert(cdin_frontend_session_receive(&session, &message) == CDIN_FRONTEND_PROTOCOL_OK);
     assert(session.driver == 1);
     assert(cdin_frontend_session_is_driver(&session));
+    {
+        cdin_frontend_capability_mask accepted = session.accepted_capabilities;
+        session.accepted_capabilities &= ~CDIN_FRONTEND_CAP_BIT(
+            CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE);
+        assert(cdin_frontend_session_send_pane_splitter_resize(
+            &session, 1u, "split-root", 1u, 5000u) ==
+            CDIN_FRONTEND_PROTOCOL_UNSUPPORTED);
+        session.accepted_capabilities = accepted;
+    }
+    output_mark = stream.output_length;
+    assert(cdin_frontend_session_send_pane_splitter_resize(
+        &session, 1u, "split-root", 1u, 5000u) == CDIN_FRONTEND_PROTOCOL_OK);
+    {
+        cdin_frontend_protocol_message_view pane_message;
+        size_t frame_length = stream.output_length - output_mark;
+        uint64_t ratio_bp = 0u;
+        assert(cdin_frontend_protocol_decode_frame(
+            stream.output + output_mark, frame_length, &pane_message, 1024u) ==
+            CDIN_FRONTEND_PROTOCOL_OK);
+        assert(pane_message.type == CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE);
+        assert(strcmp(pane_message.name_space, "pane") == 0);
+        assert(cdin_frontend_protocol_payload_get_uint(
+            pane_message.payload, pane_message.payload_length, "ratio_bp",
+            &ratio_bp) == CDIN_FRONTEND_PROTOCOL_OK);
+        assert(ratio_bp == 5000u);
+    }
 
     assert(cdin_frontend_session_ack(&session, 1u) == CDIN_FRONTEND_PROTOCOL_OK);
     assert(cdin_frontend_session_request_lines(&session, "view-1", 0u, 40u, 0u) ==

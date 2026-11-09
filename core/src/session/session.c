@@ -361,12 +361,14 @@ cdin_frontend_protocol_status cdin_frontend_session_send_pane_splitter_resize(
     cdin_frontend_protocol_status status;
     if (session == NULL || session->client == NULL ||
         session->state != CDIN_FRONTEND_SESSION_ATTACHED || !session->driver ||
-        !cdin_frontend_capability_has(session->accepted_capabilities,
-                                      CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE) ||
         request_id == 0u || layout_revision == 0u ||
         split_id == NULL || split_id[0] == '\0' ||
         ratio_bp < 1000u || ratio_bp > 8999u) {
         return CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT;
+    }
+    if (!cdin_frontend_capability_has(session->accepted_capabilities,
+                                      CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE)) {
+        return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
     }
     split_id_length = strlen(split_id);
     if (split_id_length > 128u ||
