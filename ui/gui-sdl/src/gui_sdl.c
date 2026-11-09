@@ -40,6 +40,8 @@ struct cdin_frontend_gui_sdl {
     int owns_video;
     int mouse_enabled;
     int pane_splitter_enabled;
+    int ime_composition_enabled;
+    int ime_active;
     int quit_requested;
     int splitter_pointer_captured;
     int splitter_drag_active;
@@ -56,8 +58,213 @@ struct cdin_frontend_gui_sdl {
     uint16_t splitter_preview_ratio_bp;
     char splitter_id[CDIN_FRONTEND_GUI_SDL_LAYOUT_MAX_ID_BYTES + 1u];
     cdin_frontend_gui_sdl_layout splitter_preview_layout;
+    uint64_t next_ime_id;
+    uint64_t ime_id;
+    uint64_t ime_document_version;
+    uint64_t ime_cursor_byte;
+    uint64_t ime_selection_start_byte;
+    uint64_t ime_selection_end_byte;
+    char ime_view_id[CDIN_FRONTEND_GUI_SDL_LAYOUT_MAX_ID_BYTES + 1u];
+    uint8_t ime_preedit[4097];
+    size_t ime_preedit_length;
     char title[256];
 };
+
+
+static void clear_ime_composition(cdin_frontend_gui_sdl *gui)
+{
+    if (gui == NULL) return;
+    gui->ime_active = 0;
+    gui->ime_id = 0u;
+    gui->ime_document_version = 0u;
+    gui->ime_cursor_byte = 0u;
+    gui->ime_selection_start_byte = 0u;
+    gui->ime_selection_end_byte = 0u;
+    gui->ime_view_id[0] = '\0';
+    gui->ime_preedit_length = 0u;
+    gui->ime_preedit[0] = '\0';
+}
+
+static int utf8_next_width(const uint8_t *bytes, size_t length,
+                           size_t offset, size_t *out_width)
+{
+    uint8_t first;
+    size_t width;
+    size_t index;
+    uint32_t codepoint;
+    uint32_t minimum;
+    if (bytes == NULL || out_width == NULL || offset >= length) return 0;
+    first = bytes[offset];
+    if (first < 0x80u) { *out_width = 1u; return 1; }
+    if (first >= 0xc2u && first <= 0xdfu) {
+        width = 2u; codepoint = (uint32_t)(first & 0x1fu); minimum = 0x80u;
+    } else if (first >= 0xe0u && first <= 0xefu) {
+        width = 3u; codepoint = (uint32_t)(first & 0x0fu); minimum = 0x800u;
+    } else if (first >= 0xf0u && first <= 0xf4u) {
+        width = 4u; codepoint = (uint32_t)(first & 0x07u); minimum = 0x10000u;
+    } else return 0;
+    if (width > length - offset) return 0;
+    for (index = 1u; index < width; ++index) {
+        uint8_t next = bytes[offset + index];
+        if ((next & 0xc0u) != 0x80u) return 0;
+        codepoint = (codepoint << 6u) | (uint32_t)(next & 0x3fu);
+    }
+    if (codepoint < minimum || codepoint > 0x10ffffu ||
+        (codepoint >= 0xd800u && codepoint <= 0xdfffu)) return 0;
+    *out_width = width;
+    return 1;
+}
+
+static int utf8_codepoints_to_byte_offset(
+    const uint8_t *bytes, size_t length, uint64_t codepoints, uint64_t *out_offset)
+{
+    size_t offset = 0u;
+    uint64_t index = 0u;
+    if ((bytes == NULL && length != 0u) || out_offset == NULL) return 0;
+    while (offset < length && index < codepoints) {
+        size_t width = 0u;
+        if (!utf8_next_width(bytes, length, offset, &width)) return 0;
+        offset += width;
+        index++;
+    }
+    if (index != codepoints) return 0;
+    *out_offset = (uint64_t)offset;
+    return 1;
+}
+
+static cdin_frontend_protocol_status cancel_ime_composition(
+    cdin_frontend_gui_sdl *gui, const char *reason, int notify_backend)
+{
+    cdin_frontend_protocol_status status = CDIN_FRONTEND_PROTOCOL_OK;
+    if (gui == NULL || !gui->ime_active) return status;
+    if (notify_backend && gui_session_attached(gui) &&
+        cdin_frontend_session_is_driver(gui->session)) {
+        status = cdin_frontend_session_ime_cancel(gui->session, gui->ime_id, reason);
+    }
+    clear_ime_composition(gui);
+    return status;
+}
+
+static cdin_frontend_gui_sdl_status update_ime_from_sdl(
+    cdin_frontend_gui_sdl *gui, const SDL_TextEditingEvent *event)
+{
+    const uint8_t *preedit;
+    size_t length;
+    uint64_t start_byte = 0u;
+    uint64_t end_byte = 0u;
+    uint64_t codepoints = 0u;
+    uint64_t start_codepoint;
+    uint64_t selection_codepoints;
+    const cdin_frontend_gui_sdl_view *view;
+    cdin_frontend_protocol_status status;
+    size_t offset = 0u;
+    if (gui == NULL || event == NULL) return CDIN_FRONTEND_GUI_SDL_INVALID_ARGUMENT;
+    if (!gui->ime_composition_enabled) return CDIN_FRONTEND_GUI_SDL_OK;
+    preedit = (const uint8_t *)(event->text != NULL ? event->text : "");
+    length = event->text != NULL ? SDL_strlen(event->text) : 0u;
+    if (length > 4096u) return CDIN_FRONTEND_GUI_SDL_LIMIT_EXCEEDED;
+    while (offset < length) {
+        size_t width = 0u;
+        if (!utf8_next_width(preedit, length, offset, &width))
+            return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+        offset += width;
+        codepoints++;
+    }
+    /* SDL uses UTF-8 character positions; -1 means the platform did not
+     * provide a selection. Treat that as a collapsed caret at the end. */
+    if (event->start < -1 || event->length < -1)
+        return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+    if (event->start == -1 || event->length == -1) {
+        start_codepoint = codepoints;
+        selection_codepoints = 0u;
+    } else {
+        start_codepoint = (uint64_t)event->start;
+        selection_codepoints = (uint64_t)event->length;
+    }
+    if (start_codepoint > codepoints ||
+        selection_codepoints > codepoints - start_codepoint ||
+        !utf8_codepoints_to_byte_offset(preedit, length, start_codepoint, &start_byte) ||
+        !utf8_codepoints_to_byte_offset(preedit, length,
+            start_codepoint + selection_codepoints, &end_byte)) {
+        return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+    }
+    view = cdin_frontend_gui_sdl_model_focused_view(&gui->model);
+    if (view == NULL || view->semantic.visible == 0 ||
+        view->semantic.version == 0u || view->semantic.view_id[0] == '\0') {
+        if (gui->ime_active) {
+            (void)cancel_ime_composition(gui, "view_changed", 1);
+        }
+        return CDIN_FRONTEND_GUI_SDL_OK;
+    }
+    if (gui->ime_active &&
+        (strcmp(gui->ime_view_id, view->semantic.view_id) != 0 ||
+         gui->ime_document_version != view->semantic.version)) {
+        status = cancel_ime_composition(gui, "view_changed", 1);
+        if (status != CDIN_FRONTEND_PROTOCOL_OK) return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+    }
+    if (!gui->ime_active) {
+        uint64_t composition_id = gui->next_ime_id;
+        size_t view_length = strlen(view->semantic.view_id);
+        if (composition_id == 0u) return CDIN_FRONTEND_GUI_SDL_LIMIT_EXCEEDED;
+        status = cdin_frontend_session_ime_start(
+            gui->session, composition_id, view->semantic.view_id,
+            view->semantic.version);
+        if (status != CDIN_FRONTEND_PROTOCOL_OK)
+            return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+        gui->next_ime_id = composition_id == UINT64_MAX ? 0u : composition_id + 1u;
+        gui->ime_active = 1;
+        gui->ime_id = composition_id;
+        gui->ime_document_version = view->semantic.version;
+        memcpy(gui->ime_view_id, view->semantic.view_id, view_length + 1u);
+    }
+    status = cdin_frontend_session_ime_update(
+        gui->session, gui->ime_id, preedit, length, start_byte, start_byte, end_byte);
+    if (status != CDIN_FRONTEND_PROTOCOL_OK) {
+        (void)cancel_ime_composition(gui, "ime_cancelled", 1);
+        return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+    }
+    if (length != 0u) memcpy(gui->ime_preedit, preedit, length);
+    gui->ime_preedit[length] = '\0';
+    gui->ime_preedit_length = length;
+    gui->ime_cursor_byte = start_byte;
+    gui->ime_selection_start_byte = start_byte;
+    gui->ime_selection_end_byte = end_byte;
+    return CDIN_FRONTEND_GUI_SDL_OK;
+}
+
+static int ime_target_is_current(const cdin_frontend_gui_sdl *gui)
+{
+    const cdin_frontend_gui_sdl_view *view;
+    if (gui == NULL || !gui->ime_active) return 1;
+    if (!cdin_frontend_session_is_driver(gui->session)) return 0;
+    view = cdin_frontend_gui_sdl_model_find_view_const(&gui->model, gui->ime_view_id);
+    return view != NULL && view->semantic.visible != 0 &&
+           view->semantic.focused != 0 &&
+           view->semantic.version == gui->ime_document_version;
+}
+
+#ifdef CDIN_FRONTEND_GUI_SDL_TESTING
+int cdin_frontend_gui_sdl_test_ime_active(const cdin_frontend_gui_sdl *gui)
+{
+    return gui != NULL && gui->ime_active;
+}
+uint64_t cdin_frontend_gui_sdl_test_ime_id(const cdin_frontend_gui_sdl *gui)
+{
+    return gui != NULL ? gui->ime_id : 0u;
+}
+size_t cdin_frontend_gui_sdl_test_ime_preedit_length(const cdin_frontend_gui_sdl *gui)
+{
+    return gui != NULL ? gui->ime_preedit_length : 0u;
+}
+uint64_t cdin_frontend_gui_sdl_test_ime_cursor_byte(const cdin_frontend_gui_sdl *gui)
+{
+    return gui != NULL ? gui->ime_cursor_byte : 0u;
+}
+uint64_t cdin_frontend_gui_sdl_test_ime_selection_end_byte(const cdin_frontend_gui_sdl *gui)
+{
+    return gui != NULL ? gui->ime_selection_end_byte : 0u;
+}
+#endif
 
 static cdin_frontend_gui_sdl_status map_model_status(
     cdin_frontend_gui_sdl_model_status status)
@@ -127,6 +334,9 @@ cdin_frontend_capability_mask cdin_frontend_gui_sdl_supported_capabilities(void)
 #if defined(CDIN_FRONTEND_GUI_SDL_ENABLE_PANE_SPLITTER)
     supported |= CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE);
 #endif
+#if defined(CDIN_FRONTEND_GUI_SDL_ENABLE_IME_COMPOSITION) || defined(CDIN_FRONTEND_GUI_SDL_TESTING)
+    supported |= CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_IME_COMPOSITION);
+#endif
     return supported;
 }
 
@@ -157,6 +367,10 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_create(
         cdin_frontend_session_accepted_capabilities(config->session),
         CDIN_FRONTEND_CAP_MOUSE);
     gui->next_splitter_request_id = 1u;
+    gui->next_ime_id = 1u;
+    gui->ime_composition_enabled = cdin_frontend_capability_has(
+        cdin_frontend_session_accepted_capabilities(config->session),
+        CDIN_FRONTEND_CAP_IME_COMPOSITION);
 #if defined(CDIN_FRONTEND_GUI_SDL_ENABLE_PANE_SPLITTER)
     gui->pane_splitter_enabled = cdin_frontend_capability_has(
         cdin_frontend_session_accepted_capabilities(config->session),
@@ -630,10 +844,14 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
     if (gui == NULL || out_quit_requested == NULL) {
         return CDIN_FRONTEND_GUI_SDL_INVALID_ARGUMENT;
     }
-    if (!gui_session_attached(gui)) cancel_splitter_interaction(gui);
+    if (!gui_session_attached(gui)) {
+        cancel_splitter_interaction(gui);
+        clear_ime_composition(gui);
+    }
     while (SDL_PollEvent(&event)) {
         if (!gui_session_attached(gui)) {
             cancel_splitter_interaction(gui);
+            clear_ime_composition(gui);
             /* Drop queued input for a detached Session, but preserve the
              * native close path so the Composition Root can still exit. */
             if (event.type == SDL_EVENT_QUIT) {
@@ -647,18 +865,28 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
         switch (event.type) {
             case SDL_EVENT_QUIT:
                 cancel_splitter_interaction(gui);
+                if (gui->ime_active)
+                    (void)cancel_ime_composition(gui, "ime_cancelled", 1);
                 gui->quit_requested = 1;
                 break;
             case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
                 if (event_matches_window(gui, event.window.windowID)) {
                     cancel_splitter_interaction(gui);
+                    if (gui->ime_active)
+                        (void)cancel_ime_composition(gui, "ime_cancelled", 1);
                     gui->quit_requested = 1;
                 }
                 break;
             case SDL_EVENT_KEY_DOWN:
                 if (!event_matches_window(gui, event.key.windowID)) break;
-                if (event.key.key == SDLK_ESCAPE && !event.key.repeat &&
-                    gui->splitter_drag_active) cancel_splitter_interaction(gui);
+                if (event.key.key == SDLK_ESCAPE && !event.key.repeat) {
+                    if (gui->splitter_drag_active) cancel_splitter_interaction(gui);
+                    if (gui->ime_active &&
+                        cancel_ime_composition(gui, "ime_cancelled", 1) !=
+                            CDIN_FRONTEND_PROTOCOL_OK) {
+                        return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+                    }
+                }
                 if (send_key_event(gui, &event.key,
                                    event.key.repeat ? "repeat" : "press") !=
                     CDIN_FRONTEND_GUI_SDL_OK) {
@@ -751,15 +979,33 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
                 }
                 break;
             }
+            case SDL_EVENT_TEXT_EDITING:
+                if (!event_matches_window(gui, event.edit.windowID)) break;
+                if (update_ime_from_sdl(gui, &event.edit) !=
+                    CDIN_FRONTEND_GUI_SDL_OK) {
+                    return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+                }
+                break;
             case SDL_EVENT_TEXT_INPUT:
                 if (!event_matches_window(gui, event.text.windowID)) break;
                 if (event.text.text != NULL && event.text.text[0] != '\0') {
                     cdin_frontend_protocol_status status =
-                        cdin_frontend_session_send_text(
+                        gui->ime_active
+                        ? cdin_frontend_session_ime_commit(
+                            gui->session, gui->ime_id,
+                            (const uint8_t *)event.text.text,
+                            SDL_strlen(event.text.text))
+                        : cdin_frontend_session_send_text(
                             gui->session,
                             (const uint8_t *)event.text.text,
                             SDL_strlen(event.text.text));
                     if (status != CDIN_FRONTEND_PROTOCOL_OK) {
+                        return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+                    }
+                    if (gui->ime_active) clear_ime_composition(gui);
+                } else if (gui->ime_active) {
+                    if (cancel_ime_composition(gui, "ime_cancelled", 1) !=
+                        CDIN_FRONTEND_PROTOCOL_OK) {
                         return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
                     }
                 }
@@ -787,14 +1033,29 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
                 break;
             case SDL_EVENT_FINGER_CANCELED:
             case SDL_EVENT_MOUSE_REMOVED:
+                cancel_splitter_interaction(gui);
+                break;
             case SDL_EVENT_WINDOW_HIDDEN:
+                if (event_matches_window(gui, event.window.windowID) &&
+                    gui->ime_active &&
+                    cancel_ime_composition(gui, "focus_lost", 1) !=
+                        CDIN_FRONTEND_PROTOCOL_OK) {
+                    return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+                }
                 cancel_splitter_interaction(gui);
                 break;
             case SDL_EVENT_WINDOW_FOCUS_GAINED:
             case SDL_EVENT_WINDOW_FOCUS_LOST: {
                 if (!event_matches_window(gui, event.window.windowID)) break;
                 int focused = event.type == SDL_EVENT_WINDOW_FOCUS_GAINED;
-                if (!focused) cancel_splitter_interaction(gui);
+                if (!focused) {
+                    cancel_splitter_interaction(gui);
+                    if (gui->ime_active &&
+                        cancel_ime_composition(gui, "focus_lost", 1) !=
+                            CDIN_FRONTEND_PROTOCOL_OK) {
+                        return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+                    }
+                }
                 if (cdin_frontend_session_focus(gui->session, focused) !=
                     CDIN_FRONTEND_PROTOCOL_OK) {
                     return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
@@ -910,12 +1171,28 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_apply_message(
     if (message->type == CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESULT) {
         return apply_splitter_result(gui, message);
     }
+    if (message->name_space != NULL && strcmp(message->name_space, "ime") == 0) {
+        uint64_t composition_id = 0u;
+        if (message->type != CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL ||
+            !cdin_frontend_capability_has(
+                cdin_frontend_session_accepted_capabilities(gui->session),
+                CDIN_FRONTEND_CAP_IME_COMPOSITION) ||
+            cdin_frontend_protocol_payload_get_uint(
+                message->payload, message->payload_length, "id",
+                &composition_id) != CDIN_FRONTEND_PROTOCOL_OK) {
+            return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+        }
+        if (gui->ime_active && gui->ime_id == composition_id)
+            clear_ime_composition(gui);
+        return CDIN_FRONTEND_GUI_SDL_OK;
+    }
     if (message->name_space == NULL || strcmp(message->name_space, "core") != 0) {
         return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
     }
     if (message->type == CDIN_FRONTEND_PROTOCOL_DRIVER_ROLE_CHANGED &&
         !cdin_frontend_session_is_driver(gui->session)) {
         cancel_splitter_interaction(gui);
+        clear_ime_composition(gui);
     }
     model_status = cdin_frontend_gui_sdl_model_apply(
         &gui->model, message, &action);
@@ -934,6 +1211,14 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_apply_message(
     }
     if (model_status != CDIN_FRONTEND_GUI_SDL_MODEL_OK) {
         return map_model_status(model_status);
+    }
+    if (message->type == CDIN_FRONTEND_PROTOCOL_UI_FLUSH && gui->ime_active &&
+        !ime_target_is_current(gui)) {
+        if (cdin_frontend_session_is_driver(gui->session)) {
+            (void)cancel_ime_composition(gui, "view_changed", 1);
+        } else {
+            clear_ime_composition(gui);
+        }
     }
     if (message->type == CDIN_FRONTEND_PROTOCOL_UI_FLUSH) {
         protocol_status = cdin_frontend_session_ack(
@@ -1010,10 +1295,24 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_render(
         (gui->model.mode[0] != '\0' ? gui->model.mode : "Connected"));
 
     gui_content_viewport(gui, &content);
-    render_status = cdin_frontend_gui_sdl_render_panes_with_layout(
-        gui->renderer, &gui->model,
-        gui->splitter_preview_active ? &gui->splitter_preview_layout : NULL,
-        &content, &stats);
+    if (gui->ime_active) {
+        cdin_frontend_gui_sdl_ime_overlay overlay;
+        overlay.view_id = gui->ime_view_id;
+        overlay.preedit = gui->ime_preedit;
+        overlay.preedit_length = gui->ime_preedit_length;
+        overlay.cursor_byte = gui->ime_cursor_byte;
+        overlay.selection_start_byte = gui->ime_selection_start_byte;
+        overlay.selection_end_byte = gui->ime_selection_end_byte;
+        render_status = cdin_frontend_gui_sdl_render_panes_with_layout_and_ime(
+            gui->renderer, &gui->model,
+            gui->splitter_preview_active ? &gui->splitter_preview_layout : NULL,
+            &overlay, &content, &stats);
+    } else {
+        render_status = cdin_frontend_gui_sdl_render_panes_with_layout(
+            gui->renderer, &gui->model,
+            gui->splitter_preview_active ? &gui->splitter_preview_layout : NULL,
+            NULL, &content, &stats);
+    }
     if (render_status == CDIN_FRONTEND_GUI_SDL_RENDER_SDL_ERROR) {
         log_sdl_error(gui, "render PaneTree");
         return CDIN_FRONTEND_GUI_SDL_SDL_ERROR;
@@ -1037,6 +1336,8 @@ void cdin_frontend_gui_sdl_destroy(cdin_frontend_gui_sdl *gui)
 {
     if (gui == NULL) return;
     cancel_splitter_interaction(gui);
+    if (gui->ime_active)
+        (void)cancel_ime_composition(gui, "ime_cancelled", 1);
     if (gui->window != NULL) SDL_StopTextInput(gui->window);
     if (gui->renderer != NULL) SDL_DestroyRenderer(gui->renderer);
     if (gui->window != NULL) SDL_DestroyWindow(gui->window);
