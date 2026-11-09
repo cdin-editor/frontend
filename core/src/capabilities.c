@@ -5,7 +5,7 @@
 
 static const char *const capability_names[CDIN_FRONTEND_CAP_COUNT] = {
     "clipboard", "dialogs", "canvas", "mouse", "hit_regions",
-    "rich_text", "images", "truecolor", "ime", "driver-role-events/1"
+    "rich_text", "images", "truecolor", "ime", "driver-role-events/1", "pane-splitter-resize/1"
 };
 
 static int valid_utf8_name(const unsigned char *bytes, size_t length)
