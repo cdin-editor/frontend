@@ -64,7 +64,8 @@ cdin_frontend_protocol_status cdin_frontend_client_send_namespaced(
     if (client == NULL || !client->initialized || name_space == NULL || payload == NULL || payload_length == 0u) {
         return CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT;
     }
-    if (!cdin_frontend_protocol_message_is_inbound(type)) {
+    if (!cdin_frontend_protocol_message_is_inbound(type) &&
+        type != CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL) {
         log_failure(client, "outbound message direction", CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA);
         return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
     }
