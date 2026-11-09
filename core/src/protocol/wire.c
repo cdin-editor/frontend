@@ -847,7 +847,7 @@ cdin_frontend_protocol_status cdin_frontend_protocol_validate_payload(
         status = cdin_frontend_protocol_payload_get_uint(
             payload, payload_length, "composition_id", &composition_id);
         if (status == CDIN_FRONTEND_PROTOCOL_OK) {
-            char committed_text[4097];
+            char committed_text[16385];
             if (composition_id == 0u ||
                 cdin_frontend_protocol_payload_get_text(
                     payload, payload_length, "text", committed_text, sizeof(committed_text),
