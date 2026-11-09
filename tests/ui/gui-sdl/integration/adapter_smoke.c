@@ -1,4 +1,7 @@
 #include "cdin/frontend/ui/gui_sdl/gui_sdl.h"
+#ifdef CDIN_FRONTEND_GUI_SDL_TESTING
+#include "gui_sdl_test.h"
+#endif
 
 #include <SDL3/SDL.h>
 
@@ -655,6 +658,9 @@ int main(void)
     cdin_frontend_session cell_session;
     int quit_requested = 0;
 
+#ifdef CDIN_FRONTEND_GUI_SDL_TESTING
+    cdin_frontend_gui_sdl_test_set_capture_available(1);
+#endif
     trace_step("begin");
     memset(&stream, 0, sizeof(stream));
     memset(&io, 0, sizeof(io));
