@@ -68,7 +68,13 @@ hit-test API added in [Frontend PR #29](https://github.com/cdin-editor/frontend/
 That API returns a parsed layout-node index for a configurable pixel hit
 radius, including nested divider intersections. Callers resolve the stable
 semantic split ID from `layout.nodes[index].id`; the hit-test itself does not
-mutate Runtime state or send resize requests. Drag/commit remains gated by [Spec issue #20](https://github.com/cdin-editor/spec/issues/20).
+mutate Runtime state or send resize requests. ADR-0024 now accepts the optional `pane-splitter-resize/1` contract.
+GUI-SDL implements pointer capture, local preview and the typed release request;
+its committed model remains unchanged until the matching result and atomic
+snapshot/flush are applied. The capability is gated by
+`CDIN_FRONTEND_GUI_SDL_ENABLE_PANE_SPLITTER` (default `OFF`) until CDIN pins
+compatible immutable releases and passes the live product matrix in issue
+[CDIN #118](https://github.com/cdin-editor/cdin/issues/118).
 
 ## Text pipeline design
 
@@ -144,8 +150,10 @@ Frontend does not invent a new mouse action or mutate Runtime-owned ratios
 locally.
 
 The adapter advertises the mouse capability and forwards negotiated pointer
-and wheel input. It does not advertise IME, dialogs, clipboard-provider,
-images, canvas or rich-text capabilities. SDL text composition/IME, full
+and wheel input. It advertises `pane-splitter-resize/1` only when the explicit
+build option is enabled; normal package builds keep that option off. It does
+not advertise IME, dialogs, clipboard-provider, images, canvas or rich-text
+capabilities. SDL text composition/IME, full
 grapheme mapping, fallback fonts, shaping, bidi and Persian/Arabic rendering
 remain open. Selection messages are currently not cached or rendered; Runtime
 remains the owner of selection semantics.
