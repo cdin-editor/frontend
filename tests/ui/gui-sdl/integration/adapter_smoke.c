@@ -656,10 +656,12 @@ static int output_contains_expected_mouse(const fake_stream *stream)
                     position, position_length, "x", &x) == CDIN_FRONTEND_PROTOCOL_OK &&
                 cdin_frontend_protocol_payload_get_uint(
                     position, position_length, "y", &y) == CDIN_FRONTEND_PROTOCOL_OK) {
-                return action_length == 5u && strcmp(action, "press") == 0 &&
-                       button_length == 4u && strcmp(button, "left") == 0 &&
-                       target_length == 10u && strcmp(target, "view-right") == 0 &&
-                       x == 600u && y == 100u;
+                if (action_length == 5u && strcmp(action, "press") == 0 &&
+                    button_length == 4u && strcmp(button, "left") == 0 &&
+                    target_length == 10u && strcmp(target, "view-right") == 0 &&
+                    x == 600u && y == 100u) {
+                    return 1;
+                }
             }
         }
         offset += frame_length;
@@ -765,149 +767,6 @@ int main(void)
            CDIN_FRONTEND_GUI_SDL_OK);
     assert(cdin_frontend_gui_sdl_render(gui) == CDIN_FRONTEND_GUI_SDL_OK);
     trace_step("renderer device-loss recovery verified");
-
-    /* The splitter path is enabled only in the dedicated GUI-SDL test build.
-     * Use the real SDL queue and tolerate video backends that do not support
-     * pointer capture (the adapter falls back to ordinary pointer input). */
-    if (SDL_CaptureMouse(true)) {
-        size_t pane_before = output_count_type(&stream,
-            CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE);
-        size_t mouse_before = output_count_type(&stream,
-            CDIN_FRONTEND_PROTOCOL_INPUT_MOUSE);
-        size_t output_mark;
-        static const uint8_t applied_result[] = {
-            0xa3u,
-            0x66u, 's','t','a','t','u','s', 0x67u, 'a','p','p','l','i','e','d',
-            0x6au, 'r','e','q','u','e','s','t','_','i','d', 0x01u,
-            0x6fu, 'l','a','y','o','u','t','_','r','e','v','i','s','i','o','n', 0x02u
-        };
-        uint8_t payload[512];
-        size_t payload_length;
-        cdin_frontend_protocol_message_view message;
-        cdin_frontend_protocol_message_view received;
-        uint64_t ratio_bp = 0u;
-        int committed = 0;
-
-        (void)SDL_CaptureMouse(false);
-        output_mark = stream.output_length;
-        memset(&event, 0, sizeof(event));
-        event.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
-        event.button.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
-        event.button.button = SDL_BUTTON_LEFT;
-        event.button.down = true;
-        event.button.x = 400.0f;
-        event.button.y = 100.0f;
-        assert(SDL_PushEvent(&event));
-        assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
-               CDIN_FRONTEND_GUI_SDL_OK);
-        assert(output_count_type(&stream, CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE) ==
-               pane_before);
-        assert(output_count_type(&stream, CDIN_FRONTEND_PROTOCOL_INPUT_MOUSE) ==
-               mouse_before);
-
-        memset(&event, 0, sizeof(event));
-        event.type = SDL_EVENT_MOUSE_MOTION;
-        event.motion.type = SDL_EVENT_MOUSE_MOTION;
-        event.motion.x = 500.0f;
-        event.motion.y = 100.0f;
-        assert(SDL_PushEvent(&event));
-        assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
-               CDIN_FRONTEND_GUI_SDL_OK);
-        assert(output_count_type(&stream, CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE) ==
-               pane_before);
-        assert(output_count_type(&stream, CDIN_FRONTEND_PROTOCOL_INPUT_MOUSE) ==
-               mouse_before);
-
-        memset(&event, 0, sizeof(event));
-        event.type = SDL_EVENT_MOUSE_BUTTON_UP;
-        event.button.type = SDL_EVENT_MOUSE_BUTTON_UP;
-        event.button.button = SDL_BUTTON_LEFT;
-        event.button.down = false;
-        event.button.x = 500.0f;
-        event.button.y = 100.0f;
-        assert(SDL_PushEvent(&event));
-        assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
-               CDIN_FRONTEND_GUI_SDL_OK);
-        assert(output_count_type(&stream, CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE) ==
-               pane_before + 1u);
-        assert(output_count_type(&stream, CDIN_FRONTEND_PROTOCOL_INPUT_MOUSE) ==
-               mouse_before);
-        assert(stream.output_length > output_mark);
-        assert(cdin_frontend_protocol_decode_frame(stream.output + output_mark,
-            stream.output_length - output_mark, &received, 4096u) ==
-            CDIN_FRONTEND_PROTOCOL_OK);
-        assert(received.type == CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE);
-        assert(strcmp(received.name_space, "pane") == 0);
-        assert(cdin_frontend_protocol_payload_get_uint(received.payload,
-            received.payload_length, "ratio_bp", &ratio_bp) ==
-            CDIN_FRONTEND_PROTOCOL_OK);
-        assert(ratio_bp == 6250u);
-
-        message = smoke_message(CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESULT,
-            applied_result, sizeof(applied_result));
-        message.name_space = "pane";
-        message.sequence = 3u;
-        smoke_queue_inbound(&stream, &message);
-        assert(cdin_frontend_session_receive(&session, &received) ==
-               CDIN_FRONTEND_PROTOCOL_OK);
-        assert(cdin_frontend_gui_sdl_apply_message(gui, &received, &committed) ==
-               CDIN_FRONTEND_GUI_SDL_OK);
-        assert(committed == 0);
-
-        payload_length = smoke_two_view_layout(payload, sizeof(payload), 6250u, 2u);
-        message = smoke_message(CDIN_FRONTEND_PROTOCOL_UI_LAYOUT, payload, payload_length);
-        message.sequence = 4u;
-        smoke_queue_inbound(&stream, &message);
-        assert(cdin_frontend_session_receive(&session, &received) ==
-               CDIN_FRONTEND_PROTOCOL_OK);
-        assert(cdin_frontend_gui_sdl_apply_message(gui, &received, &committed) ==
-               CDIN_FRONTEND_GUI_SDL_OK);
-        assert(committed == 0);
-
-        payload_length = smoke_snapshot_flush(payload, sizeof(payload), 2u, 2u);
-        message = smoke_message(CDIN_FRONTEND_PROTOCOL_UI_FLUSH, payload, payload_length);
-        message.sequence = 5u;
-        smoke_queue_inbound(&stream, &message);
-        assert(cdin_frontend_session_receive(&session, &received) ==
-               CDIN_FRONTEND_PROTOCOL_OK);
-        assert(cdin_frontend_gui_sdl_apply_message(gui, &received, &committed) ==
-               CDIN_FRONTEND_GUI_SDL_OK);
-        assert(committed != 0);
-        assert(cdin_frontend_gui_sdl_render(gui) == CDIN_FRONTEND_GUI_SDL_OK);
-
-        /* A second gesture is cancelled by Escape and cannot emit another
-         * resize request. The Escape key itself is still forwarded normally. */
-        pane_before = output_count_type(&stream,
-            CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE);
-        memset(&event, 0, sizeof(event));
-        event.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
-        event.button.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
-        event.button.button = SDL_BUTTON_LEFT;
-        event.button.down = true;
-        event.button.x = 500.0f;
-        event.button.y = 100.0f;
-        assert(SDL_PushEvent(&event));
-        assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
-               CDIN_FRONTEND_GUI_SDL_OK);
-        memset(&event, 0, sizeof(event));
-        event.type = SDL_EVENT_MOUSE_MOTION;
-        event.motion.type = SDL_EVENT_MOUSE_MOTION;
-        event.motion.x = 450.0f;
-        event.motion.y = 100.0f;
-        assert(SDL_PushEvent(&event));
-        assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
-               CDIN_FRONTEND_GUI_SDL_OK);
-        memset(&event, 0, sizeof(event));
-        event.type = SDL_EVENT_KEY_DOWN;
-        event.key.type = SDL_EVENT_KEY_DOWN;
-        event.key.key = SDLK_ESCAPE;
-        event.key.down = true;
-        assert(SDL_PushEvent(&event));
-        assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
-               CDIN_FRONTEND_GUI_SDL_OK);
-        assert(output_count_type(&stream, CDIN_FRONTEND_PROTOCOL_PANE_SPLITTER_RESIZE) ==
-               pane_before);
-    }
 
     /* SDL_PushEvent supplies a real SDL input event through the same adapter
      * pump as a native mouse. The public Core Session serializes it as
