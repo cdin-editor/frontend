@@ -963,6 +963,8 @@ int main(void)
     {
         size_t cancels_before = output_count_type(
             &stream, CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL);
+        size_t keys_before_escape = output_count_type(
+            &stream, CDIN_FRONTEND_PROTOCOL_INPUT_KEY);
         cdin_frontend_protocol_message_view output_message;
         char reason[32];
         size_t reason_length = 0u;
@@ -986,9 +988,17 @@ int main(void)
         event.key.key = SDLK_ESCAPE;
         event.key.down = true;
         assert(SDL_PushEvent(&event));
+        memset(&event, 0, sizeof(event));
+        event.type = SDL_EVENT_KEY_UP;
+        event.key.type = SDL_EVENT_KEY_UP;
+        event.key.key = SDLK_ESCAPE;
+        event.key.down = false;
+        assert(SDL_PushEvent(&event));
         assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
                CDIN_FRONTEND_GUI_SDL_OK);
         assert(!cdin_frontend_gui_sdl_test_ime_active(gui));
+        assert(output_count_type(&stream, CDIN_FRONTEND_PROTOCOL_INPUT_KEY) ==
+               keys_before_escape);
         assert(output_count_type(&stream, CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL) ==
                cancels_before + 1u);
         assert(output_find_message(&stream, CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL,
