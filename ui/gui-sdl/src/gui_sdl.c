@@ -42,6 +42,7 @@ struct cdin_frontend_gui_sdl {
     int pane_splitter_enabled;
     int ime_composition_enabled;
     int ime_active;
+    int ime_escape_key_suppressed;
     int quit_requested;
     int splitter_pointer_captured;
     int splitter_drag_active;
@@ -920,10 +921,15 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
                 if (!event_matches_window(gui, event.key.windowID)) break;
                 if (event.key.key == SDLK_ESCAPE && !event.key.repeat) {
                     if (gui->splitter_drag_active) cancel_splitter_interaction(gui);
-                    if (gui->ime_active &&
-                        cancel_ime_composition(gui, "ime_cancelled", 1) !=
+                    if (gui->ime_active) {
+                        if (cancel_ime_composition(gui, "ime_cancelled", 1) !=
                             CDIN_FRONTEND_PROTOCOL_OK) {
-                        return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+                            return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
+                        }
+                        /* Escape belongs to the native IME cancellation, not
+                         * to Runtime's keymap. Suppress its matching key-up too. */
+                        gui->ime_escape_key_suppressed = 1;
+                        break;
                     }
                 }
                 if (send_key_event(gui, &event.key,
@@ -934,6 +940,11 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_pump_events(
                 break;
             case SDL_EVENT_KEY_UP:
                 if (!event_matches_window(gui, event.key.windowID)) break;
+                if (event.key.key == SDLK_ESCAPE &&
+                    gui->ime_escape_key_suppressed) {
+                    gui->ime_escape_key_suppressed = 0;
+                    break;
+                }
                 if (send_key_event(gui, &event.key, "release") !=
                     CDIN_FRONTEND_GUI_SDL_OK) {
                     return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
