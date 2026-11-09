@@ -97,6 +97,8 @@ cdin_frontend_protocol_status cdin_frontend_session_send_mouse(
     uint32_t y,
     int has_position);
 /* ADR-0023: negotiated IME lifecycle. Offsets are UTF-8 byte offsets. */
+/* Returns the next usable Client TX sequence for a composition ID, or zero
+ * when the connection sequence is unavailable or exhausted. */
 uint64_t cdin_frontend_session_next_ime_composition_id(
     const cdin_frontend_session *session);
 cdin_frontend_protocol_status cdin_frontend_session_ime_start(
