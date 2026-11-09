@@ -184,6 +184,14 @@ int main(void)
     assert(session.driver == 1);
     assert(cdin_frontend_session_is_driver(&session));
     {
+        int was_driver = session.driver;
+        session.driver = 0;
+        assert(cdin_frontend_session_send_pane_splitter_resize(
+            &session, 99u, "split-root", 1u, 5000u) ==
+            CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
+        session.driver = was_driver;
+    }
+    {
         cdin_frontend_capability_mask accepted = session.accepted_capabilities;
         session.accepted_capabilities &= ~CDIN_FRONTEND_CAP_BIT(
             CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE);
