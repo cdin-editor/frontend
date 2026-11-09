@@ -1187,10 +1187,11 @@ cdin_frontend_protocol_status cdin_frontend_protocol_encode_frame(
         (!is_pane_message(message->type) && !is_ime_message(message->type) &&
          strcmp(message->name_space, "core") != 0)) return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
     if (message->sequence == 0u) return CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT;
-    if (cdin_frontend_protocol_validate_payload(message->type,
-                                                 message->payload,
-                                                 message->payload_length) != CDIN_FRONTEND_PROTOCOL_OK) {
-        return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
+    status = cdin_frontend_protocol_validate_payload(
+        message->type, message->payload, message->payload_length);
+    if (status != CDIN_FRONTEND_PROTOCOL_OK) {
+        return status == CDIN_FRONTEND_PROTOCOL_LIMIT_EXCEEDED
+            ? status : CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
     }
     type_name = cdin_frontend_protocol_message_name(message->type);
     if (strcmp(type_name, "unknown") == 0) return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
@@ -1322,9 +1323,11 @@ cdin_frontend_protocol_status cdin_frontend_protocol_decode_frame(
     if ((is_pane_message(type) != 0) != (pane_namespace != 0) ||
         (is_ime_message(type) != 0) != (ime_namespace != 0)) return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
     status = get_envelope_value(frame + 4u, body_length, "payload", &payload, &value_length);
-    if (status != CDIN_FRONTEND_PROTOCOL_OK ||
-        cdin_frontend_protocol_validate_payload(type, payload, value_length) != CDIN_FRONTEND_PROTOCOL_OK) {
-        return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
+    if (status != CDIN_FRONTEND_PROTOCOL_OK) return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
+    status = cdin_frontend_protocol_validate_payload(type, payload, value_length);
+    if (status != CDIN_FRONTEND_PROTOCOL_OK) {
+        return status == CDIN_FRONTEND_PROTOCOL_LIMIT_EXCEEDED
+            ? status : CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
     }
     out_message->major = major > UINT32_MAX ? UINT32_MAX : (uint32_t)major;
     out_message->minor = minor > UINT32_MAX ? UINT32_MAX : (uint32_t)minor;
