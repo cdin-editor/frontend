@@ -240,6 +240,35 @@ static size_t smoke_two_view_layout(
 }
 
 #ifdef CDIN_FRONTEND_GUI_SDL_TESTING
+static size_t smoke_two_view_layout_active(
+    uint8_t *output, size_t capacity, uint64_t ratio_bp,
+    uint64_t revision, const char *active_leaf)
+{
+    smoke_cbor_writer writer = { output, capacity, 0u };
+    smoke_cbor_map(&writer, 2u);
+    smoke_cbor_text(&writer, "layout");
+    smoke_cbor_map(&writer, 2u);
+    smoke_cbor_text(&writer, "root");
+    smoke_cbor_map(&writer, 6u);
+    smoke_cbor_text(&writer, "id");
+    smoke_cbor_text(&writer, "split-main");
+    smoke_cbor_text(&writer, "axis");
+    smoke_cbor_text(&writer, "horizontal");
+    smoke_cbor_text(&writer, "kind");
+    smoke_cbor_text(&writer, "split");
+    smoke_cbor_text(&writer, "first");
+    smoke_cbor_leaf(&writer, "leaf-left", "view-left");
+    smoke_cbor_text(&writer, "second");
+    smoke_cbor_leaf(&writer, "leaf-right", "view-right");
+    smoke_cbor_text(&writer, "ratio_bp");
+    smoke_cbor_uint(&writer, ratio_bp);
+    smoke_cbor_text(&writer, "active_leaf");
+    smoke_cbor_text(&writer, active_leaf);
+    smoke_cbor_text(&writer, "revision");
+    smoke_cbor_uint(&writer, revision);
+    return writer.length;
+}
+
 static size_t smoke_ime_cancel_payload(
     uint8_t *output, size_t capacity, uint64_t composition_id,
     const char *reason)
@@ -1091,6 +1120,98 @@ int main(void)
         assert(cdin_frontend_gui_sdl_apply_message(gui, &received, &committed) ==
                CDIN_FRONTEND_GUI_SDL_OK);
         assert(!cdin_frontend_gui_sdl_test_ime_active(gui));
+    }
+
+    /* Empty committed text from the native text path cancels an active
+     * preedit instead of creating an empty document edit. */
+    {
+        size_t cancels_before = output_count_type(
+            &stream, CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL);
+        uint64_t native_cancel_id =
+            cdin_frontend_session_next_ime_composition_id(&session);
+        cdin_frontend_protocol_message_view output_message;
+        char reason[32];
+        size_t reason_length = 0u;
+        assert(native_cancel_id != 0u);
+        memset(&event, 0, sizeof(event));
+        event.type = SDL_EVENT_TEXT_EDITING;
+        event.edit.type = SDL_EVENT_TEXT_EDITING;
+        event.edit.text = "native";
+        event.edit.start = 3;
+        event.edit.length = 0;
+        assert(SDL_PushEvent(&event));
+        assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+               CDIN_FRONTEND_GUI_SDL_OK);
+        assert(cdin_frontend_gui_sdl_test_ime_active(gui));
+        assert(cdin_frontend_gui_sdl_test_ime_id(gui) == native_cancel_id);
+
+        memset(&event, 0, sizeof(event));
+        event.type = SDL_EVENT_TEXT_INPUT;
+        event.text.type = SDL_EVENT_TEXT_INPUT;
+        event.text.text = "";
+        assert(SDL_PushEvent(&event));
+        assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+               CDIN_FRONTEND_GUI_SDL_OK);
+        assert(!cdin_frontend_gui_sdl_test_ime_active(gui));
+        assert(output_count_type(&stream, CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL) ==
+               cancels_before + 1u);
+        assert(output_find_message(&stream, CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL,
+                                   cancels_before, &output_message));
+        assert(cdin_frontend_protocol_payload_get_text(
+            output_message.payload, output_message.payload_length, "reason",
+            reason, sizeof(reason), &reason_length) == CDIN_FRONTEND_PROTOCOL_OK);
+        assert(strcmp(reason, "ime_cancelled") == 0);
+    }
+
+    /* A committed PaneTree focus change invalidates the originating view.
+     * The adapter must cancel its local composition after the atomic flush. */
+    {
+        uint64_t stale_view_composition_id =
+            cdin_frontend_session_next_ime_composition_id(&session);
+        size_t cancels_before = output_count_type(
+            &stream, CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL);
+        uint8_t snapshot_payload[512];
+        size_t snapshot_length;
+        cdin_frontend_protocol_message_view output_message;
+        char reason[32];
+        size_t reason_length = 0u;
+        assert(stale_view_composition_id != 0u);
+        memset(&event, 0, sizeof(event));
+        event.type = SDL_EVENT_TEXT_EDITING;
+        event.edit.type = SDL_EVENT_TEXT_EDITING;
+        event.edit.text = "stale-view";
+        event.edit.start = 4;
+        event.edit.length = 0;
+        assert(SDL_PushEvent(&event));
+        assert(cdin_frontend_gui_sdl_pump_events(gui, &quit_requested) ==
+               CDIN_FRONTEND_GUI_SDL_OK);
+        assert(cdin_frontend_gui_sdl_test_ime_active(gui));
+        assert(cdin_frontend_gui_sdl_test_ime_id(gui) == stale_view_composition_id);
+
+        snapshot_length = smoke_two_view_layout_active(
+            snapshot_payload, sizeof(snapshot_payload), 6000u, 4u, "leaf-right");
+        smoke_apply_inbound(gui, &session, &stream,
+            CDIN_FRONTEND_PROTOCOL_UI_LAYOUT, "core",
+            snapshot_payload, snapshot_length, 11u, 0);
+        snapshot_length = smoke_view_cursor(
+            snapshot_payload, sizeof(snapshot_payload), "view-right", 1u, 0u);
+        smoke_apply_inbound(gui, &session, &stream,
+            CDIN_FRONTEND_PROTOCOL_UI_CURSOR, "core",
+            snapshot_payload, snapshot_length, 12u, 0);
+        snapshot_length = smoke_snapshot_flush(
+            snapshot_payload, sizeof(snapshot_payload), 4u, 4u);
+        smoke_apply_inbound(gui, &session, &stream,
+            CDIN_FRONTEND_PROTOCOL_UI_FLUSH, "core",
+            snapshot_payload, snapshot_length, 13u, 1);
+        assert(!cdin_frontend_gui_sdl_test_ime_active(gui));
+        assert(output_count_type(&stream, CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL) ==
+               cancels_before + 1u);
+        assert(output_find_message(&stream, CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL,
+                                   cancels_before, &output_message));
+        assert(cdin_frontend_protocol_payload_get_text(
+            output_message.payload, output_message.payload_length, "reason",
+            reason, sizeof(reason), &reason_length) == CDIN_FRONTEND_PROTOCOL_OK);
+        assert(strcmp(reason, "view_changed") == 0);
     }
 
     /* Focus loss sends the Frontend-owned cancellation reason before focus(false). */
