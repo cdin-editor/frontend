@@ -96,6 +96,19 @@ cdin_frontend_protocol_status cdin_frontend_session_send_mouse(
     uint32_t x,
     uint32_t y,
     int has_position);
+/* ADR-0023: negotiated IME lifecycle. Offsets are UTF-8 byte offsets. */
+cdin_frontend_protocol_status cdin_frontend_session_ime_start(
+    cdin_frontend_session *session, uint64_t composition_id,
+    const char *view_id, uint64_t document_version);
+cdin_frontend_protocol_status cdin_frontend_session_ime_update(
+    cdin_frontend_session *session, uint64_t composition_id,
+    const uint8_t *preedit, size_t preedit_length, uint64_t cursor_byte,
+    uint64_t selection_start_byte, uint64_t selection_end_byte);
+cdin_frontend_protocol_status cdin_frontend_session_ime_cancel(
+    cdin_frontend_session *session, uint64_t composition_id, const char *reason);
+cdin_frontend_protocol_status cdin_frontend_session_ime_commit(
+    cdin_frontend_session *session, uint64_t composition_id,
+    const uint8_t *text, size_t text_length);
 cdin_frontend_protocol_status cdin_frontend_session_send_text(
     cdin_frontend_session *session,
     const uint8_t *text,
