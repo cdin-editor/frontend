@@ -3,6 +3,25 @@
 #include "session/model.h"
 #include "render/render.h"
 
+#ifdef CDIN_FRONTEND_GUI_SDL_TESTING
+#include "gui_sdl_test.h"
+static int gui_test_capture_available = -1;
+void cdin_frontend_gui_sdl_test_set_capture_available(int available)
+{
+    gui_test_capture_available = available < 0 ? -1 : (available != 0 ? 1 : 0);
+}
+#endif
+
+static int gui_capture_mouse(int enabled)
+{
+#ifdef CDIN_FRONTEND_GUI_SDL_TESTING
+    if (gui_test_capture_available >= 0) {
+        return enabled == 0 || gui_test_capture_available != 0;
+    }
+#endif
+    return SDL_CaptureMouse(enabled != 0);
+}
+
 #include <SDL3/SDL.h>
 
 #include <stdio.h>
@@ -329,7 +348,7 @@ static void gui_content_viewport(
 static void cancel_splitter_interaction(cdin_frontend_gui_sdl *gui)
 {
     if (gui == NULL) return;
-    if (gui->splitter_pointer_captured) (void)SDL_CaptureMouse(false);
+    if (gui->splitter_pointer_captured) (void)gui_capture_mouse(0);
     gui->splitter_pointer_captured = 0;
     gui->splitter_drag_active = 0;
     gui->splitter_preview_active = 0;
@@ -433,7 +452,7 @@ static int begin_splitter_interaction(
         axis_extent = rects[split_index].height;
     }
     if (axis_extent < 2u || split->id[0] == '\0') return 0;
-    if (!SDL_CaptureMouse(true)) return 0;
+    if (!gui_capture_mouse(1)) return 0;
     memcpy(&gui->splitter_preview_layout, &gui->model.layout,
            sizeof(gui->splitter_preview_layout));
     gui->splitter_pointer_captured = 1;
