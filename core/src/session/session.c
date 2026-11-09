@@ -6,7 +6,7 @@
 #include <string.h>
 
 typedef struct payload_writer {
-    uint8_t bytes[1024];
+    uint8_t bytes[4608];
     size_t length;
     int failed;
 } payload_writer;
@@ -75,6 +75,50 @@ static cdin_frontend_protocol_status send_payload(cdin_frontend_session *session
                             cdin_frontend_protocol_status_name(status));
     }
     return status;
+}
+
+
+static cdin_frontend_protocol_status send_namespaced_payload(
+    cdin_frontend_session *session, const char *name_space,
+    cdin_frontend_protocol_message_type type, payload_writer *writer)
+{
+    cdin_frontend_protocol_status status;
+    if (writer->failed) return CDIN_FRONTEND_PROTOCOL_LIMIT_EXCEEDED;
+    status = cdin_frontend_client_send_namespaced(
+        session->client, name_space, type, writer->bytes, writer->length);
+    if (status != CDIN_FRONTEND_PROTOCOL_OK && session->logger != NULL) {
+        CDIN_FRONTEND_ERROR(session->logger, "SESSION", "send %s failed: %s",
+                            cdin_frontend_protocol_message_name(type),
+                            cdin_frontend_protocol_status_name(status));
+    }
+    return status;
+}
+
+static int utf8_byte_boundary(const uint8_t *bytes, size_t length, uint64_t offset)
+{
+    return offset <= (uint64_t)length &&
+           (offset == 0u || offset == (uint64_t)length ||
+            (bytes[(size_t)offset] & 0xc0u) != 0x80u);
+}
+
+static int frontend_ime_cancel_reason_valid(const char *reason)
+{
+    return reason != NULL &&
+        (strcmp(reason, "ime_cancelled") == 0 ||
+         strcmp(reason, "focus_lost") == 0 ||
+         strcmp(reason, "view_changed") == 0);
+}
+
+static int backend_ime_cancel_reason_valid(const char *reason)
+{
+    return reason != NULL &&
+        (strcmp(reason, "focus_lost") == 0 ||
+         strcmp(reason, "stale_document") == 0 ||
+         strcmp(reason, "view_changed") == 0 ||
+         strcmp(reason, "selection_changed") == 0 ||
+         strcmp(reason, "view_removed") == 0 ||
+         strcmp(reason, "driver_revoked") == 0 ||
+         strcmp(reason, "session_reset") == 0);
 }
 
 static int copy_string(char *output, size_t capacity, const char *value)
@@ -204,6 +248,21 @@ cdin_frontend_protocol_status cdin_frontend_session_receive(
         !cdin_frontend_capability_has(session->accepted_capabilities,
                                       CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE)) {
         return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
+    }
+    if (strcmp(out_message->name_space, "ime") == 0 &&
+        !cdin_frontend_capability_has(session->accepted_capabilities,
+                                      CDIN_FRONTEND_CAP_IME_COMPOSITION)) {
+        return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
+    }
+    if (out_message->type == CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL) {
+        char reason[32];
+        size_t reason_length = 0u;
+        if (cdin_frontend_protocol_payload_get_text(out_message->payload,
+                out_message->payload_length, "reason", reason, sizeof(reason),
+                &reason_length) != CDIN_FRONTEND_PROTOCOL_OK ||
+            !backend_ime_cancel_reason_valid(reason)) {
+            return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
+        }
     }
     if (out_message->type == CDIN_FRONTEND_PROTOCOL_HELLO_ACK) {
         if (session->state != CDIN_FRONTEND_SESSION_HELLO_SENT) return CDIN_FRONTEND_PROTOCOL_INVALID_SCHEMA;
@@ -485,6 +544,97 @@ cdin_frontend_protocol_status cdin_frontend_session_send_mouse(
     if ((modifiers & CDIN_FRONTEND_MOD_ALTGR) != 0u) write_text(&writer, "altgr", 5u);
     if ((modifiers & CDIN_FRONTEND_MOD_SHIFT) != 0u) write_text(&writer, "shift", 5u);
     return send_payload(session, CDIN_FRONTEND_PROTOCOL_INPUT_MOUSE, &writer);
+}
+
+
+cdin_frontend_protocol_status cdin_frontend_session_ime_start(
+    cdin_frontend_session *session, uint64_t composition_id,
+    const char *view_id, uint64_t document_version)
+{
+    payload_writer writer;
+    size_t view_length;
+    if (session == NULL || session->state != CDIN_FRONTEND_SESSION_ATTACHED ||
+        !session->driver || composition_id == 0u || view_id == NULL || view_id[0] == '\0')
+        return CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT;
+    if (!cdin_frontend_capability_has(session->accepted_capabilities,
+                                      CDIN_FRONTEND_CAP_IME_COMPOSITION))
+        return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
+    view_length = strlen(view_id);
+    if (view_length > 128u || !valid_utf8((const uint8_t *)view_id, view_length))
+        return CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT;
+    memset(&writer, 0, sizeof(writer));
+    write_head(&writer, 5u, 3u);
+    write_key(&writer, "id"); write_uint(&writer, composition_id);
+    write_key(&writer, "view_id"); write_text(&writer, view_id, view_length);
+    write_key(&writer, "document_version"); write_uint(&writer, document_version);
+    return send_namespaced_payload(session, "ime",
+        CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_START, &writer);
+}
+
+cdin_frontend_protocol_status cdin_frontend_session_ime_update(
+    cdin_frontend_session *session, uint64_t composition_id,
+    const uint8_t *preedit, size_t preedit_length, uint64_t cursor_byte,
+    uint64_t selection_start_byte, uint64_t selection_end_byte)
+{
+    payload_writer writer;
+    if (session == NULL || session->state != CDIN_FRONTEND_SESSION_ATTACHED ||
+        !session->driver || composition_id == 0u || preedit == NULL ||
+        preedit_length > 4096u || !valid_utf8(preedit, preedit_length) ||
+        selection_start_byte > selection_end_byte ||
+        !utf8_byte_boundary(preedit, preedit_length, cursor_byte) ||
+        !utf8_byte_boundary(preedit, preedit_length, selection_start_byte) ||
+        !utf8_byte_boundary(preedit, preedit_length, selection_end_byte))
+        return CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT;
+    if (!cdin_frontend_capability_has(session->accepted_capabilities,
+                                      CDIN_FRONTEND_CAP_IME_COMPOSITION))
+        return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
+    memset(&writer, 0, sizeof(writer));
+    write_head(&writer, 5u, 5u);
+    write_key(&writer, "id"); write_uint(&writer, composition_id);
+    write_key(&writer, "preedit"); write_text(&writer, (const char *)preedit, preedit_length);
+    write_key(&writer, "cursor_byte"); write_uint(&writer, cursor_byte);
+    write_key(&writer, "selection_end_byte"); write_uint(&writer, selection_end_byte);
+    write_key(&writer, "selection_start_byte"); write_uint(&writer, selection_start_byte);
+    return send_namespaced_payload(session, "ime",
+        CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_UPDATE, &writer);
+}
+
+cdin_frontend_protocol_status cdin_frontend_session_ime_cancel(
+    cdin_frontend_session *session, uint64_t composition_id, const char *reason)
+{
+    payload_writer writer;
+    if (session == NULL || session->state != CDIN_FRONTEND_SESSION_ATTACHED ||
+        !session->driver || composition_id == 0u ||
+        !frontend_ime_cancel_reason_valid(reason))
+        return CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT;
+    if (!cdin_frontend_capability_has(session->accepted_capabilities,
+                                      CDIN_FRONTEND_CAP_IME_COMPOSITION))
+        return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
+    memset(&writer, 0, sizeof(writer));
+    write_head(&writer, 5u, 2u);
+    write_key(&writer, "id"); write_uint(&writer, composition_id);
+    write_key(&writer, "reason"); write_text(&writer, reason, strlen(reason));
+    return send_namespaced_payload(session, "ime",
+        CDIN_FRONTEND_PROTOCOL_IME_COMPOSITION_CANCEL, &writer);
+}
+
+cdin_frontend_protocol_status cdin_frontend_session_ime_commit(
+    cdin_frontend_session *session, uint64_t composition_id,
+    const uint8_t *text, size_t text_length)
+{
+    payload_writer writer;
+    if (session == NULL || session->state != CDIN_FRONTEND_SESSION_ATTACHED ||
+        !session->driver || composition_id == 0u || text == NULL ||
+        text_length == 0u || !valid_utf8(text, text_length))
+        return CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT;
+    if (!cdin_frontend_capability_has(session->accepted_capabilities,
+                                      CDIN_FRONTEND_CAP_IME_COMPOSITION))
+        return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
+    memset(&writer, 0, sizeof(writer));
+    write_head(&writer, 5u, 2u);
+    write_key(&writer, "text"); write_text(&writer, (const char *)text, text_length);
+    write_key(&writer, "composition_id"); write_uint(&writer, composition_id);
+    return send_payload(session, CDIN_FRONTEND_PROTOCOL_INPUT_TEXT, &writer);
 }
 
 cdin_frontend_protocol_status cdin_frontend_session_send_text(
