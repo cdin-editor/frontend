@@ -3,6 +3,12 @@
 #include "session/model.h"
 #include "render/render.h"
 
+#include <SDL3/SDL.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #ifdef CDIN_FRONTEND_GUI_SDL_TESTING
 #include "gui_sdl_test.h"
 static int gui_test_capture_available = -1;
@@ -22,11 +28,6 @@ static int gui_capture_mouse(int enabled)
     return SDL_CaptureMouse(enabled != 0);
 }
 
-#include <SDL3/SDL.h>
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 struct cdin_frontend_gui_sdl {
     cdin_frontend_session *session;
