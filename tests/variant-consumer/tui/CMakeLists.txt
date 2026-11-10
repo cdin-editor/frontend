@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.22)
+project(cdin_frontend_tui_consumer LANGUAGES C)
+include(CTest)
+find_package(cdinFrontendTUI 1.1 CONFIG REQUIRED)
+add_executable(frontend_tui_consumer main.c)
+target_compile_features(frontend_tui_consumer PRIVATE c_std_11)
+target_link_libraries(frontend_tui_consumer PRIVATE cdin::frontend_ui_tui)
+add_test(NAME frontend_tui_installed_consumer COMMAND frontend_tui_consumer)
