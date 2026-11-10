@@ -2,5 +2,6 @@
 
 int main(void)
 {
-    return cdin_frontend_gui_sdl_supported_capabilities() == 0u ? 0 : 0;
+    cdin_frontend_gui_sdl_destroy(NULL);
+    return 0;
 }
