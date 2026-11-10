@@ -151,6 +151,9 @@ int main(void)
     cdin_frontend_session_init(&incomplete_session, &client, NULL, "incomplete");
     incomplete_session.state = CDIN_FRONTEND_SESSION_ATTACHED;
     incomplete_session.driver = 1;
+    assert(cdin_frontend_session_request_lines_at_byte(
+        &incomplete_session, "view-1", 0u, 12u, 8u, 1u) ==
+        CDIN_FRONTEND_PROTOCOL_UNSUPPORTED);
     assert(cdin_frontend_session_resize(&incomplete_session, 800u, 600u) ==
            CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
     cdin_frontend_session_init(&session, &client, NULL, "tui");
