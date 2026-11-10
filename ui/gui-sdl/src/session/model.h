@@ -40,6 +40,8 @@ typedef struct cdin_frontend_gui_sdl_line {
 
 typedef struct cdin_frontend_gui_sdl_line_window {
     uint64_t first_line;
+    uint64_t first_byte;
+    int has_first_byte;
     size_t count;
     size_t bytes;
     cdin_frontend_gui_sdl_line lines[CDIN_FRONTEND_GUI_SDL_MAX_VISIBLE_LINES];
@@ -71,6 +73,9 @@ typedef struct cdin_frontend_gui_sdl_view {
     uint64_t requested_first_line;
     uint64_t requested_line_count;
     uint64_t requested_version;
+    uint64_t requested_anchor_byte;
+    int has_requested_anchor_byte;
+    int expects_first_byte;
     uint64_t last_used;
     int has_line_request;
     int pending_lines_valid;
@@ -114,6 +119,8 @@ typedef struct cdin_frontend_gui_sdl_view_request {
     uint64_t first_line;
     uint64_t line_count;
     uint64_t version;
+    uint64_t anchor_byte;
+    int has_anchor_byte;
 } cdin_frontend_gui_sdl_view_request;
 
 typedef struct cdin_frontend_gui_sdl_model {
@@ -155,6 +162,15 @@ cdin_frontend_gui_sdl_model_status cdin_frontend_gui_sdl_model_expect_lines(
     uint64_t first_line,
     uint64_t line_count,
     uint64_t version);
+cdin_frontend_gui_sdl_model_status cdin_frontend_gui_sdl_model_expect_lines_ex(
+    cdin_frontend_gui_sdl_model *model,
+    const char *view_id,
+    uint64_t first_line_fallback,
+    uint64_t line_count,
+    uint64_t version,
+    int has_anchor_byte,
+    uint64_t anchor_byte,
+    int expects_first_byte);
 
 void cdin_frontend_gui_sdl_model_cancel_line_request(
     cdin_frontend_gui_sdl_model *model,
