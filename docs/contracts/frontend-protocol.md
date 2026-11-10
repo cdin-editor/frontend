@@ -58,7 +58,22 @@ Protocol 1.0.0 behavior are defined in Spec `docs/architecture/protocol-wire.md`
 This repository must not fork the schema into an independently maintained
 contract.
 
-## 4. Connection lifecycle
+## 4. Optional byte-anchored line windows
+
+The accepted `byte-anchored-lines/1` capability is an additive Protocol 1.0.0
+extension. A negotiated client may add `anchor_byte` to the existing
+`view.request_lines` payload while retaining a valid `first_line` fallback.
+Backend resolves the anchor and reads the complete returned line window from
+one immutable Kernel snapshot. A negotiated peer receives `first_byte` on
+every `view.lines` response, including line-number-only requests. The
+Frontend does not scan document prefixes or count UTF-8 code points to derive
+line starts. Without accepted capability the legacy payloads are unchanged.
+
+GUI-SDL's implementation is opt-in through
+`CDIN_FRONTEND_GUI_SDL_ENABLE_BYTE_ANCHORED_LINES` and stays disabled in
+normal product builds until CDIN #118's live native matrix passes.
+
+## 5. Connection lifecycle
 
 ```mermaid
 stateDiagram-v2
