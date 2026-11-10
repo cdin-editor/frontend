@@ -500,7 +500,7 @@ static void test_independent_view_state_and_cache(void)
     assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_SELECTION,
                          payload, length, &action) ==
            CDIN_FRONTEND_GUI_SDL_MODEL_OK);
-    length = build_cursor(payload, sizeof(payload), "view-1", 3u, 12u, 1, 7u);
+    length = build_cursor(payload, sizeof(payload), "view-1", 3u, 12u, 0, 0u);
     assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_CURSOR,
                          payload, length, &action) ==
            CDIN_FRONTEND_GUI_SDL_MODEL_OK);
