@@ -1,9 +1,6 @@
-## Unreleased — Registry integration candidate 1.1.0
+## [1.1.0] - 2026-11-10
 
-The CMake/package version is now `1.1.0` for the next immutable TUI and
-GUI-SDL Registry source identities. This additive package candidate includes
-the optional typed PaneTree splitter resize API; it is not a formal `v1.1.0`
-tag or GitHub Release. The Frontend Protocol wire contract remains `1.0.0`.
+Frontend Foundation package release notes for `1.1.0`. The Frontend Protocol wire contract remains independently versioned at `1.0.0`. This package version does not declare the complete TUI, GUI-SDL or CDIN product release-ready; see `docs/FRONTEND-1.0.0-RELEASE-GATE.md` for the product gate.
 
 ### Added
 
