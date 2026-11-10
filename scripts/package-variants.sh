@@ -8,7 +8,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$repo_root"
 
 tag="${PIPELINE_RELEASE_TAG:-${GITHUB_REF_NAME:-}}"
-version="$(sed -n 's/^project(cdin_frontend VERSION \\([^ ]*\\) LANGUAGES C)$/\\1/p' CMakeLists.txt)"
+version="$(sed -n 's/^project(cdin_frontend VERSION \([^ ]*\) LANGUAGES C)$/\1/p' CMakeLists.txt)"
 version="${version:-}"
 [[ -n "$version" ]] || { echo "Could not determine Frontend package version" >&2; exit 2; }
 [[ "$tag" == "v$version" ]] || {
