@@ -83,7 +83,7 @@ if [[ -z "${SDL3_PREFIX:-}" ]]; then
   SDL3_PREFIX="$repo_root/.deps/sdl3"
 fi
 logger_prefix="${LOGGER_PREFIX:-$repo_root/.deps/log}"
-[[ -f "$logger_prefix/lib/cmake/m-mdy-m-log/m-mdy-m-logConfig.cmake" ]] || {
+[[ -f "$logger_prefix/lib/cmake/m-mdy-m-log/m-mdy-m-log-config.cmake" ]] || {
   find "$logger_prefix" -maxdepth 5 -type f -iname '*log*config.cmake' -print
   echo "Pinned m-mdy-m/log.c package config was not found in $logger_prefix." >&2
   exit 1
