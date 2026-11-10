@@ -403,6 +403,31 @@ cdin_frontend_protocol_status cdin_frontend_session_request_lines(
     return send_payload(session, CDIN_FRONTEND_PROTOCOL_VIEW_REQUEST_LINES, &writer);
 }
 
+cdin_frontend_protocol_status cdin_frontend_session_request_lines_at_byte(
+    cdin_frontend_session *session, const char *view_id,
+    uint64_t first_line_fallback, uint64_t anchor_byte,
+    uint64_t line_count, uint64_t version)
+{
+    payload_writer writer;
+    if (session == NULL || (session->state != CDIN_FRONTEND_SESSION_ATTACHED &&
+        session->state != CDIN_FRONTEND_SESSION_ATTACH_SENT) || view_id == NULL ||
+        view_id[0] == '\0' || line_count == 0u || line_count > 4096u) {
+        return CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT;
+    }
+    if (!cdin_frontend_capability_has(session->accepted_capabilities,
+                                      CDIN_FRONTEND_CAP_BYTE_ANCHORED_LINES)) {
+        return CDIN_FRONTEND_PROTOCOL_UNSUPPORTED;
+    }
+    memset(&writer, 0, sizeof(writer));
+    write_head(&writer, 5u, 5u);
+    write_key(&writer, "version"); write_uint(&writer, version);
+    write_key(&writer, "view_id"); write_text(&writer, view_id, strlen(view_id));
+    write_key(&writer, "first_line"); write_uint(&writer, first_line_fallback);
+    write_key(&writer, "line_count"); write_uint(&writer, line_count);
+    write_key(&writer, "anchor_byte"); write_uint(&writer, anchor_byte);
+    return send_payload(session, CDIN_FRONTEND_PROTOCOL_VIEW_REQUEST_LINES, &writer);
+}
+
 cdin_frontend_protocol_status cdin_frontend_session_send_pane_splitter_resize(
     cdin_frontend_session *session,
     uint64_t request_id,
