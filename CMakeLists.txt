@@ -322,8 +322,8 @@ if(NOT CDIN_FRONTEND_USE_LOG_STUB)
         DESTINATION "${CDIN_FRONTEND_CMAKE_INSTALL_DIR}/cdinFrontendCore"
         COMPONENT core)
     install(DIRECTORY include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-        FILES_MATCHING PATTERN "*.h"
-        COMPONENT core)
+        COMPONENT core
+        FILES_MATCHING PATTERN "*.h")
 
     configure_package_config_file(
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake/cdinFrontendCoreConfig.cmake.in"
@@ -362,8 +362,8 @@ if(NOT CDIN_FRONTEND_USE_LOG_STUB)
             DESTINATION "${CDIN_FRONTEND_CMAKE_INSTALL_DIR}/cdinFrontendTUI"
             COMPONENT tui)
         install(DIRECTORY ui/tui/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-            FILES_MATCHING PATTERN "*.h"
-            COMPONENT tui)
+            COMPONENT tui
+            FILES_MATCHING PATTERN "*.h")
 
         configure_package_config_file(
             "${CMAKE_CURRENT_SOURCE_DIR}/cmake/cdinFrontendTUIConfig.cmake.in"
@@ -403,8 +403,8 @@ if(NOT CDIN_FRONTEND_USE_LOG_STUB)
             DESTINATION "${CDIN_FRONTEND_CMAKE_INSTALL_DIR}/cdinFrontendGUISDL"
             COMPONENT gui-sdl)
         install(DIRECTORY ui/gui-sdl/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-            FILES_MATCHING PATTERN "*.h"
-            COMPONENT gui-sdl)
+            COMPONENT gui-sdl
+            FILES_MATCHING PATTERN "*.h")
 
         configure_package_config_file(
             "${CMAKE_CURRENT_SOURCE_DIR}/cmake/cdinFrontendGUISDLConfig.cmake.in"
