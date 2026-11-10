@@ -90,20 +90,18 @@ def main() -> int:
             raise SystemExit(f"{descriptor_path}: missing artifact object")
 
         artifact_id = str(artifact.get("artifact_id", ""))
-        match = re.fullmatch(r"frontend-(core|tui|gui-sdl)-(linux|darwin|windows)-([a-z0-9-]+)-(.+)", artifact_id)
-        if match is None:
-            raise SystemExit(f"{descriptor_path}: invalid Frontend artifact_id")
-        variant, target_os, arch_slug, abi = match.groups()
-        arch = arch_slug.replace("-", "_") if arch_slug in {"x86-64", "arm64"} else arch_slug
-        if arch_slug == "x86-64":
-            arch = "x86_64"
         target = artifact.get("target", {})
         target_key = (target.get("os"), target.get("architecture"), target.get("abi"))
-        if target_key not in EXPECTED_TARGETS or target_key in {
-            (item[1], item[2], item[3]) for item in selected if item[0] == variant
-        }:
+        filename_hint = descriptor_path.name.removesuffix(".artifact.json")
+        variant_match = re.match(r"^cdin-frontend-[0-9]+\\.[0-9]+\\.[0-9]+-(core|tui|gui-sdl)-", filename_hint)
+        if variant_match is None:
+            raise SystemExit(f"{descriptor_path}: cannot determine Frontend package variant")
+        variant = variant_match.group(1)
+        if target_key not in EXPECTED_TARGETS or (variant, *target_key) in selected:
             raise SystemExit(f"{descriptor_path}: unexpected or duplicate target {target_key} for {variant}")
-        if target_key != (target_os, arch, abi):
+        target_os, arch, abi = target_key
+        expected_artifact_id = f"frontend-{variant}-{target_os}-{arch.replace('_', '-')}-{abi}"
+        if artifact_id != expected_artifact_id:
             raise SystemExit(f"{descriptor_path}: artifact_id and target tuple disagree")
         if artifact.get("kind") != "native-development-package" or artifact.get("format") != "tar.gz":
             raise SystemExit(f"{descriptor_path}: unexpected package kind or format")
