@@ -10,6 +10,7 @@ option(CDIN_FRONTEND_BUILD_UI_TUI "Build the interactive terminal UI adapter" ON
 option(CDIN_FRONTEND_BUILD_UI_SDL "Build the production GUI-SDL adapter and preview" OFF)
 option(CDIN_FRONTEND_GUI_SDL_ENABLE_PANE_SPLITTER "Allow GUI-SDL to request pane-splitter-resize/1 (keep OFF until CDIN product E2E passes)" OFF)
 option(CDIN_FRONTEND_GUI_SDL_ENABLE_IME_COMPOSITION "Allow GUI-SDL to request ime-composition/1 (keep OFF until CDIN live IME E2E passes)" OFF)
+option(CDIN_FRONTEND_GUI_SDL_ENABLE_BYTE_ANCHORED_LINES "Allow GUI-SDL to request byte-anchored-lines/1 (keep OFF until CDIN byte-anchor E2E passes)" OFF)
 option(CDIN_FRONTEND_GUI_SDL_TEST_CAPTURE_OVERRIDE "Enable the deterministic GUI-SDL pointer-capture test seam" OFF)
 option(CDIN_FRONTEND_BUILD_APPS "Build runnable adapter preview applications" ON)
 option(CDIN_FRONTEND_BUILD_UI_HEADLESS "Build the display-free reference recorder/replayer" ON)
@@ -136,6 +137,10 @@ if(CDIN_FRONTEND_BUILD_UI_SDL)
     if(CDIN_FRONTEND_GUI_SDL_ENABLE_IME_COMPOSITION)
         target_compile_definitions(cdin_frontend_ui_gui_sdl PRIVATE
             CDIN_FRONTEND_GUI_SDL_ENABLE_IME_COMPOSITION=1)
+    endif()
+    if(CDIN_FRONTEND_GUI_SDL_ENABLE_BYTE_ANCHORED_LINES)
+        target_compile_definitions(cdin_frontend_ui_gui_sdl PRIVATE
+            CDIN_FRONTEND_GUI_SDL_ENABLE_BYTE_ANCHORED_LINES=1)
     endif()
     if(CDIN_FRONTEND_GUI_SDL_TEST_CAPTURE_OVERRIDE)
         target_compile_definitions(cdin_frontend_ui_gui_sdl PRIVATE
