@@ -67,6 +67,14 @@ cdin_frontend_protocol_status cdin_frontend_session_request_lines(
     uint64_t first_line,
     uint64_t line_count,
     uint64_t version);
+/* ADR-0027: request a byte-anchored line window only after the capability is accepted. */
+cdin_frontend_protocol_status cdin_frontend_session_request_lines_at_byte(
+    cdin_frontend_session *session,
+    const char *view_id,
+    uint64_t first_line_fallback,
+    uint64_t anchor_byte,
+    uint64_t line_count,
+    uint64_t version);
 /* FE-016 / PROTO-041: send a typed Runtime command request. The Frontend
  * does not interpret the command; Runtime owns authorization and execution.
  * `path` is an optional UTF-8 argument for document lifecycle commands. */
