@@ -40,6 +40,7 @@ current Frontend or Backend supports them all.
 | `images` | Image-bearing UI content | Not in baseline unless terminal image protocol is explicitly added | Optional texture/image rendering |
 | `truecolor` | Full 24-bit foreground/background color | Depends on terminal capability detection | Supported by renderer when enabled |
 | `ime` | Input-method composition; committed result travels through `input.text` | Terminal/platform dependent | Desktop input-method integration |
+| `byte-anchored-lines/1` | Version-pinned byte scroll anchor resolved to a logical line by Backend; `first_byte` identifies the returned window start | Not requested by the current TUI adapter | Opt-in GUI-SDL bounded line-window scrolling; requires same-snapshot Backend support |
 
 The Headless adapter can emulate any registered capability for tests, but its
 reported accepted set must describe the fake implementation explicitly; it
@@ -71,7 +72,7 @@ The stable UI-neutral registry is implemented in:
 - `cdin_frontend_session_set_capabilities()` and the `hello_ack` path in
   `core/src/session/session.c`
 
-The registry uses a fixed 64-bit mask with stable bit identities for the nine
+The registry uses a fixed 64-bit mask with stable bit identities for the registered
 Spec names. `cdin_frontend_capabilities_parse_names()` and
 `cdin_frontend_capabilities_parse_cbor_array()` validate UTF-8 identifiers,
 reject duplicates, ignore unknown identifiers, and return only registered
@@ -109,8 +110,13 @@ Protocol behavior.
   integration path.
 - **Adapters:** the TUI preview defaults to an empty requested set. It must not
   advertise mouse, clipboard, dialogs, canvas, images, truecolor or IME until
-  each implementation and its tests exist. GUI-SDL remains pending; Headless
+  each implementation and its tests exist. GUI-SDL supports opt-in IME, splitter
+  and byte-anchored line windows in component builds; normal product builds keep
+  their compile-time gates disabled until CDIN #118 live E2E passes. Headless
   records protocol messages but does not implement optional device services.
 
 The registry itself is implemented; concrete adapter support and Protocol
-1.0.0 interoperability are separate release gates.
+1.0.0 interoperability are separate release gates. The byte-anchor implementation
+is tracked by [Frontend #45](https://github.com/cdin-editor/frontend/issues/45)
+and [Backend #30](https://github.com/cdin-editor/backend/issues/30), with product
+acceptance in [CDIN #118](https://github.com/cdin-editor/cdin/issues/118).
