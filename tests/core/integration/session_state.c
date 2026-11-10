@@ -73,10 +73,11 @@ int main(void)
         0x6au, 's','e','s','s','i','o','n','_','i','d', 0x07u,
         0x71u, 'd','r','i','v','e','r','_','r','o','l','e','_','e','p','o','c','h', 0x01u,
         0x75u, 'a','c','c','e','p','t','e','d','_','c','a','p','a','b','i','l','i','t','i','e','s',
-        0x84u, 0x65u, 'm','o','u','s','e',
+        0x85u, 0x65u, 'm','o','u','s','e',
         0x74u, 'd','r','i','v','e','r','-','r','o','l','e','-','e','v','e','n','t','s','/','1',
         0x76u, 'p','a','n','e','-','s','p','l','i','t','t','e','r','-','r','e','s','i','z','e','/','1',
-        0x71u, 'i','m','e','-','c','o','m','p','o','s','i','t','i','o','n','/','1'
+        0x71u, 'i','m','e','-','c','o','m','p','o','s','i','t','i','o','n','/','1',
+        0x75u, 'b','y','t','e','-','a','n','c','h','o','r','e','d','-','l','i','n','e','s','/','1'
     };
     static const uint8_t snapshot_flush[] = {
         0xa3u,
@@ -157,7 +158,8 @@ int main(void)
         &session, CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_MOUSE) |
                   CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_DRIVER_ROLE_EVENTS) |
                   CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE) |
-                  CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_IME_COMPOSITION)) ==
+                  CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_IME_COMPOSITION) |
+                  CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_BYTE_ANCHORED_LINES)) ==
         CDIN_FRONTEND_PROTOCOL_OK);
     assert(cdin_frontend_session_hello(&session) == CDIN_FRONTEND_PROTOCOL_OK);
     assert(cdin_frontend_session_set_capabilities(&session, 0u) == CDIN_FRONTEND_PROTOCOL_INVALID_ARGUMENT);
@@ -173,7 +175,8 @@ int main(void)
            (CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_MOUSE) |
             CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_DRIVER_ROLE_EVENTS) |
             CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE) |
-            CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_IME_COMPOSITION)));
+            CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_IME_COMPOSITION) |
+            CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_BYTE_ANCHORED_LINES)));
     assert(cdin_frontend_session_attach(&session, "view-1", "cells", 80u, 24u) ==
            CDIN_FRONTEND_PROTOCOL_OK);
     assert(session.state == CDIN_FRONTEND_SESSION_ATTACH_SENT);
@@ -224,6 +227,26 @@ int main(void)
     assert(cdin_frontend_session_ack(&session, 1u) == CDIN_FRONTEND_PROTOCOL_OK);
     assert(cdin_frontend_session_request_lines(&session, "view-1", 0u, 40u, 0u) ==
            CDIN_FRONTEND_PROTOCOL_OK);
+    output_mark = stream.output_length;
+    assert(cdin_frontend_session_request_lines_at_byte(
+        &session, "view-1", 0u, 4096u, 40u, 0u) == CDIN_FRONTEND_PROTOCOL_OK);
+    {
+        cdin_frontend_protocol_message_view lines_message;
+        size_t frame_length = stream.output_length - output_mark;
+        uint64_t fallback_line = UINT64_MAX;
+        uint64_t anchor_byte = UINT64_MAX;
+        assert(cdin_frontend_protocol_decode_frame(
+            stream.output + output_mark, frame_length, &lines_message, 1024u) ==
+            CDIN_FRONTEND_PROTOCOL_OK);
+        assert(lines_message.type == CDIN_FRONTEND_PROTOCOL_VIEW_REQUEST_LINES);
+        assert(cdin_frontend_protocol_payload_get_uint(
+            lines_message.payload, lines_message.payload_length, "first_line",
+            &fallback_line) == CDIN_FRONTEND_PROTOCOL_OK);
+        assert(cdin_frontend_protocol_payload_get_uint(
+            lines_message.payload, lines_message.payload_length, "anchor_byte",
+            &anchor_byte) == CDIN_FRONTEND_PROTOCOL_OK);
+        assert(fallback_line == 0u && anchor_byte == 4096u);
+    }
     assert(cdin_frontend_session_send_key(&session, "c", CDIN_FRONTEND_MOD_CTRL, "press") ==
            CDIN_FRONTEND_PROTOCOL_OK);
     output_mark = stream.output_length;
