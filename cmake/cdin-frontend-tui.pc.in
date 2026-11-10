@@ -1,0 +1,11 @@
+prefix=${pcfiledir}/../..
+exec_prefix=${prefix}
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: cdin-frontend-tui
+Description: CDIN Frontend terminal UI adapter
+Version: @PROJECT_VERSION@
+Requires: cdin-frontend-core >= @PROJECT_VERSION@
+Libs: -L${libdir} -lcdin_frontend_ui_tui
+Cflags: -I${includedir}
