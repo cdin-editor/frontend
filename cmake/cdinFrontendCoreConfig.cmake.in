@@ -1,0 +1,6 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(m-mdy-m-log 0.1.0 CONFIG REQUIRED)
+include("${CMAKE_CURRENT_LIST_DIR}/cdinFrontendCoreTargets.cmake")
+check_required_components(cdinFrontendCore)
