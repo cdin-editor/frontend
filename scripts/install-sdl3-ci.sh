@@ -22,7 +22,18 @@ command -v curl >/dev/null 2>&1 || { echo "curl is required to prepare SDL3 in C
 curl --fail --location --retry 3 \
   "https://github.com/libsdl-org/SDL/releases/download/release-$version/SDL3-$version.tar.gz" \
   --output "$archive"
-echo "$sha256  $archive" | sha256sum --check
+if command -v sha256sum >/dev/null 2>&1; then
+    printf '%s  %s\n' "$sha256" "$archive" | sha256sum --check
+elif command -v shasum >/dev/null 2>&1; then
+    actual_sha256="$(shasum -a 256 "$archive" | awk '{print $1}')"
+    [[ "$actual_sha256" == "$sha256" ]] || {
+        echo "SDL3 $version source archive checksum mismatch" >&2
+        exit 1
+    }
+else
+    echo "sha256sum or shasum is required to verify SDL3 $version" >&2
+    exit 2
+fi
 
 rm -rf "$source_dir" "$build_dir" "$prefix"
 mkdir -p "$source_dir" "$prefix"
