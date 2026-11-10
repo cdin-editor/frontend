@@ -713,7 +713,8 @@ cdin_frontend_protocol_status cdin_frontend_protocol_validate_payload(
     static const payload_field_rule focus[] = { RULE_REQUIRED("focused", FIELD_BOOL) };
     static const payload_field_rule request_lines[] = {
         RULE_REQUIRED("view_id", FIELD_TEXT), RULE_REQUIRED("first_line", FIELD_UINT),
-        RULE_REQUIRED("line_count", FIELD_UINT), RULE_REQUIRED("version", FIELD_UINT)
+        RULE_REQUIRED("line_count", FIELD_UINT), RULE_REQUIRED("version", FIELD_UINT),
+        RULE_OPTIONAL("anchor_byte", FIELD_UINT)
     };
     static const payload_field_rule set_position[] = {
         RULE_REQUIRED("view_id", FIELD_TEXT), RULE_REQUIRED("anchor", FIELD_UINT),
@@ -752,7 +753,7 @@ cdin_frontend_protocol_status cdin_frontend_protocol_validate_payload(
     static const payload_field_rule lines[] = {
         RULE_REQUIRED("view_id", FIELD_TEXT), RULE_REQUIRED("version", FIELD_UINT),
         RULE_REQUIRED("first_line", FIELD_UINT), RULE_REQUIRED("lines", FIELD_ARRAY),
-        RULE_OPTIONAL("total_lines", FIELD_UINT)
+        RULE_OPTIONAL("total_lines", FIELD_UINT), RULE_OPTIONAL("first_byte", FIELD_UINT)
     };
     static const payload_field_rule invalidate[] = {
         RULE_REQUIRED("view_id", FIELD_TEXT), RULE_REQUIRED("version", FIELD_UINT),
