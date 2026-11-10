@@ -1,4 +1,4 @@
-name: Build and publish release
+name: Build and publish Frontend source and variant packages
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   release:
-    name: Check and publish Frontend source package
+    name: Build, test and publish Frontend packages (Pipeline)
     permissions:
       contents: write
       id-token: write
@@ -19,7 +19,58 @@ jobs:
       pipeline-ref: main
       changelog-path: CHANGELOG.md
       test-command: make check
-      build-command: bash scripts/package-release.sh
+      build-command: bash scripts/package-variants.sh
+      asset-preparation-command: >-
+        python3 scripts/generate-release-metadata.py
+        --tag "$PIPELINE_RELEASE_TAG"
+        --artifact-dir "$RELEASE_ASSETS_DIRECTORY"
       artifact-path: |
-        dist/cdin-frontend-*.tar.gz
-        dist/cdin-frontend-*.tar.gz.sha256
+        dist/release-build-*/*.tar.gz
+        dist/release-build-*/*.tar.gz.sha256
+        dist/release-build-*/*.tar.gz.artifact.json
+      build-matrix-json: >-
+        {"include":[
+          {
+            "id":"linux-x86_64",
+            "os":"ubuntu-24.04",
+            "target_os":"linux",
+            "architecture":"x86_64",
+            "abi":"gnu-glibc-2.39",
+            "build_command":"sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build pkg-config curl python3 && bash scripts/package-release.sh && FRONTEND_TARGET_OS=linux FRONTEND_TARGET_ARCH=x86_64 FRONTEND_TARGET_ABI=gnu-glibc-2.39 FRONTEND_TARGET_RUNNER=github-actions-ubuntu-24.04 bash scripts/package-variants.sh",
+            "artifact_path":"dist/release-build-*/*\ndist/cdin-frontend-*-source.tar.gz\ndist/cdin-frontend-*-source.tar.gz.sha256"
+          },
+          {
+            "id":"linux-arm64",
+            "os":"ubuntu-24.04-arm",
+            "target_os":"linux",
+            "architecture":"arm64",
+            "abi":"gnu-glibc-2.39",
+            "build_command":"sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build pkg-config curl python3 && FRONTEND_TARGET_OS=linux FRONTEND_TARGET_ARCH=arm64 FRONTEND_TARGET_ABI=gnu-glibc-2.39 FRONTEND_TARGET_RUNNER=github-actions-ubuntu-24.04-arm64 bash scripts/package-variants.sh"
+          },
+          {
+            "id":"macos-x86_64",
+            "os":"macos-15-intel",
+            "target_os":"darwin",
+            "architecture":"x86_64",
+            "abi":"macos-15",
+            "build_command":"brew install cmake ninja pkgconf && FRONTEND_TARGET_OS=darwin FRONTEND_TARGET_ARCH=x86_64 FRONTEND_TARGET_ABI=macos-15 FRONTEND_TARGET_RUNNER=github-actions-macos-15-intel bash scripts/package-variants.sh"
+          },
+          {
+            "id":"macos-arm64",
+            "os":"macos-15",
+            "target_os":"darwin",
+            "architecture":"arm64",
+            "abi":"macos-15",
+            "build_command":"brew install cmake ninja pkgconf && FRONTEND_TARGET_OS=darwin FRONTEND_TARGET_ARCH=arm64 FRONTEND_TARGET_ABI=macos-15 FRONTEND_TARGET_RUNNER=github-actions-macos-15-arm64 bash scripts/package-variants.sh"
+          },
+          {
+            "id":"windows-ucrt64-x86_64",
+            "os":"windows-latest",
+            "msys2_msystem":"UCRT64",
+            "msys2_packages":"git make mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-pkgconf mingw-w64-ucrt-x86_64-curl mingw-w64-ucrt-x86_64-unzip tar python",
+            "target_os":"windows",
+            "architecture":"x86_64",
+            "abi":"windows-ucrt64",
+            "build_command":"FRONTEND_TARGET_OS=windows FRONTEND_TARGET_ARCH=x86_64 FRONTEND_TARGET_ABI=windows-ucrt64 FRONTEND_TARGET_RUNNER=github-actions-windows-2025-ucrt64 bash scripts/package-variants.sh"
+          }
+        ]}
