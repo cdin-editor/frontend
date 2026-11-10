@@ -111,6 +111,21 @@ jobs:
           cmake --build "$RUNNER_TEMP/frontend-consumer-build" --parallel
           ctest --test-dir "$RUNNER_TEMP/frontend-consumer-build" --output-on-failure
 
+      - name: Verify native variant archive packaging and external consumers
+        env:
+          PIPELINE_RELEASE_TAG: v1.1.0
+          FRONTEND_TARGET_OS: linux
+          FRONTEND_TARGET_ARCH: x86_64
+          FRONTEND_TARGET_ABI: gnu-glibc-2.39
+          FRONTEND_TARGET_RUNNER: github-actions-ubuntu-24.04
+          LOGGER_PREFIX: ${{ github.workspace }}/.deps/log
+          SDL3_PREFIX: ${{ runner.temp }}/SDL3-install
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/generate-release-metadata.py scripts/test-variant-packages.py
+          git tag --force "$PIPELINE_RELEASE_TAG" HEAD
+          bash scripts/package-variants.sh
+
   platform-smoke:
     name: ${{ matrix.os }} native Core + TUI UI peer
     strategy:
