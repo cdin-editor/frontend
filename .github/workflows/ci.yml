@@ -91,7 +91,7 @@ jobs:
             -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/SDL3-install;$PWD/.deps/log" \
             -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/frontend-install" \
             -DCDIN_FRONTEND_USE_LOG_STUB=OFF \
-            -DCDIN_FRONTEND_BUILD_UI_TUI=OFF \
+            -DCDIN_FRONTEND_BUILD_UI_TUI=ON \
             -DCDIN_FRONTEND_BUILD_UI_SDL=ON \
             -DCDIN_FRONTEND_BUILD_UI_HEADLESS=OFF \
             -DCDIN_FRONTEND_BUILD_APPS=ON \
