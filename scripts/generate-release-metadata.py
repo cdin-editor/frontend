@@ -1,0 +1,228 @@
+#!/usr/bin/env python3
+"""Aggregate the 5x3 native Frontend packages into ADR-0028 Release Metadata."""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+from urllib.parse import urlparse
+
+EXPECTED_TARGETS = {
+    ("linux", "x86_64", "gnu-glibc-2.39"),
+    ("linux", "arm64", "gnu-glibc-2.39"),
+    ("darwin", "x86_64", "macos-15"),
+    ("darwin", "arm64", "macos-15"),
+    ("windows", "x86_64", "windows-ucrt64"),
+}
+VARIANTS = ("core", "tui", "gui-sdl")
+REPOSITORY_URI = "https://github.com/cdin-editor/frontend"
+PROTOCOL_REQUIREMENT = {
+    "contract_id": "org.cdin.frontend-protocol",
+    "version_constraint": ">=1.0.0 <2.0.0",
+}
+LOGGER_REQUIREMENT = {
+    "contract_id": "org.m-mdy-m.log-c-api",
+    "version_constraint": "=0.1.0",
+}
+SDL3_REQUIREMENT = {
+    "contract_id": "org.cdin.sdl3-sdk",
+    "version_constraint": "=3.4.16",
+}
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--tag", default=os.environ.get("PIPELINE_RELEASE_TAG", ""))
+    parser.add_argument("--artifact-dir", type=Path, default=Path("release-assets"))
+    parser.add_argument("--output-dir", type=Path)
+    args = parser.parse_args()
+
+    if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", args.tag):
+        parser.error("--tag must be the exact immutable vMAJOR.MINOR.PATCH release tag")
+    version = args.tag[1:]
+    tag_revision = subprocess.check_output(
+        ["git", "rev-parse", "--verify", f"refs/tags/{args.tag}^{{commit}}"], text=True
+    ).strip().lower()
+    head_revision = subprocess.check_output(
+        ["git", "rev-parse", "--verify", "HEAD"], text=True
+    ).strip().lower()
+    if tag_revision != head_revision:
+        raise SystemExit(
+            f"refusing metadata generation: tag {args.tag} resolves to {tag_revision}, "
+            f"but release source HEAD is {head_revision}"
+        )
+    if len(tag_revision) not in (40, 64) or not re.fullmatch(r"[0-9a-f]+", tag_revision):
+        raise SystemExit("release tag did not resolve to a full Git object ID")
+
+    descriptors = sorted(args.artifact_dir.rglob("cdin-frontend-*.tar.gz.artifact.json"))
+    if len(descriptors) != len(EXPECTED_TARGETS) * len(VARIANTS):
+        raise SystemExit(
+            f"expected {len(EXPECTED_TARGETS) * len(VARIANTS)} Frontend package descriptors; "
+            f"found {len(descriptors)}"
+        )
+
+    artifacts: dict[str, list[dict]] = {variant: [] for variant in VARIANTS}
+    selected: set[tuple[str, str, str, str]] = set()
+    release_prefix = f"https://github.com/cdin-editor/frontend/releases/download/{args.tag}/"
+
+    for descriptor_path in descriptors:
+        try:
+            record = json.loads(descriptor_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise SystemExit(f"{descriptor_path}: invalid artifact descriptor: {error}") from error
+        if record.get("source_revision") != tag_revision:
+            raise SystemExit(f"{descriptor_path}: package source revision does not match tag {args.tag}")
+        artifact = record.get("artifact")
+        if not isinstance(artifact, dict):
+            raise SystemExit(f"{descriptor_path}: missing artifact object")
+
+        artifact_id = str(artifact.get("artifact_id", ""))
+        match = re.fullmatch(r"frontend-(core|tui|gui-sdl)-(linux|darwin|windows)-([a-z0-9-]+)-(.+)", artifact_id)
+        if match is None:
+            raise SystemExit(f"{descriptor_path}: invalid Frontend artifact_id")
+        variant, target_os, arch_slug, abi = match.groups()
+        arch = arch_slug.replace("-", "_") if arch_slug in {"x86-64", "arm64"} else arch_slug
+        if arch_slug == "x86-64":
+            arch = "x86_64"
+        target = artifact.get("target", {})
+        target_key = (target.get("os"), target.get("architecture"), target.get("abi"))
+        if target_key not in EXPECTED_TARGETS or target_key in {
+            (item[1], item[2], item[3]) for item in selected if item[0] == variant
+        }:
+            raise SystemExit(f"{descriptor_path}: unexpected or duplicate target {target_key} for {variant}")
+        if target_key != (target_os, arch, abi):
+            raise SystemExit(f"{descriptor_path}: artifact_id and target tuple disagree")
+        if artifact.get("kind") != "native-development-package" or artifact.get("format") != "tar.gz":
+            raise SystemExit(f"{descriptor_path}: unexpected package kind or format")
+        if artifact.get("layout") != "cmake-prefix-v1":
+            raise SystemExit(f"{descriptor_path}: package layout must be cmake-prefix-v1")
+        if artifact.get("source_unit_ids") != ["frontend-source"]:
+            raise SystemExit(f"{descriptor_path}: artifact must reference frontend-source")
+        build = artifact.get("build")
+        if not isinstance(build, dict) or build.get("recipe") != {
+            "source_unit_id": "frontend-source",
+            "path": "scripts/package-variants.sh",
+        } or not build.get("toolchain") or not build.get("runner"):
+            raise SystemExit(f"{descriptor_path}: incomplete package build provenance")
+
+        filename = artifact.get("file_name", "")
+        expected_arch_slug = arch.replace("_", "-")
+        expected_filename = (
+            f"cdin-frontend-{version}-{variant}-{target_os}-{expected_arch_slug}-{abi}.tar.gz"
+        )
+        if filename != expected_filename or Path(filename).name != filename:
+            raise SystemExit(f"{descriptor_path}: unexpected package filename {filename!r}")
+        if descriptor_path.name != filename + ".artifact.json":
+            raise SystemExit(f"{descriptor_path}: descriptor basename does not match its archive")
+        if artifact.get("uri") != release_prefix + filename:
+            raise SystemExit(f"{descriptor_path}: artifact URI does not identify exact tag release asset")
+        parsed = urlparse(artifact["uri"])
+        if parsed.scheme != "https" or parsed.netloc != "github.com" or parsed.query or parsed.fragment:
+            raise SystemExit(f"{descriptor_path}: artifact URI must be canonical HTTPS GitHub release URL")
+        if not re.fullmatch(r"[0-9a-f]{64}", str(artifact.get("sha256", ""))):
+            raise SystemExit(f"{descriptor_path}: invalid SHA-256")
+        if not isinstance(artifact.get("size_bytes"), int) or artifact["size_bytes"] <= 0:
+            raise SystemExit(f"{descriptor_path}: invalid package byte size")
+
+        archive_path = descriptor_path.parent / filename
+        sidecar = Path(str(archive_path) + ".sha256")
+        if not archive_path.is_file() or not sidecar.is_file():
+            raise SystemExit(f"{descriptor_path}: package archive or checksum sidecar is missing")
+        actual_digest = sha256(archive_path)
+        if actual_digest != artifact["sha256"] or archive_path.stat().st_size != artifact["size_bytes"]:
+            raise SystemExit(f"{descriptor_path}: archive digest/size differs from descriptor")
+        checksum_fields = sidecar.read_text(encoding="ascii").split()
+        if len(checksum_fields) < 2 or checksum_fields[0] != actual_digest or checksum_fields[1].lstrip("*") != filename:
+            raise SystemExit(f"{descriptor_path}: checksum sidecar does not match archive")
+
+        artifacts[variant].append(artifact)
+        selected.add((variant, *target_key))
+
+    for variant in VARIANTS:
+        found = {(os_name, arch, abi) for item_variant, os_name, arch, abi in selected if item_variant == variant}
+        if found != EXPECTED_TARGETS:
+            raise SystemExit(f"{variant}: missing native package targets: {sorted(EXPECTED_TARGETS - found)}")
+
+    if args.output_dir is None:
+        output_root = args.artifact_dir
+    else:
+        output_root = args.output_dir
+    output_root.mkdir(parents=True, exist_ok=True)
+
+    for variant in VARIANTS:
+        dependencies = []
+        requirements = []
+        if variant == "core":
+            requirements.append(LOGGER_REQUIREMENT)
+        elif variant == "tui":
+            dependencies.append({
+                "component_id": "frontend",
+                "variant": "core",
+                "version_constraint": f"={version}",
+            })
+            requirements.extend([PROTOCOL_REQUIREMENT, LOGGER_REQUIREMENT])
+        else:
+            dependencies.append({
+                "component_id": "frontend",
+                "variant": "core",
+                "version_constraint": f"={version}",
+            })
+            requirements.extend([PROTOCOL_REQUIREMENT, SDL3_REQUIREMENT])
+
+        metadata_name = f"frontend-{variant}-{version}.json"
+        metadata = {
+            "schema_version": "1.2.0",
+            "component_id": "frontend",
+            "variant": variant,
+            "version": version,
+            "status": "active",
+            "source_units": [{
+                "source_unit_id": "frontend-source",
+                "repository_uri": REPOSITORY_URI,
+                "revision": tag_revision,
+            }],
+            "artifacts": sorted(
+                artifacts[variant],
+                key=lambda item: (
+                    item["target"]["os"],
+                    item["target"]["architecture"],
+                    item["target"]["abi"],
+                ),
+            ),
+            "dependencies": dependencies,
+            "contracts": {"provides": [], "requires": requirements},
+            "publication": {
+                "provider": "github-releases-v1",
+                "repository_uri": REPOSITORY_URI,
+                "tag": args.tag,
+                "tag_commit": tag_revision,
+                "metadata_asset_name": metadata_name,
+            },
+        }
+        output = output_root / metadata_name
+        if output.exists():
+            raise SystemExit(f"refusing to overwrite immutable release metadata: {output}")
+        output.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        print(f"Wrote {output} with {len(artifacts[variant])} verified native packages")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        print(f"Frontend release metadata generation failed: {error}", file=sys.stderr)
+        raise SystemExit(1)
