@@ -52,6 +52,24 @@ int main(void)
         'i','m','e','_','c','a','n','c','e','l','l','e','d'
     };
     static const uint8_t ack_payload[] = { 0xa1u, 0x68u, 's','e','q','u','e','n','c','e', 0x01u };
+    static const uint8_t byte_anchor_request[] = {
+        0xa5u,
+        0x67u, 'v','e','r','s','i','o','n', 0x00u,
+        0x67u, 'v','i','e','w','_','i','d', 0x61u, 'v',
+        0x6au, 'f','i','r','s','t','_','l','i','n','e', 0x00u,
+        0x6au, 'l','i','n','e','_','c','o','u','n','t', 0x01u,
+        0x6bu, 'a','n','c','h','o','r','_','b','y','t','e', 0x04u
+    };
+    static const uint8_t byte_anchor_response[] = {
+        0xa6u,
+        0x65u, 'l','i','n','e','s', 0x81u, 0xa1u,
+            0x65u, 'b','y','t','e','s', 0x42u, 'b', 0x0au,
+        0x67u, 'v','e','r','s','i','o','n', 0x00u,
+        0x67u, 'v','i','e','w','_','i','d', 0x61u, 'v',
+        0x6au, 'f','i','r','s','t','_','b','y','t','e', 0x04u,
+        0x6au, 'f','i','r','s','t','_','l','i','n','e', 0x01u,
+        0x6bu, 't','o','t','a','l','_','l','i','n','e','s', 0x03u
+    };
     static const uint8_t invalid_payload[] = { 0xa1u, 0x68u, 's','e','q','u','e','n','c','e', 0x18u, 0x01u };
     static const uint8_t ui_options_v1[] = {
         0xa3u,
@@ -100,6 +118,12 @@ int main(void)
     assert(cdin_frontend_protocol_validate_payload(CDIN_FRONTEND_PROTOCOL_UI_LAYOUT,
         nullable_active_view_layout, sizeof(nullable_active_view_layout)) ==
         CDIN_FRONTEND_PROTOCOL_OK);
+    assert(cdin_frontend_protocol_validate_payload(
+        CDIN_FRONTEND_PROTOCOL_VIEW_REQUEST_LINES,
+        byte_anchor_request, sizeof(byte_anchor_request)) == CDIN_FRONTEND_PROTOCOL_OK);
+    assert(cdin_frontend_protocol_validate_payload(
+        CDIN_FRONTEND_PROTOCOL_VIEW_LINES,
+        byte_anchor_response, sizeof(byte_anchor_response)) == CDIN_FRONTEND_PROTOCOL_OK);
     assert(cdin_frontend_protocol_validate_payload(input.type, input.payload, input.payload_length) ==
            CDIN_FRONTEND_PROTOCOL_OK);
     assert(cdin_frontend_protocol_encode_frame(&input, frame, sizeof(frame), &frame_length, 1024u) ==
