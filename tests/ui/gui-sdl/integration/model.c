@@ -608,7 +608,7 @@ static void test_independent_view_state_and_cache(void)
     /* A byte-anchored response may start at a different logical line, but its
      * exact first byte must identify a returned line that contains the anchor. */
     {
-        static const uint8_t anchored_text[] = { 'a', 'b', 'c', '\\n' };
+        static const uint8_t anchored_text[] = { 'a', 'b', 'c', '\n' };
         assert(cdin_frontend_gui_sdl_model_expect_lines_ex(
             &model, "view-0", 0u, 16u, 1u, 1, 12u, 1) ==
             CDIN_FRONTEND_GUI_SDL_MODEL_OK);
