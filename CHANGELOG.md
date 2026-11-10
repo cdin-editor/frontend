@@ -53,6 +53,8 @@ immutable component candidates and live CDIN product verification.
   and reject unrequested or future responses.
 - Add a transport-agnostic TUI readiness coordinator with bounded per-source
   drains, resize/termination routing, and an explicit shutdown callback.
+- Add the Frontend 1.0.0 release-gate document with per-requirement status,
+  source paths, Spec anchors, and product acceptance scenarios.
 - Add the bounded `CDHR` v1 Headless message-trace recorder/replayer with
   Protocol payload, direction, sequence/version, trace-bound, and truncation
   validation.
@@ -123,9 +125,6 @@ ready.
   `m-mdy-m/log.c`.
 - Add the CMake install/export package, Pipeline tasks, PSX metadata, gix
   flow, and CTest integration coverage.
-- Add a transport-agnostic TUI readiness coordinator and a bounded Headless
-  trace primitive; the remaining live wait/transport and reference-peer
-  integration stays outside this foundation release.
 - Add the Frontend 1.0.0 release-gate document with per-requirement status,
   source paths, Spec anchors, and product acceptance scenarios.
 - Add detailed Headless and GUI-SDL designs, a Protocol 1.0.0 upgrade plan,
