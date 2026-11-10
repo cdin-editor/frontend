@@ -93,7 +93,7 @@ def main() -> int:
         target = artifact.get("target", {})
         target_key = (target.get("os"), target.get("architecture"), target.get("abi"))
         filename_hint = descriptor_path.name.removesuffix(".artifact.json")
-        variant_match = re.match(r"^cdin-frontend-[0-9]+\\.[0-9]+\\.[0-9]+-(core|tui|gui-sdl)-", filename_hint)
+        variant_match = re.match(r"^cdin-frontend-[0-9]+\.[0-9]+\.[0-9]+-(core|tui|gui-sdl)-", filename_hint)
         if variant_match is None:
             raise SystemExit(f"{descriptor_path}: cannot determine Frontend package variant")
         variant = variant_match.group(1)
