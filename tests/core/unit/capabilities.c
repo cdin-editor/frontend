@@ -31,8 +31,12 @@ int main(void)
                   "pane-splitter-resize/1") == 0);
     assert(strcmp(cdin_frontend_capability_name(CDIN_FRONTEND_CAP_IME_COMPOSITION),
                   "ime-composition/1") == 0);
+    assert(strcmp(cdin_frontend_capability_name(CDIN_FRONTEND_CAP_BYTE_ANCHORED_LINES),
+                  "byte-anchored-lines/1") == 0);
     assert(cdin_frontend_capability_from_name("ime-composition/1", &capability));
     assert(capability == CDIN_FRONTEND_CAP_IME_COMPOSITION);
+    assert(cdin_frontend_capability_from_name("byte-anchored-lines/1", &capability));
+    assert(capability == CDIN_FRONTEND_CAP_BYTE_ANCHORED_LINES);
     assert(cdin_frontend_capability_from_name("pane-splitter-resize/1", &capability));
     assert(capability == CDIN_FRONTEND_CAP_PANE_SPLITTER_RESIZE);
     assert(cdin_frontend_capability_from_name("mouse", &capability));
