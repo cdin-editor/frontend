@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.22)
+project(cdin_frontend_core_consumer LANGUAGES C)
+include(CTest)
+find_package(cdinFrontendCore 1.1 CONFIG REQUIRED)
+add_executable(frontend_core_consumer main.c)
+target_compile_features(frontend_core_consumer PRIVATE c_std_11)
+target_link_libraries(frontend_core_consumer PRIVATE cdin::frontend_core)
+add_test(NAME frontend_core_installed_consumer COMMAND frontend_core_consumer)
