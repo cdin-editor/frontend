@@ -1003,7 +1003,7 @@ cdin_frontend_gui_sdl_model_status cdin_frontend_gui_sdl_model_expect_lines_ex(
     int expects_first_byte)
 {
     cdin_frontend_gui_sdl_view *view;
-    if (model == NULL || view_id == NULL || view_id[0] == '\\0' ||
+    if (model == NULL || view_id == NULL || view_id[0] == '\0' ||
         version == 0u || line_count == 0u ||
         line_count > (uint64_t)model->visible_line_capacity ||
         first_line_fallback > UINT64_MAX - line_count ||
