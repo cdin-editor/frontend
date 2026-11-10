@@ -574,7 +574,7 @@ static cdin_frontend_gui_sdl_model_status apply_lines(
     }
     view = cdin_frontend_gui_sdl_model_find_view(model, view_id);
     if (view == NULL) return CDIN_FRONTEND_GUI_SDL_MODEL_STALE;
-    if (version == 0u || version != view->semantic.version ||
+    if (version == 0u || version != view->semantic.version || count == 0u ||
         view->has_line_request == 0 ||
         version != view->requested_version ||
         count > view->requested_line_count ||
@@ -584,12 +584,9 @@ static cdin_frontend_gui_sdl_model_status apply_lines(
         (view->expects_first_byte == 0 && has_first_byte != 0)) {
         return CDIN_FRONTEND_GUI_SDL_MODEL_STALE;
     }
-    if (view->has_requested_anchor_byte != 0) {
-        if (has_first_byte == 0 || count == 0u ||
-            first_byte > view->requested_anchor_byte ||
-            view->requested_anchor_byte - first_byte > UINT64_MAX) {
-            return CDIN_FRONTEND_GUI_SDL_MODEL_STALE;
-        }
+    if (view->has_requested_anchor_byte != 0 &&
+        (has_first_byte == 0 || first_byte > view->requested_anchor_byte)) {
+        return CDIN_FRONTEND_GUI_SDL_MODEL_STALE;
     }
     if (count > model->visible_line_capacity ||
         count > CDIN_FRONTEND_GUI_SDL_MAX_VISIBLE_LINES) {
@@ -685,6 +682,8 @@ static void apply_response_flush(cdin_frontend_gui_sdl_model *model)
         memset(&view->pending, 0, sizeof(view->pending));
         view->pending_lines_valid = 0;
         view->has_line_request = 0;
+        view->has_requested_anchor_byte = 0;
+        view->expects_first_byte = 0;
         view->semantic.needs_lines = 0;
         view->last_used = next_access(model);
     }
