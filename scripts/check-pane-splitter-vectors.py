@@ -145,7 +145,7 @@ def main() -> None:
             fail(f"{case_id}: expected ratio_bp={expected}, got {actual}")
 
     raw_fixture = fixture_path.read_bytes()
-    git_blob_header = f"blob {len(raw_fixture)}\\0".encode("ascii")
+    git_blob_header = f"blob {len(raw_fixture)}\0".encode("ascii")
     git_blob_sha1 = hashlib.sha1(git_blob_header + raw_fixture).hexdigest()
     if git_blob_sha1 != SPEC_FIXTURE_GIT_BLOB_SHA1:
         fail(
