@@ -55,7 +55,7 @@ def safe_extract(archive: Path, destination: Path) -> None:
 
 
 def verify_archive(artifact_dir: Path, version: str, variant: str, target_os: str, arch: str, abi: str) -> Path:
-    filename = f"cdin-frontend-{version}-{variant}-{target_os}-{arch}-{abi}.tar.gz"
+    filename = f"cdin-frontend-{version}-{variant}-{target_os}-{arch.replace('_', '-')}-{abi}.tar.gz"
     archive = artifact_dir / filename
     descriptor_path = Path(str(archive) + ".artifact.json")
     sidecar = Path(str(archive) + ".sha256")
@@ -112,7 +112,7 @@ def main() -> int:
     archives = {
         variant: verify_archive(
             args.artifact_dir, args.version, variant,
-            args.target_os, args.target_arch.replace("_", "-"), args.target_abi,
+            args.target_os, args.target_arch, args.target_abi,
         )
         for variant in VARIANTS
     }
