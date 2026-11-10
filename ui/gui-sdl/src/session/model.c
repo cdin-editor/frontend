@@ -534,6 +534,8 @@ static cdin_frontend_gui_sdl_model_status apply_lines(
     size_t span_counts[CDIN_FRONTEND_GUI_SDL_MAX_VISIBLE_LINES];
     uint64_t version = 0u;
     uint64_t first_line = 0u;
+    uint64_t first_byte = 0u;
+    int has_first_byte = 0;
     size_t id_length = 0u;
     size_t total_bytes = 0u;
     size_t index;
@@ -562,14 +564,32 @@ static cdin_frontend_gui_sdl_model_status apply_lines(
             CDIN_FRONTEND_PROTOCOL_OK) {
         return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
     }
+    {
+        cdin_frontend_protocol_status byte_status =
+            cdin_frontend_protocol_payload_get_uint(
+                message->payload, message->payload_length, "first_byte", &first_byte);
+        if (byte_status == CDIN_FRONTEND_PROTOCOL_OK) has_first_byte = 1;
+        else if (byte_status != CDIN_FRONTEND_PROTOCOL_UNSUPPORTED)
+            return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
+    }
     view = cdin_frontend_gui_sdl_model_find_view(model, view_id);
     if (view == NULL) return CDIN_FRONTEND_GUI_SDL_MODEL_STALE;
     if (version == 0u || version != view->semantic.version ||
         view->has_line_request == 0 ||
         version != view->requested_version ||
-        first_line != view->requested_first_line ||
-        count > view->requested_line_count) {
+        count > view->requested_line_count ||
+        (view->has_requested_anchor_byte == 0 &&
+         first_line != view->requested_first_line) ||
+        (view->expects_first_byte != 0 && has_first_byte == 0) ||
+        (view->expects_first_byte == 0 && has_first_byte != 0)) {
         return CDIN_FRONTEND_GUI_SDL_MODEL_STALE;
+    }
+    if (view->has_requested_anchor_byte != 0) {
+        if (has_first_byte == 0 || count == 0u ||
+            first_byte > view->requested_anchor_byte ||
+            view->requested_anchor_byte - first_byte > UINT64_MAX) {
+            return CDIN_FRONTEND_GUI_SDL_MODEL_STALE;
+        }
     }
     if (count > model->visible_line_capacity ||
         count > CDIN_FRONTEND_GUI_SDL_MAX_VISIBLE_LINES) {
@@ -610,10 +630,16 @@ static cdin_frontend_gui_sdl_model_status apply_lines(
             return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
         }
     }
+    if (view->has_requested_anchor_byte != 0 &&
+        view->requested_anchor_byte - first_byte > (uint64_t)lengths[0]) {
+        return CDIN_FRONTEND_GUI_SDL_MODEL_STALE;
+    }
     cache_status = ensure_cache_room(model, total_bytes, view);
     if (cache_status != CDIN_FRONTEND_GUI_SDL_MODEL_OK) return cache_status;
 
     pending.first_line = first_line;
+    pending.first_byte = first_byte;
+    pending.has_first_byte = has_first_byte;
     pending.count = count;
     pending.bytes = total_bytes;
     for (index = 0u; index < count; ++index) {
@@ -715,6 +741,10 @@ static cdin_frontend_gui_sdl_model_status apply_flush(
                 (uint64_t)model->visible_line_capacity;
             action->requests[action->request_count].version =
                 view->semantic.version;
+            action->requests[action->request_count].has_anchor_byte =
+                view->semantic.has_scroll_anchor;
+            action->requests[action->request_count].anchor_byte =
+                view->semantic.scroll_anchor;
             action->request_count++;
         }
         return CDIN_FRONTEND_GUI_SDL_MODEL_OK;
@@ -963,18 +993,22 @@ void cdin_frontend_gui_sdl_model_destroy(cdin_frontend_gui_sdl_model *model)
     memset(model, 0, sizeof(*model));
 }
 
-cdin_frontend_gui_sdl_model_status cdin_frontend_gui_sdl_model_expect_lines(
+cdin_frontend_gui_sdl_model_status cdin_frontend_gui_sdl_model_expect_lines_ex(
     cdin_frontend_gui_sdl_model *model,
     const char *view_id,
-    uint64_t first_line,
+    uint64_t first_line_fallback,
     uint64_t line_count,
-    uint64_t version)
+    uint64_t version,
+    int has_anchor_byte,
+    uint64_t anchor_byte,
+    int expects_first_byte)
 {
     cdin_frontend_gui_sdl_view *view;
-    if (model == NULL || view_id == NULL || view_id[0] == '\0' ||
+    if (model == NULL || view_id == NULL || view_id[0] == '\\0' ||
         version == 0u || line_count == 0u ||
         line_count > (uint64_t)model->visible_line_capacity ||
-        first_line > UINT64_MAX - line_count) {
+        first_line_fallback > UINT64_MAX - line_count ||
+        (has_anchor_byte != 0 && expects_first_byte == 0)) {
         return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
     }
     view = cdin_frontend_gui_sdl_model_find_view(model, view_id);
@@ -983,13 +1017,27 @@ cdin_frontend_gui_sdl_model_status cdin_frontend_gui_sdl_model_expect_lines(
     }
     line_window_release(model, &view->pending);
     view->pending_lines_valid = 0;
-    view->requested_first_line = first_line;
+    view->requested_first_line = first_line_fallback;
     view->requested_line_count = line_count;
     view->requested_version = version;
+    view->requested_anchor_byte = anchor_byte;
+    view->has_requested_anchor_byte = has_anchor_byte != 0;
+    view->expects_first_byte = expects_first_byte != 0;
     view->has_line_request = 1;
     view->semantic.needs_lines = 1;
     view->last_used = next_access(model);
     return CDIN_FRONTEND_GUI_SDL_MODEL_OK;
+}
+
+cdin_frontend_gui_sdl_model_status cdin_frontend_gui_sdl_model_expect_lines(
+    cdin_frontend_gui_sdl_model *model,
+    const char *view_id,
+    uint64_t first_line,
+    uint64_t line_count,
+    uint64_t version)
+{
+    return cdin_frontend_gui_sdl_model_expect_lines_ex(
+        model, view_id, first_line, line_count, version, 0, 0u, 0);
 }
 
 void cdin_frontend_gui_sdl_model_cancel_line_request(
@@ -1000,6 +1048,8 @@ void cdin_frontend_gui_sdl_model_cancel_line_request(
         cdin_frontend_gui_sdl_model_find_view(model, view_id);
     if (view == NULL) return;
     view->has_line_request = 0;
+    view->has_requested_anchor_byte = 0;
+    view->expects_first_byte = 0;
     line_window_release(model, &view->pending);
     view->pending_lines_valid = 0;
 }
