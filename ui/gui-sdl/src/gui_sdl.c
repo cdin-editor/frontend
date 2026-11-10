@@ -41,6 +41,7 @@ struct cdin_frontend_gui_sdl {
     int mouse_enabled;
     int pane_splitter_enabled;
     int ime_composition_enabled;
+    int byte_anchored_lines_enabled;
     int ime_active;
     int ime_escape_key_suppressed;
     int quit_requested;
@@ -378,6 +379,9 @@ cdin_frontend_capability_mask cdin_frontend_gui_sdl_supported_capabilities(void)
 #if defined(CDIN_FRONTEND_GUI_SDL_ENABLE_IME_COMPOSITION) || defined(CDIN_FRONTEND_GUI_SDL_TESTING)
     supported |= CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_IME_COMPOSITION);
 #endif
+#if defined(CDIN_FRONTEND_GUI_SDL_ENABLE_BYTE_ANCHORED_LINES)
+    supported |= CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_BYTE_ANCHORED_LINES);
+#endif
     return supported;
 }
 
@@ -411,6 +415,9 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_create(
     gui->ime_composition_enabled = cdin_frontend_capability_has(
         cdin_frontend_session_accepted_capabilities(config->session),
         CDIN_FRONTEND_CAP_IME_COMPOSITION);
+    gui->byte_anchored_lines_enabled = cdin_frontend_capability_has(
+        cdin_frontend_session_accepted_capabilities(config->session),
+        CDIN_FRONTEND_CAP_BYTE_ANCHORED_LINES);
 #if defined(CDIN_FRONTEND_GUI_SDL_ENABLE_PANE_SPLITTER)
     gui->pane_splitter_enabled = cdin_frontend_capability_has(
         cdin_frontend_session_accepted_capabilities(config->session),
@@ -1154,11 +1161,14 @@ static cdin_frontend_gui_sdl_status request_line_window(
     const char *view_id,
     uint64_t first_line,
     uint64_t line_count,
-    uint64_t version)
+    uint64_t version,
+    int has_anchor_byte,
+    uint64_t anchor_byte)
 {
     cdin_frontend_protocol_status status;
     cdin_frontend_gui_sdl_model_status model_status;
     const cdin_frontend_gui_sdl_view *view;
+    int use_anchor;
     if (gui == NULL || view_id == NULL || view_id[0] == '\0' || version == 0u) {
         return CDIN_FRONTEND_GUI_SDL_INVALID_ARGUMENT;
     }
@@ -1169,13 +1179,20 @@ static cdin_frontend_gui_sdl_status request_line_window(
     if (view == NULL || view->semantic.version != version) {
         return CDIN_FRONTEND_GUI_SDL_INVALID_STATE;
     }
-    model_status = cdin_frontend_gui_sdl_model_expect_lines(
-        &gui->model, view_id, first_line, line_count, version);
+    use_anchor = gui->byte_anchored_lines_enabled && has_anchor_byte;
+    model_status = cdin_frontend_gui_sdl_model_expect_lines_ex(
+        &gui->model, view_id, first_line, line_count, version,
+        use_anchor, anchor_byte, gui->byte_anchored_lines_enabled);
     if (model_status != CDIN_FRONTEND_GUI_SDL_MODEL_OK) {
         return map_model_status(model_status);
     }
-    status = cdin_frontend_session_request_lines(
-        gui->session, view_id, first_line, line_count, version);
+    if (use_anchor) {
+        status = cdin_frontend_session_request_lines_at_byte(
+            gui->session, view_id, first_line, anchor_byte, line_count, version);
+    } else {
+        status = cdin_frontend_session_request_lines(
+            gui->session, view_id, first_line, line_count, version);
+    }
     if (status != CDIN_FRONTEND_PROTOCOL_OK) {
         cdin_frontend_gui_sdl_model_cancel_line_request(&gui->model, view_id);
         return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
@@ -1198,7 +1215,8 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_request_view_lines(
     }
     return request_line_window(
         gui, view_id, first_line,
-        (uint64_t)gui->model.visible_line_capacity, view->semantic.version);
+        (uint64_t)gui->model.visible_line_capacity, view->semantic.version,
+        0, 0u);
 }
 
 cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_request_lines(
@@ -1316,7 +1334,8 @@ cdin_frontend_gui_sdl_status cdin_frontend_gui_sdl_apply_message(
                     &action.requests[request_index];
                 if (request_line_window(
                         gui, request->view_id, request->first_line,
-                        request->line_count, request->version) !=
+                        request->line_count, request->version,
+                        request->has_anchor_byte, request->anchor_byte) !=
                     CDIN_FRONTEND_GUI_SDL_OK) {
                     return CDIN_FRONTEND_GUI_SDL_PROTOCOL_ERROR;
                 }
