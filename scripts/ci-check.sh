@@ -34,5 +34,30 @@ cmake -S tests/package-consumer -B build/package-consumer \
 cmake --build build/package-consumer --config Release --parallel
 ctest --test-dir build/package-consumer -C Release --output-on-failure
 
+# Verify the independently installable Core and TUI variants. The adapter
+# prefix is deliberately composed after Core is installed: TUI must resolve
+# the shared Core target instead of exporting a duplicate copy.
+variant_prefix="${repo_root}/build/variant-consumer-prefix"
+core_consumer_build="${repo_root}/build/variant-consumer-core"
+tui_consumer_build="${repo_root}/build/variant-consumer-tui"
+rm -rf "${variant_prefix}" "${core_consumer_build}" "${tui_consumer_build}"
+cmake --install build --component core --prefix "${variant_prefix}"
+cmake_variant_prefix="${variant_prefix}"
+if command -v cygpath >/dev/null 2>&1; then
+    cmake_variant_prefix="$(cygpath -m "${variant_prefix}")"
+fi
+cmake -S tests/variant-consumer/core -B "${core_consumer_build}" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_PREFIX_PATH="${cmake_variant_prefix};${cmake_logger_prefix}"
+cmake --build "${core_consumer_build}" --config Release --parallel
+ctest --test-dir "${core_consumer_build}" -C Release --output-on-failure
+
+cmake --install build --component tui --prefix "${variant_prefix}"
+cmake -S tests/variant-consumer/tui -B "${tui_consumer_build}" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_PREFIX_PATH="${cmake_variant_prefix};${cmake_logger_prefix}"
+cmake --build "${tui_consumer_build}" --config Release --parallel
+ctest --test-dir "${tui_consumer_build}" -C Release --output-on-failure
+
 bash scripts/check-boundaries.sh
 bash scripts/lint-docs.sh
