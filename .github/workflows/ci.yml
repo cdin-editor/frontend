@@ -69,7 +69,7 @@ jobs:
             -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address" \
             -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/SDL3-install;$PWD/.deps/log" \
             -DCDIN_FRONTEND_USE_LOG_STUB=OFF \
-            -DCDIN_FRONTEND_BUILD_UI_TUI=OFF \
+            -DCDIN_FRONTEND_BUILD_UI_TUI=ON \
             -DCDIN_FRONTEND_BUILD_UI_SDL=ON \
             -DCDIN_FRONTEND_BUILD_UI_HEADLESS=OFF \
             -DCDIN_FRONTEND_BUILD_APPS=ON \
@@ -102,26 +102,13 @@ jobs:
           cmake --build build-gui-sdl --parallel
           ctest --test-dir build-gui-sdl --output-on-failure
           cmake --install build-gui-sdl
-      - name: Verify clean-prefix GUI-SDL consumer
+      - name: Verify composable Core, TUI and GUI-SDL packages from a clean prefix
         run: |
-          mkdir -p "$RUNNER_TEMP/gui-sdl-consumer"
-          cat > "$RUNNER_TEMP/gui-sdl-consumer/CMakeLists.txt" <<'EOF'
-          cmake_minimum_required(VERSION 3.22)
-          project(gui_sdl_consumer C)
-          find_package(cdinFrontend 1.0 CONFIG REQUIRED)
-          add_executable(gui_sdl_consumer main.c)
-          target_link_libraries(gui_sdl_consumer PRIVATE cdin::frontend_ui_gui_sdl)
-          EOF
-          cat > "$RUNNER_TEMP/gui-sdl-consumer/main.c" <<'EOF'
-          #include <cdin/frontend/ui/gui_sdl/gui_sdl.h>
-          int main(void) {
-              cdin_frontend_gui_sdl_destroy(NULL);
-              return CDIN_FRONTEND_GUI_SDL_OK;
-          }
-          EOF
-          cmake -S "$RUNNER_TEMP/gui-sdl-consumer" -B "$RUNNER_TEMP/gui-sdl-consumer-build" -G Ninja \
+          cmake -S tests/variant-consumer/combined -B "$RUNNER_TEMP/frontend-consumer-build" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/frontend-install;$RUNNER_TEMP/SDL3-install;$PWD/.deps/log"
-          cmake --build "$RUNNER_TEMP/gui-sdl-consumer-build" --parallel
+          cmake --build "$RUNNER_TEMP/frontend-consumer-build" --parallel
+          ctest --test-dir "$RUNNER_TEMP/frontend-consumer-build" --output-on-failure
 
   platform-smoke:
     name: ${{ matrix.os }} native Core + TUI UI peer
