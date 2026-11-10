@@ -225,6 +225,30 @@ static size_t build_lines(
     return writer.length;
 }
 
+static size_t build_lines_with_first_byte(
+    uint8_t *output, size_t capacity,
+    const char *view_id, uint64_t version,
+    uint64_t first_byte, uint64_t first_line,
+    const uint8_t *line_bytes, size_t line_length)
+{
+    cbor_writer writer = { output, capacity, 0u };
+    put_map(&writer, 5u);
+    put_text(&writer, "lines");
+    put_array(&writer, 1u);
+    put_map(&writer, 1u);
+    put_text(&writer, "bytes");
+    put_bytes(&writer, line_bytes, line_length);
+    put_text(&writer, "version");
+    put_uint(&writer, version);
+    put_text(&writer, "view_id");
+    put_text(&writer, view_id);
+    put_text(&writer, "first_byte");
+    put_uint(&writer, first_byte);
+    put_text(&writer, "first_line");
+    put_uint(&writer, first_line);
+    return writer.length;
+}
+
 static size_t build_lines_with_one_span(
     uint8_t *output, size_t capacity,
     const char *view_id, uint64_t version,
@@ -492,7 +516,10 @@ static void test_independent_view_state_and_cache(void)
     assert(action.acknowledge_sequence == 1u);
     assert(action.request_count == 2u);
     assert(strcmp(action.requests[0].view_id, "view-0") == 0);
+    assert(action.requests[0].has_anchor_byte != 0);
+    assert(action.requests[0].anchor_byte == 2u);
     assert(strcmp(action.requests[1].view_id, "view-1") == 0);
+    assert(action.requests[1].has_anchor_byte == 0);
     assert(model.view_count == 2u);
     assert(model.layout.node_count == 3u);
     assert(model.layout.view_count == 2u);
@@ -507,6 +534,7 @@ static void test_independent_view_state_and_cache(void)
     assert(first->semantic.selection_anchor == 2u);
     assert(first->semantic.selection_caret == 5u);
     assert(first->semantic.scroll_anchor == 2u);
+    assert(first->semantic.has_scroll_anchor != 0);
     assert(second->semantic.focused == 0);
     assert(second->semantic.visible != 0);
     assert(second->semantic.version == 3u);
@@ -576,6 +604,43 @@ static void test_independent_view_state_and_cache(void)
     assert(first->visible.first_line == 0u);
     assert(second->visible.first_line == 10u);
     cdin_frontend_gui_sdl_model_cancel_line_request(&model, "view-0");
+
+    /* A byte-anchored response may start at a different logical line, but its
+     * exact first byte must identify a returned line that contains the anchor. */
+    {
+        static const uint8_t anchored_text[] = { 'a', 'b', 'c', '\\n' };
+        assert(cdin_frontend_gui_sdl_model_expect_lines_ex(
+            &model, "view-0", 0u, 16u, 1u, 1, 12u, 1) ==
+            CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+        length = build_lines_with_first_byte(
+            payload, sizeof(payload), "view-0", 1u, 10u, 1u,
+            anchored_text, sizeof(anchored_text));
+        assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_VIEW_LINES,
+                             payload, length, &action) ==
+               CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+        length = build_response_flush(payload, sizeof(payload), 3u);
+        assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
+                             payload, length, &action) ==
+               CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+        assert(first->visible.first_line == 1u);
+        assert(first->visible.has_first_byte != 0);
+        assert(first->visible.first_byte == 10u);
+
+        /* A response whose first byte is after the requested anchor is stale;
+         * the previously committed visible window remains untouched. */
+        assert(cdin_frontend_gui_sdl_model_expect_lines_ex(
+            &model, "view-0", 0u, 16u, 1u, 1, 12u, 1) ==
+            CDIN_FRONTEND_GUI_SDL_MODEL_OK);
+        length = build_lines_with_first_byte(
+            payload, sizeof(payload), "view-0", 1u, 13u, 1u,
+            anchored_text, sizeof(anchored_text));
+        assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_VIEW_LINES,
+                             payload, length, &action) ==
+               CDIN_FRONTEND_GUI_SDL_MODEL_STALE);
+        assert(first->visible.first_line == 1u);
+        assert(first->visible.first_byte == 10u);
+        cdin_frontend_gui_sdl_model_cancel_line_request(&model, "view-0");
+    }
 
     /* A same-version complete snapshot retains both independent line caches. */
     length = build_layout(payload, sizeof(payload), 10u, 2u);
