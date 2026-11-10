@@ -705,7 +705,8 @@ static void test_independent_view_state_and_cache(void)
     assert(model.view_count == 1u);
     assert(cdin_frontend_gui_sdl_model_find_view(&model, "view-1") == NULL);
     assert(cdin_frontend_gui_sdl_model_find_view(&model, "view-0") != NULL);
-    assert(model.cache_bytes == sizeof(first_text) - 1u);
+    /* The byte-anchored response replaced view-0's earlier line window. */
+    assert(model.cache_bytes == sizeof(anchored_text) - 1u);
 
     /* Re-adding a removed ID creates fresh state; an earlier cache is not resurrected. */
     length = build_layout(payload, sizeof(payload), 13u, 2u);
