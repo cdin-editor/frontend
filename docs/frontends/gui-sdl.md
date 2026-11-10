@@ -148,12 +148,15 @@ semantic focus. Mouse motion and button release do not trigger a focus change.
 The renderer viewport and startup dimensions are initialized from drawable
 pixel dimensions, not logical window dimensions.
 
-The current Runtime accepts `input.mouse.target` as a View ID, while the
-Protocol architecture text describes it generically as a region ID. The exact
-splitter/region identity and ratio-drag operation are not yet standardized.
-Split resize is therefore gated by [Spec ADR-0024](https://github.com/cdin-editor/spec/blob/main/docs/adr/ADR-0024-pane-tree-splitter-resize.md);
-Frontend does not invent a new mouse action or mutate Runtime-owned ratios
-locally.
+The optional `pane-splitter-resize/1` operation is standardized by the
+accepted [Spec ADR-0024](https://github.com/cdin-editor/spec/blob/main/docs/adr/ADR-0024-pane-tree-splitter-resize.md).
+The SDL adapter identifies a stable Split node, captures the pointer, renders a
+local preview, and submits the typed resize request through the Frontend
+Session. Runtime remains authoritative for split identity, Driver permission,
+ratio validation and committed PaneTree state; Frontend never commits a local
+semantic ratio. A successful result is reconciled with the following atomic
+snapshot. The capability remains build-time opt-in and disabled in normal
+packages until CDIN's exact pinned-stack product E2E passes.
 
 The adapter advertises the mouse capability and forwards negotiated pointer
 and wheel input. It advertises `pane-splitter-resize/1` only when the explicit
