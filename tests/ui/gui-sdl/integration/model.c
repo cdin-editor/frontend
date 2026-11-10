@@ -730,7 +730,7 @@ static void test_independent_view_state_and_cache(void)
     assert(second->semantic.version == 5u);
     assert(second->visible.count == 0u);
     assert(second->pending_lines_valid == 0);
-    assert(model.cache_bytes == sizeof(first_text) - 1u);
+    assert(model.cache_bytes == sizeof(anchored_text));
 
     /* A malformed replacement layout does not destroy the last valid tree. */
     before_invalid = model.layout;
