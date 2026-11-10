@@ -314,8 +314,8 @@ if(NOT CDIN_FRONTEND_USE_LOG_STUB)
         ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
         LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
         RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+        COMPONENT core
         INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-        COMPONENT core)
     install(EXPORT cdinFrontendCoreTargets
         FILE cdinFrontendCoreTargets.cmake
         NAMESPACE cdin::
@@ -354,8 +354,8 @@ if(NOT CDIN_FRONTEND_USE_LOG_STUB)
             ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
             LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
             RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+            COMPONENT tui
             INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-            COMPONENT tui)
         install(EXPORT cdinFrontendTUITargets
             FILE cdinFrontendTUITargets.cmake
             NAMESPACE cdin::
@@ -395,8 +395,8 @@ if(NOT CDIN_FRONTEND_USE_LOG_STUB)
             ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
             LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
             RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+            COMPONENT gui-sdl
             INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-            COMPONENT gui-sdl)
         install(EXPORT cdinFrontendGUISDLTargets
             FILE cdinFrontendGUISDLTargets.cmake
             NAMESPACE cdin::
