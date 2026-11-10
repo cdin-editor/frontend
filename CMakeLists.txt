@@ -311,10 +311,9 @@ if(NOT CDIN_FRONTEND_USE_LOG_STUB)
     # Core package: UI-neutral services and public contracts.
     install(TARGETS cdin_frontend_core
         EXPORT cdinFrontendCoreTargets
-        ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-        LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-        COMPONENT core
+        ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT core
+        LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT core
+        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT core
         INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
     install(EXPORT cdinFrontendCoreTargets
         FILE cdinFrontendCoreTargets.cmake
@@ -351,10 +350,9 @@ if(NOT CDIN_FRONTEND_USE_LOG_STUB)
     if(CDIN_FRONTEND_BUILD_UI_TUI)
         install(TARGETS cdin_frontend_ui_tui
             EXPORT cdinFrontendTUITargets
-            ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-            LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-            RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-            COMPONENT tui
+            ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT tui
+            LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT tui
+            RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT tui
             INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
         install(EXPORT cdinFrontendTUITargets
             FILE cdinFrontendTUITargets.cmake
@@ -392,10 +390,9 @@ if(NOT CDIN_FRONTEND_USE_LOG_STUB)
     if(CDIN_FRONTEND_BUILD_UI_SDL)
         install(TARGETS cdin_frontend_ui_gui_sdl
             EXPORT cdinFrontendGUISDLTargets
-            ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-            LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-            RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-            COMPONENT gui-sdl
+            ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT gui-sdl
+            LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT gui-sdl
+            RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT gui-sdl
             INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
         install(EXPORT cdinFrontendGUISDLTargets
             FILE cdinFrontendGUISDLTargets.cmake
