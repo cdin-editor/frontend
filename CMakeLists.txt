@@ -301,43 +301,142 @@ if(CDIN_FRONTEND_BUILD_EXAMPLES)
     cdin_frontend_enable_strict(cdin_frontend_logging_example)
 endif()
 
-# The production package installs Core and, when enabled, the reusable TUI
-# adapter. The adapter is still a partial application until FE-019 and live
-# product gates pass; consumers receive its public target without vendoring.
+# Install each public product as a separate Registry package variant.
+# Core is a shared dependency; adapters export only their own targets and
+# resolve Core through its separately installed CMake package.
 if(NOT CDIN_FRONTEND_USE_LOG_STUB)
-    set(CDIN_FRONTEND_INSTALL_TARGETS cdin_frontend_core)
-    if(CDIN_FRONTEND_BUILD_UI_TUI)
-        list(APPEND CDIN_FRONTEND_INSTALL_TARGETS cdin_frontend_ui_tui)
-    endif()
-    if(CDIN_FRONTEND_BUILD_UI_SDL)
-        list(APPEND CDIN_FRONTEND_INSTALL_TARGETS cdin_frontend_ui_gui_sdl)
-    endif()
-    install(TARGETS ${CDIN_FRONTEND_INSTALL_TARGETS}
-        EXPORT cdinFrontendTargets
+    set(CDIN_FRONTEND_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake")
+    set(CDIN_FRONTEND_PKGCONFIG_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
+
+    # Core package: UI-neutral services and public contracts.
+    install(TARGETS cdin_frontend_core
+        EXPORT cdinFrontendCoreTargets
         ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
         LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
         RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-        INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
-    install(DIRECTORY include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-        FILES_MATCHING PATTERN "*.h")
-    if(CDIN_FRONTEND_BUILD_UI_TUI)
-        install(DIRECTORY ui/tui/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-            FILES_MATCHING PATTERN "*.h")
-    endif()
-    if(CDIN_FRONTEND_BUILD_UI_SDL)
-        install(DIRECTORY ui/gui-sdl/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-            FILES_MATCHING PATTERN "*.h")
-    endif()
-    install(EXPORT cdinFrontendTargets
-        FILE cdinFrontendTargets.cmake
+        INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+        COMPONENT core)
+    install(EXPORT cdinFrontendCoreTargets
+        FILE cdinFrontendCoreTargets.cmake
         NAMESPACE cdin::
-        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/cdinFrontend")
+        DESTINATION "${CDIN_FRONTEND_CMAKE_INSTALL_DIR}/cdinFrontendCore"
+        COMPONENT core)
+    install(DIRECTORY include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+        FILES_MATCHING PATTERN "*.h"
+        COMPONENT core)
 
-    set(CDIN_FRONTEND_CONFIG_NEEDS_SDL ${CDIN_FRONTEND_BUILD_UI_SDL})
+    configure_package_config_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/cdinFrontendCoreConfig.cmake.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/cdinFrontendCoreConfig.cmake"
+        INSTALL_DESTINATION "${CDIN_FRONTEND_CMAKE_INSTALL_DIR}/cdinFrontendCore")
+    write_basic_package_version_file(
+        "${CMAKE_CURRENT_BINARY_DIR}/cdinFrontendCoreConfigVersion.cmake"
+        VERSION "${PROJECT_VERSION}"
+        COMPATIBILITY SameMajorVersion)
+    install(FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/cdinFrontendCoreConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/cdinFrontendCoreConfigVersion.cmake"
+        DESTINATION "${CDIN_FRONTEND_CMAKE_INSTALL_DIR}/cdinFrontendCore"
+        COMPONENT core)
+
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/cdin-frontend-core.pc.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/cdin-frontend-core.pc"
+        @ONLY)
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cdin-frontend-core.pc"
+        DESTINATION "${CDIN_FRONTEND_PKGCONFIG_INSTALL_DIR}"
+        COMPONENT core)
+
+    # TUI package: only the terminal adapter. Core is resolved separately.
+    if(CDIN_FRONTEND_BUILD_UI_TUI)
+        install(TARGETS cdin_frontend_ui_tui
+            EXPORT cdinFrontendTUITargets
+            ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+            LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+            RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+            INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+            COMPONENT tui)
+        install(EXPORT cdinFrontendTUITargets
+            FILE cdinFrontendTUITargets.cmake
+            NAMESPACE cdin::
+            DESTINATION "${CDIN_FRONTEND_CMAKE_INSTALL_DIR}/cdinFrontendTUI"
+            COMPONENT tui)
+        install(DIRECTORY ui/tui/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+            FILES_MATCHING PATTERN "*.h"
+            COMPONENT tui)
+
+        configure_package_config_file(
+            "${CMAKE_CURRENT_SOURCE_DIR}/cmake/cdinFrontendTUIConfig.cmake.in"
+            "${CMAKE_CURRENT_BINARY_DIR}/cdinFrontendTUIConfig.cmake"
+            INSTALL_DESTINATION "${CDIN_FRONTEND_CMAKE_INSTALL_DIR}/cdinFrontendTUI")
+        write_basic_package_version_file(
+            "${CMAKE_CURRENT_BINARY_DIR}/cdinFrontendTUIConfigVersion.cmake"
+            VERSION "${PROJECT_VERSION}"
+            COMPATIBILITY SameMajorVersion)
+        install(FILES
+            "${CMAKE_CURRENT_BINARY_DIR}/cdinFrontendTUIConfig.cmake"
+            "${CMAKE_CURRENT_BINARY_DIR}/cdinFrontendTUIConfigVersion.cmake"
+            DESTINATION "${CDIN_FRONTEND_CMAKE_INSTALL_DIR}/cdinFrontendTUI"
+            COMPONENT tui)
+
+        configure_file(
+            "${CMAKE_CURRENT_SOURCE_DIR}/cmake/cdin-frontend-tui.pc.in"
+            "${CMAKE_CURRENT_BINARY_DIR}/cdin-frontend-tui.pc"
+            @ONLY)
+        install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cdin-frontend-tui.pc"
+            DESTINATION "${CDIN_FRONTEND_PKGCONFIG_INSTALL_DIR}"
+            COMPONENT tui)
+    endif()
+
+    # GUI-SDL package: only the SDL adapter; SDL3 remains an environment package.
+    if(CDIN_FRONTEND_BUILD_UI_SDL)
+        install(TARGETS cdin_frontend_ui_gui_sdl
+            EXPORT cdinFrontendGUISDLTargets
+            ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+            LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+            RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+            INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+            COMPONENT gui-sdl)
+        install(EXPORT cdinFrontendGUISDLTargets
+            FILE cdinFrontendGUISDLTargets.cmake
+            NAMESPACE cdin::
+            DESTINATION "${CDIN_FRONTEND_CMAKE_INSTALL_DIR}/cdinFrontendGUISDL"
+            COMPONENT gui-sdl)
+        install(DIRECTORY ui/gui-sdl/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+            FILES_MATCHING PATTERN "*.h"
+            COMPONENT gui-sdl)
+
+        configure_package_config_file(
+            "${CMAKE_CURRENT_SOURCE_DIR}/cmake/cdinFrontendGUISDLConfig.cmake.in"
+            "${CMAKE_CURRENT_BINARY_DIR}/cdinFrontendGUISDLConfig.cmake"
+            INSTALL_DESTINATION "${CDIN_FRONTEND_CMAKE_INSTALL_DIR}/cdinFrontendGUISDL")
+        write_basic_package_version_file(
+            "${CMAKE_CURRENT_BINARY_DIR}/cdinFrontendGUISDLConfigVersion.cmake"
+            VERSION "${PROJECT_VERSION}"
+            COMPATIBILITY SameMajorVersion)
+        install(FILES
+            "${CMAKE_CURRENT_BINARY_DIR}/cdinFrontendGUISDLConfig.cmake"
+            "${CMAKE_CURRENT_BINARY_DIR}/cdinFrontendGUISDLConfigVersion.cmake"
+            DESTINATION "${CDIN_FRONTEND_CMAKE_INSTALL_DIR}/cdinFrontendGUISDL"
+            COMPONENT gui-sdl)
+
+        configure_file(
+            "${CMAKE_CURRENT_SOURCE_DIR}/cmake/cdin-frontend-gui-sdl.pc.in"
+            "${CMAKE_CURRENT_BINARY_DIR}/cdin-frontend-gui-sdl.pc"
+            @ONLY)
+        install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cdin-frontend-gui-sdl.pc"
+            DESTINATION "${CDIN_FRONTEND_PKGCONFIG_INSTALL_DIR}"
+            COMPONENT gui-sdl)
+    endif()
+
+    # Compatibility meta-package for existing consumers. New consumers should
+    # request cdinFrontendCore, cdinFrontendTUI or cdinFrontendGUISDL explicitly.
+    set(CDIN_FRONTEND_CONFIG_HAS_TUI ${CDIN_FRONTEND_BUILD_UI_TUI})
+    set(CDIN_FRONTEND_CONFIG_HAS_GUI_SDL ${CDIN_FRONTEND_BUILD_UI_SDL})
     configure_package_config_file(
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake/cdinFrontendConfig.cmake.in"
         "${CMAKE_CURRENT_BINARY_DIR}/cdinFrontendConfig.cmake"
-        INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/cdinFrontend")
+        INSTALL_DESTINATION "${CDIN_FRONTEND_CMAKE_INSTALL_DIR}/cdinFrontend")
     write_basic_package_version_file(
         "${CMAKE_CURRENT_BINARY_DIR}/cdinFrontendConfigVersion.cmake"
         VERSION "${PROJECT_VERSION}"
@@ -345,5 +444,5 @@ if(NOT CDIN_FRONTEND_USE_LOG_STUB)
     install(FILES
         "${CMAKE_CURRENT_BINARY_DIR}/cdinFrontendConfig.cmake"
         "${CMAKE_CURRENT_BINARY_DIR}/cdinFrontendConfigVersion.cmake"
-        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/cdinFrontend")
+        DESTINATION "${CDIN_FRONTEND_CMAKE_INSTALL_DIR}/cdinFrontend")
 endif()
