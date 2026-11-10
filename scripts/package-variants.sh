@@ -93,6 +93,10 @@ logger_prefix="${LOGGER_PREFIX:-$repo_root/.deps/log}"
   exit 1
 }
 
+# pkg-config does not inherit CMake's CMAKE_PREFIX_PATH. Make the separately
+# installed logger package visible for version/provenance recording.
+export PKG_CONFIG_PATH="$logger_prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+
 cmake_logger="$logger_prefix"
 cmake_sdl="$SDL3_PREFIX"
 if command -v cygpath >/dev/null 2>&1; then
