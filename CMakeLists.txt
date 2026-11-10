@@ -198,6 +198,15 @@ if(BUILD_TESTING)
     cdin_frontend_core_test(cdin_frontend_session_tests tests/core/integration/session_state.c)
     cdin_frontend_core_test(cdin_frontend_command_request_tests tests/core/integration/command_request.c)
 
+    if(CDIN_FRONTEND_BUILD_UI_SDL)
+        find_package(Python3 COMPONENTS Interpreter REQUIRED)
+        add_test(NAME cdin_frontend_pane_splitter_vectors
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/scripts/check-pane-splitter-vectors.py
+                ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/pane-splitter-v1.json
+                ${CMAKE_CURRENT_SOURCE_DIR})
+    endif()
+
     if(CDIN_FRONTEND_BUILD_UI_HEADLESS)
         add_executable(cdin_frontend_headless_recorder_tests
             tests/ui/headless/integration/recorder.c)
