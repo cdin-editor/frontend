@@ -33,9 +33,12 @@ The GUI has a separate presentation model; it does not cache canonical
 document bytes or move selection authority out of Runtime. It tracks up to 32
 stable Runtime view IDs, with independent document version, cursor, selection,
 scroll anchor, visibility/focus and one outstanding line-window request per
-view. A `view.lines` response is accepted only for that view's exact requested
-first-line/count/version tuple and remains pending until response-scoped
-`ui.flush`. Complete snapshot replacement removes views omitted by the new
+view. A `view.lines` response is accepted only for that view's requested
+first-line/count/version tuple, or for the actual first line that contains its
+requested byte anchor when `byte-anchored-lines/1` was negotiated. Negotiated
+responses must include the exact `first_byte` from the same Backend snapshot;
+non-negotiated responses retain the legacy line-only shape. Responses remain
+pending until response-scoped `ui.flush`. Complete snapshot replacement removes views omitted by the new
 PaneTree; a same-version view retains its cache, while a changed version drops
 only that view's stale cache. Snapshot revisions must be strictly increasing.
 
@@ -98,7 +101,9 @@ Text is still drawn with SDL's diagnostic debug-text primitive. Non-ASCII
 bytes are shown as placeholders; the original bytes remain unchanged in the
 cache. The renderer is therefore multi-pane, but not yet a production Unicode
 text renderer. Style roles, cursor/selection visualization, panels, widgets
-and per-view scrolling remain later phases.
+and production text shaping remain later phases. Byte-anchored bounded line
+requests are implemented behind `CDIN_FRONTEND_GUI_SDL_ENABLE_BYTE_ANCHORED_LINES`
+(default `OFF`); the live CDIN matrix remains the gate before normal product builds enable it.
 
 ## Semantic presentation payloads and line spans
 
@@ -117,10 +122,11 @@ against the same 4 MiB aggregate LRU cache budget as line content. This gives
 the later text renderer the original byte-to-role data without prematurely
 assigning colors or glyph geometry.
 
-The field-level style attribute and declarative widget schemas remain
-under design in [Spec issue #21](https://github.com/cdin-editor/spec/issues/21).
-Until that contract is accepted, the GUI does not invent rendering semantics
-for opaque panel/prompt maps. Cursor and selection drawing also remains gated
+The field-level style attribute and declarative widget schemas are accepted in
+[Spec ADR-0026](https://github.com/cdin-editor/spec/blob/main/docs/adr/ADR-0026-ui-presentation-contract.md).
+The renderer still does not invent partial semantics for opaque panel/prompt
+maps; implementation and conformance are tracked by [Backend #31](https://github.com/cdin-editor/backend/issues/31)
+and [Frontend #15](https://github.com/cdin-editor/frontend/issues/15). Cursor and selection drawing also remains gated
 on the byte-to-visual mapping from the text pipeline phase.
 
 ## Pane hit-testing and pointer routing
@@ -145,7 +151,7 @@ pixel dimensions, not logical window dimensions.
 The current Runtime accepts `input.mouse.target` as a View ID, while the
 Protocol architecture text describes it generically as a region ID. The exact
 splitter/region identity and ratio-drag operation are not yet standardized.
-Split resize is therefore gated by [Spec issue #20](https://github.com/cdin-editor/spec/issues/20);
+Split resize is therefore gated by [Spec ADR-0024](https://github.com/cdin-editor/spec/blob/main/docs/adr/ADR-0024-pane-tree-splitter-resize.md);
 Frontend does not invent a new mouse action or mutate Runtime-owned ratios
 locally.
 
