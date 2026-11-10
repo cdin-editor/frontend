@@ -1,0 +1,12 @@
+prefix=${pcfiledir}/../..
+exec_prefix=${prefix}
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: cdin-frontend-gui-sdl
+Description: CDIN Frontend SDL3 GUI adapter
+Version: @PROJECT_VERSION@
+Requires: cdin-frontend-core >= @PROJECT_VERSION@
+Requires.private: sdl3 >= 3.2
+Libs: -L${libdir} -lcdin_frontend_ui_gui_sdl
+Cflags: -I${includedir}
