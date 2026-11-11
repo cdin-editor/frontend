@@ -113,7 +113,7 @@ jobs:
 
       - name: Verify native variant archive packaging and external consumers
         env:
-          PIPELINE_RELEASE_TAG: v1.1.0
+          PIPELINE_RELEASE_TAG: v1.1.1
           FRONTEND_TARGET_OS: linux
           FRONTEND_TARGET_ARCH: x86_64
           FRONTEND_TARGET_ABI: gnu-glibc-2.39
