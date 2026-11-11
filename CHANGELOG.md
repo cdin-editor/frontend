@@ -11,6 +11,26 @@ themselves declare the complete TUI, GUI-SDL, or CDIN application production
 ready. Optional IME and pane-splitter capabilities remain gated on compatible
 immutable component candidates and live CDIN product verification.
 
+## [1.1.1] - 2026-11-11
+
+### Added
+
+- Prepare immutable Core, TUI and GUI-SDL CMake-prefix package releases for
+  Linux x86_64/ARM64, macOS x86_64/ARM64 and Windows x86_64 UCRT64.
+- Generate three canonical ADR-0028 Component Release Metadata assets
+  (`frontend-core-1.1.1.json`, `frontend-tui-1.1.1.json` and
+  `frontend-gui-sdl-1.1.1.json`) from the exact tagged source commit after
+  all 15 target/variant archives and their descriptors have been collected.
+
+### Changed
+
+- Keep the contributor source archive separate from installable variant
+  packages. Core is published once per target and shared by TUI and GUI-SDL;
+  SDL3 remains a separately provisioned environment package.
+- Preserve the published 1.1.0 source-only Release and all earlier metadata
+  identities unchanged. Package publication does not claim full TUI/GUI-SDL
+  product readiness or enable optional capabilities by default.
+
 ## [1.1.0] - 2026-11-10
 
 ### Added
