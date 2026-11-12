@@ -807,6 +807,19 @@ static cdin_frontend_gui_sdl_model_status apply_style_table(
     if (styles_length > CDIN_FRONTEND_GUI_SDL_MAX_STYLE_TABLE_BYTES) {
         return CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT;
     }
+    {
+        cdin_frontend_gui_sdl_style_table decoded;
+        cdin_frontend_gui_sdl_style_status style_status =
+            cdin_frontend_gui_sdl_style_table_decode(
+                styles, styles_length, &decoded);
+        if (style_status == CDIN_FRONTEND_GUI_SDL_STYLE_LIMIT) {
+            return CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT;
+        }
+        if (style_status != CDIN_FRONTEND_GUI_SDL_STYLE_OK) {
+            return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
+        }
+        presentation->decoded_style_table = decoded;
+    }
     base_bytes = presentation->encoded_bytes -
         presentation->style_table_length;
     if (base_bytes > CDIN_FRONTEND_GUI_SDL_MAX_PRESENTATION_BYTES -
