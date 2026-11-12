@@ -58,6 +58,27 @@ static size_t debug_text_columns(
     return count;
 }
 
+static uint8_t source_over_channel(
+    uint8_t source, uint8_t source_alpha, uint8_t destination)
+{
+    uint32_t numerator = (uint32_t)source * (uint32_t)source_alpha +
+        (uint32_t)destination * (uint32_t)(255u - source_alpha);
+    return (uint8_t)((numerator + 127u) / 255u);
+}
+
+static void source_over_rgb(
+    const uint8_t source[4],
+    const uint8_t destination[3],
+    uint8_t output[4])
+{
+    size_t channel;
+    for (channel = 0u; channel < 3u; ++channel) {
+        output[channel] = source_over_channel(
+            source[channel], source[3], destination[channel]);
+    }
+    output[3] = 255u;
+}
+
 static void draw_text_run(
     SDL_Renderer *renderer,
     float x,
@@ -69,10 +90,16 @@ static void draw_text_run(
     const cdin_frontend_gui_sdl_style_role *style,
     const uint8_t base_background[3])
 {
+    static const uint8_t base_foreground_rgba[4] = {
+        205u, 211u, 221u, 255u
+    };
+    uint8_t base_background_rgba[4] = {0u, 0u, 0u, 255u};
+    uint8_t background_source[4];
+    uint8_t foreground_source[4];
+    uint8_t background[4];
+    uint8_t foreground[4];
     char text[512];
     size_t columns;
-    uint8_t foreground[4] = {205u, 211u, 221u, 255u};
-    uint8_t background[4] = {0u, 0u, 0u, 255u};
     int draw_background = 0;
     SDL_FRect background_rect;
     float run_x = x + (float)column * 8.0f;
@@ -83,30 +110,54 @@ static void draw_text_run(
     columns = debug_text_columns(bytes, length, capacity - column, text);
     if (columns == 0u) return;
     if (base_background != NULL) {
-        background[0] = base_background[0];
-        background[1] = base_background[1];
-        background[2] = base_background[2];
+        base_background_rgba[0] = base_background[0];
+        base_background_rgba[1] = base_background[1];
+        base_background_rgba[2] = base_background[2];
     }
+
+    memcpy(background_source, base_background_rgba,
+           sizeof(background_source));
+    memcpy(foreground_source, base_foreground_rgba,
+           sizeof(foreground_source));
     if (style != NULL) {
-        if (style->has_foreground != 0u) {
-            memcpy(foreground, style->foreground, sizeof(foreground));
-        }
-        if (style->has_background != 0u) {
-            memcpy(background, style->background, sizeof(background));
-            draw_background = 1;
-        }
+        draw_background = style->has_background != 0u ||
+            style->inverse != 0u;
         if (style->inverse != 0u) {
-            uint8_t previous_foreground[4];
-            memcpy(previous_foreground, foreground, sizeof(previous_foreground));
-            memcpy(foreground, background, sizeof(foreground));
-            memcpy(background, previous_foreground, sizeof(background));
-            draw_background = 1;
-        }
-        if (style->dim != 0u) {
-            for (channel = 0u; channel < 3u; ++channel) {
-                foreground[channel] =
-                    (uint8_t)(((unsigned)foreground[channel] * 2u) / 3u);
+            if (style->has_foreground != 0u) {
+                memcpy(background_source, style->foreground,
+                       sizeof(background_source));
+            } else {
+                memcpy(background_source, base_foreground_rgba,
+                       sizeof(background_source));
             }
+            if (style->has_background != 0u) {
+                memcpy(foreground_source, style->background,
+                       sizeof(foreground_source));
+            } else {
+                memcpy(foreground_source, base_background_rgba,
+                       sizeof(foreground_source));
+            }
+        } else {
+            if (style->has_background != 0u) {
+                memcpy(background_source, style->background,
+                       sizeof(background_source));
+            }
+            if (style->has_foreground != 0u) {
+                memcpy(foreground_source, style->foreground,
+                       sizeof(foreground_source));
+            }
+        }
+    }
+
+    /* ADR-0026 defines RGBA alpha as source-over opacity. Composite the role
+     * background over the pane base, then the foreground over that result.
+     * Draw opaque RGB so the result is independent of SDL's draw blend mode. */
+    source_over_rgb(background_source, base_background_rgba, background);
+    source_over_rgb(foreground_source, background, foreground);
+    if (style != NULL && style->dim != 0u) {
+        for (channel = 0u; channel < 3u; ++channel) {
+            foreground[channel] =
+                (uint8_t)(((unsigned)foreground[channel] * 2u) / 3u);
         }
     }
     if (draw_background != 0) {
@@ -115,11 +166,11 @@ static void draw_text_run(
         background_rect.w = (float)columns * 8.0f;
         background_rect.h = 9.0f;
         (void)SDL_SetRenderDrawColor(renderer, background[0], background[1],
-                                     background[2], background[3]);
+                                     background[2], 255u);
         (void)SDL_RenderFillRect(renderer, &background_rect);
     }
     (void)SDL_SetRenderDrawColor(renderer, foreground[0], foreground[1],
-                                 foreground[2], foreground[3]);
+                                 foreground[2], 255u);
     if (style != NULL && style->italic != 0u) {
         size_t index;
         for (index = 0u; index < columns; ++index) {
