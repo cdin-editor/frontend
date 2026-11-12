@@ -238,6 +238,22 @@ static void test_line_spans_resolve_semantic_style_roles(
     assert(cdin_frontend_gui_sdl_style_table_decode(
         styles, sizeof(styles), &model.presentation.decoded_style_table) ==
         CDIN_FRONTEND_GUI_SDL_STYLE_OK);
+    {
+        const cdin_frontend_gui_sdl_style_role *role =
+            cdin_frontend_gui_sdl_style_table_find(
+                &model.presentation.decoded_style_table, "keyword");
+        assert(role != NULL);
+        assert(role->has_background == 1u);
+        assert(role->has_foreground == 1u);
+        assert(role->background[0] == 100u);
+        assert(role->background[1] == 20u);
+        assert(role->background[2] == 40u);
+        assert(role->background[3] == 128u);
+        assert(role->foreground[0] == 255u);
+        assert(role->foreground[1] == 60u);
+        assert(role->foreground[2] == 10u);
+        assert(role->foreground[3] == 128u);
+    }
 
     assert(SDL_SetRenderDrawColor(renderer, 0u, 0u, 0u, 255u));
     assert(SDL_RenderClear(renderer));
