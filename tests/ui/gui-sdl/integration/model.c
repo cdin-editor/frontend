@@ -280,6 +280,45 @@ static size_t build_lines_with_one_span(
     return writer.length;
 }
 
+static size_t build_lines_with_two_spans(
+    uint8_t *output, size_t capacity,
+    const char *view_id, uint64_t version,
+    uint64_t first_line, const uint8_t *line_bytes, size_t line_length,
+    uint64_t first_start, uint64_t first_end,
+    uint64_t second_start, uint64_t second_end, const char *role)
+{
+    cbor_writer writer = { output, capacity, 0u };
+    put_map(&writer, 4u);
+    put_text(&writer, "lines");
+    put_array(&writer, 1u);
+    put_map(&writer, 2u);
+    put_text(&writer, "bytes");
+    put_bytes(&writer, line_bytes, line_length);
+    put_text(&writer, "spans");
+    put_array(&writer, 2u);
+    put_map(&writer, 3u);
+    put_text(&writer, "end");
+    put_uint(&writer, first_end);
+    put_text(&writer, "role");
+    put_text(&writer, role);
+    put_text(&writer, "start");
+    put_uint(&writer, first_start);
+    put_map(&writer, 3u);
+    put_text(&writer, "end");
+    put_uint(&writer, second_end);
+    put_text(&writer, "role");
+    put_text(&writer, role);
+    put_text(&writer, "start");
+    put_uint(&writer, second_start);
+    put_text(&writer, "version");
+    put_uint(&writer, version);
+    put_text(&writer, "view_id");
+    put_text(&writer, view_id);
+    put_text(&writer, "first_line");
+    put_uint(&writer, first_line);
+    return writer.length;
+}
+
 static size_t build_style_table(
     uint8_t *output, size_t capacity, uint64_t revision, const char *role)
 {
@@ -562,6 +601,35 @@ static void test_independent_view_state_and_cache(void)
     assert(first->visible.count == 0u && first->pending_lines_valid != 0);
     assert(second->visible.count == 0u && second->pending_lines_valid != 0);
 
+    {
+        static const uint8_t arabic_line[] = {0xd8u, 0xa7u};
+        size_t before = model.cache_bytes;
+        length = build_lines_with_one_span(
+            payload, sizeof(payload), "view-0", 4u, 0u,
+            arabic_line, sizeof(arabic_line), 1u, 2u, "keyword");
+        assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_VIEW_LINES,
+                             payload, length, &action) ==
+               CDIN_FRONTEND_GUI_SDL_MODEL_INVALID);
+        assert(model.cache_bytes == before);
+        length = build_lines_with_one_span(
+            payload, sizeof(payload), "view-0", 4u, 0u,
+            line_bytes, sizeof(line_bytes) - 1u, 6u, 6u, "keyword");
+        assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_VIEW_LINES,
+                             payload, length, &action) ==
+               CDIN_FRONTEND_GUI_SDL_MODEL_INVALID);
+        assert(model.cache_bytes == before);
+    }
+    {
+        size_t before = model.cache_bytes;
+        length = build_lines_with_two_spans(
+            payload, sizeof(payload), "view-0", 4u, 0u,
+            line_bytes, sizeof(line_bytes) - 1u,
+            0u, 6u, 3u, 10u, "keyword");
+        assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_VIEW_LINES,
+                             payload, length, &action) ==
+               CDIN_FRONTEND_GUI_SDL_MODEL_INVALID);
+        assert(model.cache_bytes == before);
+    }
     length = build_response_flush(payload, sizeof(payload), 2u);
     assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
                          payload, length, &action) ==
