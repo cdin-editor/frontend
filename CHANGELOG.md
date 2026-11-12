@@ -16,8 +16,8 @@ immutable component candidates and live CDIN product verification.
 ### Added
 
 - Decode the accepted ADR-0026 GUI-SDL style-role schema into a bounded typed
-  lookup and apply RGBA foreground/background and supported emphasis attributes
-  to byte-anchored visible-line spans.
+  lookup and apply RGBA foreground/background with source-over alpha
+  compositing plus supported emphasis attributes to byte-anchored line spans.
 - Add independent style-table parser tests and SDL software-renderer pixel
   coverage for styled versus unstyled line ranges.
 - Validate line spans as non-empty, ordered, non-overlapping UTF-8 byte ranges
