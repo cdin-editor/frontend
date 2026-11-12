@@ -24,6 +24,7 @@ jobs:
         python3 scripts/generate-release-metadata.py
         --tag "$PIPELINE_RELEASE_TAG"
         --artifact-dir "$RELEASE_ASSETS_DIRECTORY"
+        --output-dir "$RELEASE_ASSETS_DIRECTORY/release-build-metadata"
       artifact-path: |
         dist/release-build-*/*.tar.gz
         dist/release-build-*/*.tar.gz.sha256
