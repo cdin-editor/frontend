@@ -470,16 +470,28 @@ static cdin_frontend_gui_sdl_model_status apply_selection(
     return CDIN_FRONTEND_GUI_SDL_MODEL_OK;
 }
 
+static int line_byte_boundary(
+    const uint8_t *line_bytes, size_t line_length, size_t offset)
+{
+    if (offset == 0u || offset == line_length) return 1;
+    /* UTF-8 continuation bytes have the binary form 10xxxxxx. This check
+     * also preserves safe raw-byte boundaries when a line is not valid UTF-8. */
+    return (line_bytes[offset] & 0xc0u) != 0x80u;
+}
+
 static cdin_frontend_gui_sdl_model_status validate_line_spans(
     const uint8_t *raw,
     size_t raw_length,
+    const uint8_t *line_bytes,
     size_t line_length,
     size_t *out_count)
 {
     size_t count = 0u;
     size_t index;
+    uint64_t previous_end = 0u;
     if (out_count != NULL) *out_count = 0u;
-    if (raw == NULL || raw_length == 0u || out_count == NULL ||
+    if (raw == NULL || raw_length == 0u || line_bytes == NULL ||
+        out_count == NULL ||
         cdin_frontend_protocol_array_count(raw, raw_length, &count) !=
             CDIN_FRONTEND_PROTOCOL_OK) {
         return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
@@ -492,7 +504,7 @@ static cdin_frontend_gui_sdl_model_status validate_line_spans(
         size_t span_length = 0u;
         uint64_t start = 0u;
         uint64_t end = 0u;
-        char role[CDIN_FRONTEND_GUI_SDL_MAX_PANEL_ID_BYTES + 1u];
+        char role[CDIN_FRONTEND_GUI_SDL_MAX_STYLE_ROLE_ID_BYTES + 1u];
         size_t role_length = 0u;
         cdin_frontend_protocol_status status;
         if (cdin_frontend_protocol_array_get_raw(
@@ -512,9 +524,13 @@ static cdin_frontend_gui_sdl_model_status validate_line_spans(
             return CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT;
         }
         if (status != CDIN_FRONTEND_PROTOCOL_OK || role_length == 0u ||
-            start > end || end > (uint64_t)line_length) {
+            start >= end || start < previous_end ||
+            end > (uint64_t)line_length ||
+            !line_byte_boundary(line_bytes, line_length, (size_t)start) ||
+            !line_byte_boundary(line_bytes, line_length, (size_t)end)) {
             return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
         }
+        previous_end = end;
     }
     *out_count = count;
     return CDIN_FRONTEND_GUI_SDL_MODEL_OK;
@@ -617,7 +633,7 @@ static cdin_frontend_gui_sdl_model_status apply_lines(
         if (span_status == CDIN_FRONTEND_PROTOCOL_OK) {
             status = validate_line_spans(
                 span_source[index], span_lengths[index],
-                lengths[index], &span_counts[index]);
+                source[index], lengths[index], &span_counts[index]);
             if (status != CDIN_FRONTEND_GUI_SDL_MODEL_OK) return status;
             if (span_lengths[index] > SIZE_MAX - total_bytes) {
                 return CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT;
