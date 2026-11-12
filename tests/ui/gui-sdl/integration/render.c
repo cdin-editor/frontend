@@ -201,10 +201,10 @@ static void test_line_spans_resolve_semantic_style_roles(
     static const uint8_t spans[] = {
         0x81u,
         0xa3u,
-        0x65u, 's', 't', 'a', 'r', 't', 0x02u,
         0x63u, 'e', 'n', 'd', 0x04u,
         0x64u, 'r', 'o', 'l', 'e',
-        0x67u, 'k', 'e', 'y', 'w', 'o', 'r', 'd'
+        0x67u, 'k', 'e', 'y', 'w', 'o', 'r', 'd',
+        0x65u, 's', 't', 'a', 'r', 't', 0x02u
     };
     static const uint8_t styles[] = {
         0xa1u,
