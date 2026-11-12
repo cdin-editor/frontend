@@ -11,6 +11,24 @@ themselves declare the complete TUI, GUI-SDL, or CDIN application production
 ready. Optional IME and pane-splitter capabilities remain gated on compatible
 immutable component candidates and live CDIN product verification.
 
+## [Unreleased]
+
+### Added
+
+- Decode the accepted ADR-0026 GUI-SDL style-role schema into a bounded typed
+  lookup and apply RGBA foreground/background and supported emphasis attributes
+  to byte-anchored visible-line spans.
+- Add independent style-table parser tests and SDL software-renderer pixel
+  coverage for styled versus unstyled line ranges.
+- Validate line spans as non-empty, ordered, non-overlapping UTF-8 byte ranges
+  whose endpoints do not split a continuation byte.
+
+### Changed
+
+- Keep declarative panel/prompt maps opaque until their renderer phase; this
+  change does not claim production Unicode shaping, bidi, grapheme layout,
+  cursor/selection rendering or Persian/Arabic glyph support.
+
 ## [1.1.1] - 2026-11-11
 
 ### Added
