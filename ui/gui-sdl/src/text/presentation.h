@@ -32,6 +32,11 @@ typedef struct cdin_frontend_gui_sdl_style_table {
     cdin_frontend_gui_sdl_style_role roles[CDIN_FRONTEND_GUI_SDL_MAX_STYLE_ROLES];
 } cdin_frontend_gui_sdl_style_table;
 
+/* Validate the shared ADR-0026 role identifier grammar used by both
+ * style-table keys and per-line span references. */
+int cdin_frontend_gui_sdl_style_role_id_valid(
+    const uint8_t *bytes, size_t length);
+
 /* Decode the accepted ADR-0026 style-role map. On failure, out_table is
  * unchanged. The input is one complete CBOR map from ui.style_table.styles. */
 cdin_frontend_gui_sdl_style_status cdin_frontend_gui_sdl_style_table_decode(
