@@ -123,7 +123,7 @@ static void draw_text_run(
     if (style != NULL && style->italic != 0u) {
         size_t index;
         for (index = 0u; index < columns; ++index) {
-            char glyph[2] = {text[index], '\\0'};
+            char glyph[2] = {text[index], '\0'};
             float slant = (float)(columns - index - 1u) * 0.75f;
             (void)SDL_RenderDebugText(renderer,
                 run_x + (float)index * 8.0f + slant, y, glyph);
