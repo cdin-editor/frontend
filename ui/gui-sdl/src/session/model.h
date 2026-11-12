@@ -3,6 +3,7 @@
 
 #include "cdin/frontend/core/protocol/wire.h"
 #include "layout.h"
+#include "../text/presentation.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -93,6 +94,7 @@ typedef struct cdin_frontend_gui_sdl_presentation {
     uint64_t style_revision;
     size_t style_table_length;
     uint8_t style_table_cbor[CDIN_FRONTEND_GUI_SDL_MAX_STYLE_TABLE_BYTES];
+    cdin_frontend_gui_sdl_style_table decoded_style_table;
     size_t panel_count;
     cdin_frontend_gui_sdl_panel_state panels[CDIN_FRONTEND_GUI_SDL_MAX_PANELS];
     int has_prompt;
