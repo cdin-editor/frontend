@@ -120,9 +120,23 @@ static void draw_text_run(
     }
     (void)SDL_SetRenderDrawColor(renderer, foreground[0], foreground[1],
                                  foreground[2], foreground[3]);
-    (void)SDL_RenderDebugText(renderer, run_x, y, text);
-    if (style != NULL && style->bold != 0u) {
-        (void)SDL_RenderDebugText(renderer, run_x + 1.0f, y, text);
+    if (style != NULL && style->italic != 0u) {
+        size_t index;
+        for (index = 0u; index < columns; ++index) {
+            char glyph[2] = {text[index], '\\0'};
+            float slant = (float)(columns - index - 1u) * 0.75f;
+            (void)SDL_RenderDebugText(renderer,
+                run_x + (float)index * 8.0f + slant, y, glyph);
+            if (style->bold != 0u) {
+                (void)SDL_RenderDebugText(renderer,
+                    run_x + (float)index * 8.0f + slant + 1.0f, y, glyph);
+            }
+        }
+    } else {
+        (void)SDL_RenderDebugText(renderer, run_x, y, text);
+        if (style != NULL && style->bold != 0u) {
+            (void)SDL_RenderDebugText(renderer, run_x + 1.0f, y, text);
+        }
     }
     if (style != NULL && (style->underline != 0u ||
                           style->strikethrough != 0u)) {
@@ -363,6 +377,7 @@ static cdin_frontend_gui_sdl_render_status draw_view_pane(
         text_capacity = rect->width > line_number_width + 8u
             ? (size_t)(rect->width - (uint32_t)line_number_width - 8u) / 8u
             : 0u;
+        if (text_capacity > 511u) text_capacity = 511u;
         (void)SDL_SetRenderDrawColor(renderer, 205u, 211u, 221u, 255u);
         for (index = 0u; index < view->visible.count; ++index) {
             char line_number[24];
