@@ -43,10 +43,11 @@ static int read_head(cbor_cursor *cursor, uint8_t *out_major, uint64_t *out_valu
             value = (value << 8u) | cursor->bytes[cursor->offset++];
         }
         /* Enforce shortest-form integer/length encoding. */
-        if ((width == 1u && value < 24u) ||
-            (width == 2u && value <= 0xffu) ||
-            (width == 4u && value <= 0xffffu) ||
-            (width == 8u && value <= 0xffffffffu)) {
+        if (*out_major != 7u &&
+            ((width == 1u && value < 24u) ||
+             (width == 2u && value <= 0xffu) ||
+             (width == 4u && value <= 0xffffu) ||
+             (width == 8u && value <= 0xffffffffu))) {
             return 0;
         }
     }
@@ -290,8 +291,7 @@ cdin_frontend_gui_sdl_style_status cdin_frontend_gui_sdl_style_table_decode(
     cursor.bytes = encoded;
     cursor.length = encoded_length;
     cursor.offset = 0u;
-    if (!read_head(&cursor, &major, &count) || major != 5u ||
-        cursor.offset == cursor.length) {
+    if (!read_head(&cursor, &major, &count) || major != 5u) {
         return CDIN_FRONTEND_GUI_SDL_STYLE_INVALID;
     }
     if (count > CDIN_FRONTEND_GUI_SDL_MAX_STYLE_ROLES) {
