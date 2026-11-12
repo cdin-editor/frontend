@@ -18,9 +18,12 @@ TUI adapter.
 The renderer still uses SDL's diagnostic debug-text primitive and displays
 one placeholder per non-ASCII Unicode scalar; it does not provide shaping,
 font fallback, grapheme layout or bidi. It now validates the accepted
-ADR-0026 style-role table and applies RGBA foreground/background plus supported
-debug-font emphasis to byte-anchored line spans. This is an incremental
-presentation step, not a production Unicode renderer. It does not yet render
+ADR-0026 style-role table and applies RGBA foreground/background with
+source-over alpha compositing plus supported debug-font emphasis to
+byte-anchored line spans. Missing colors inherit the pane base; the role
+background is composited over that base before the foreground is composited
+over the result. This is an incremental presentation step, not a production
+Unicode renderer. It does not yet render
 declarative panels/widgets, cursor/selection or plugin canvas content. Mouse input is advertised when implemented;
 the optional splitter capability is advertised only when the explicit
 `CDIN_FRONTEND_GUI_SDL_ENABLE_PANE_SPLITTER` build option is enabled and
