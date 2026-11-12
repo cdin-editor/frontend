@@ -15,10 +15,13 @@ and SDL input addressed to other windows is ignored. The GUI does not retain
 Runtime-owned selection state. It does not link Backend, Runtime, Kernel or the
 TUI adapter.
 
-The renderer currently uses SDL's ASCII/debug-text primitive, but it
-does render the committed multi-pane PaneTree with per-leaf clipping. It does
-not claim production font fallback, grapheme shaping, bidi, IME composition,
-panels or plugin canvas support. Mouse input is advertised when implemented;
+The renderer still uses SDL's diagnostic debug-text primitive and displays
+one placeholder per non-ASCII Unicode scalar; it does not provide shaping,
+font fallback, grapheme layout or bidi. It now validates the accepted
+ADR-0026 style-role table and applies RGBA foreground/background plus supported
+debug-font emphasis to byte-anchored line spans. This is an incremental
+presentation step, not a production Unicode renderer. It does not yet render
+declarative panels/widgets, cursor/selection or plugin canvas content. Mouse input is advertised when implemented;
 the optional splitter capability is advertised only when the explicit
 `CDIN_FRONTEND_GUI_SDL_ENABLE_PANE_SPLITTER` build option is enabled and
 the peer accepts the capability.
