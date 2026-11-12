@@ -174,7 +174,7 @@ static int read_boolean(const uint8_t *encoded, size_t encoded_length,
     return 0;
 }
 
-static int role_id_valid(const uint8_t *bytes, size_t length)
+int cdin_frontend_gui_sdl_style_role_id_valid(const uint8_t *bytes, size_t length)
 {
     size_t index;
     if (bytes == NULL || length == 0u ||
@@ -307,7 +307,7 @@ cdin_frontend_gui_sdl_style_status cdin_frontend_gui_sdl_style_table_decode(
         cdin_frontend_gui_sdl_style_role role;
         size_t prior;
         if (!read_text_key(&cursor, &role_id, &role_id_length) ||
-            !role_id_valid(role_id, role_id_length)) {
+            !cdin_frontend_gui_sdl_style_role_id_valid(role_id, role_id_length)) {
             return CDIN_FRONTEND_GUI_SDL_STYLE_INVALID;
         }
         value_start = cursor.offset;
