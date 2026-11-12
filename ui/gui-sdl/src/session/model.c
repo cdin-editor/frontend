@@ -834,13 +834,13 @@ static cdin_frontend_gui_sdl_model_status apply_style_table(
         if (style_status != CDIN_FRONTEND_GUI_SDL_STYLE_OK) {
             return CDIN_FRONTEND_GUI_SDL_MODEL_INVALID;
         }
+        base_bytes = presentation->encoded_bytes -
+            presentation->style_table_length;
+        if (base_bytes > CDIN_FRONTEND_GUI_SDL_MAX_PRESENTATION_BYTES -
+                         styles_length) {
+            return CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT;
+        }
         presentation->decoded_style_table = decoded;
-    }
-    base_bytes = presentation->encoded_bytes -
-        presentation->style_table_length;
-    if (base_bytes > CDIN_FRONTEND_GUI_SDL_MAX_PRESENTATION_BYTES -
-                     styles_length) {
-        return CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT;
     }
     memcpy(presentation->style_table_cbor, styles, styles_length);
     presentation->style_table_length = styles_length;
