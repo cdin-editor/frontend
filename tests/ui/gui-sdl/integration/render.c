@@ -169,6 +169,83 @@ static void test_nested_layout_renders_every_active_leaf(
     SDL_DestroySurface(pixels);
 }
 
+static int surface_region_has_rgb(
+    SDL_Surface *surface, int left, int top, int right, int bottom,
+    uint8_t expected_r, uint8_t expected_g, uint8_t expected_b)
+{
+    int x;
+    int y;
+    for (y = top; y < bottom; ++y) {
+        for (x = left; x < right; ++x) {
+            uint8_t red = 0u;
+            uint8_t green = 0u;
+            uint8_t blue = 0u;
+            if (SDL_ReadSurfacePixel(
+                    surface, x, y, &red, &green, &blue, NULL) &&
+                red == expected_r && green == expected_g &&
+                blue == expected_b) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+static void test_line_spans_resolve_semantic_style_roles(
+    SDL_Renderer *renderer)
+{
+    static const uint8_t line_bytes[] = "abcd";
+    static const uint8_t spans[] = {
+        0x81u,
+        0xa3u,
+        0x65u, 's', 't', 'a', 'r', 't', 0x02u,
+        0x63u, 'e', 'n', 'd', 0x04u,
+        0x64u, 'r', 'o', 'l', 'e',
+        0x67u, 'k', 'e', 'y', 'w', 'o', 'r', 'd'
+    };
+    static const uint8_t styles[] = {
+        0xa1u,
+        0x67u, 'k', 'e', 'y', 'w', 'o', 'r', 'd',
+        0xa1u,
+        0x6au, 'f', 'o', 'r', 'e', 'g', 'r', 'o', 'u', 'n', 'd',
+        0xa4u,
+        0x61u, 'r', 0x18u, 0xffu,
+        0x61u, 'g', 0x18u, 0x3cu,
+        0x61u, 'b', 0x0au,
+        0x61u, 'a', 0x18u, 0xffu
+    };
+    cdin_frontend_gui_sdl_model model;
+    cdin_frontend_gui_sdl_view *view;
+    cdin_frontend_gui_sdl_rect viewport = { 0u, 42u, 640u, 328u };
+    cdin_frontend_gui_sdl_render_stats stats;
+    SDL_Surface *pixels;
+
+    make_two_pane_model(&model);
+    view = &model.views[0];
+    view->visible.count = 1u;
+    view->visible.lines[0].bytes = (uint8_t *)(uintptr_t)line_bytes;
+    view->visible.lines[0].length = sizeof(line_bytes) - 1u;
+    view->visible.lines[0].spans_cbor = (uint8_t *)(uintptr_t)spans;
+    view->visible.lines[0].spans_cbor_length = sizeof(spans);
+    view->visible.lines[0].span_count = 1u;
+    assert(cdin_frontend_gui_sdl_style_table_decode(
+        styles, sizeof(styles), &model.presentation.decoded_style_table) ==
+        CDIN_FRONTEND_GUI_SDL_STYLE_OK);
+
+    assert(SDL_SetRenderDrawColor(renderer, 0u, 0u, 0u, 255u));
+    assert(SDL_RenderClear(renderer));
+    assert(cdin_frontend_gui_sdl_render_panes(
+        renderer, &model, &viewport, &stats) ==
+        CDIN_FRONTEND_GUI_SDL_RENDER_OK);
+    pixels = SDL_RenderReadPixels(renderer, NULL);
+    assert(pixels != NULL);
+    /* The span covers the final two ASCII glyphs; the prefix keeps the
+     * adapter's default foreground. */
+    assert(surface_region_has_rgb(pixels, 72, 68, 88, 78, 255u, 60u, 10u));
+    assert(!surface_region_has_rgb(pixels, 56, 68, 72, 78, 255u, 60u, 10u));
+    SDL_DestroySurface(pixels);
+}
+
 static void test_invalid_layout_fails_closed_and_empty_layout_draws_nothing(
     SDL_Renderer *renderer)
 {
@@ -209,6 +286,7 @@ int main(void)
 
     test_two_panes_render_to_distinct_pixel_regions(renderer);
     test_nested_layout_renders_every_active_leaf(renderer);
+    test_line_spans_resolve_semantic_style_roles(renderer);
     test_invalid_layout_fails_closed_and_empty_layout_draws_nothing(renderer);
 
     SDL_DestroyRenderer(renderer);
