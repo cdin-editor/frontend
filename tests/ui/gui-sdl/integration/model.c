@@ -601,35 +601,6 @@ static void test_independent_view_state_and_cache(void)
     assert(first->visible.count == 0u && first->pending_lines_valid != 0);
     assert(second->visible.count == 0u && second->pending_lines_valid != 0);
 
-    {
-        static const uint8_t arabic_line[] = {0xd8u, 0xa7u};
-        size_t before = model.cache_bytes;
-        length = build_lines_with_one_span(
-            payload, sizeof(payload), "view-0", 4u, 0u,
-            arabic_line, sizeof(arabic_line), 1u, 2u, "keyword");
-        assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_VIEW_LINES,
-                             payload, length, &action) ==
-               CDIN_FRONTEND_GUI_SDL_MODEL_INVALID);
-        assert(model.cache_bytes == before);
-        length = build_lines_with_one_span(
-            payload, sizeof(payload), "view-0", 4u, 0u,
-            line_bytes, sizeof(line_bytes) - 1u, 6u, 6u, "keyword");
-        assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_VIEW_LINES,
-                             payload, length, &action) ==
-               CDIN_FRONTEND_GUI_SDL_MODEL_INVALID);
-        assert(model.cache_bytes == before);
-    }
-    {
-        size_t before = model.cache_bytes;
-        length = build_lines_with_two_spans(
-            payload, sizeof(payload), "view-0", 4u, 0u,
-            line_bytes, sizeof(line_bytes) - 1u,
-            0u, 6u, 3u, 10u, "keyword");
-        assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_VIEW_LINES,
-                             payload, length, &action) ==
-               CDIN_FRONTEND_GUI_SDL_MODEL_INVALID);
-        assert(model.cache_bytes == before);
-    }
     length = build_response_flush(payload, sizeof(payload), 2u);
     assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
                          payload, length, &action) ==
@@ -839,8 +810,8 @@ static void test_styles_panels_prompts_and_line_spans(void)
                          payload, length, &action) ==
            CDIN_FRONTEND_GUI_SDL_MODEL_OK);
 
-    /* Style-role and widget maps are retained as opaque bounded CBOR. Their
-     * field-level rendering semantics are owned by the pending Spec contract. */
+    /* The accepted ADR-0026 style-role schema is decoded into a bounded
+     * typed lookup; panel and prompt widget payloads remain opaque here. */
     length = build_style_table(payload, sizeof(payload), 7u, "normal");
     assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_STYLE_TABLE,
                          payload, length, &action) ==
@@ -904,6 +875,35 @@ static void test_styles_panels_prompts_and_line_spans(void)
         assert(model.cache_bytes == before);
         assert(view->pending_lines_valid != 0);
         assert(view->pending.lines[0].span_count == 1u);
+    }
+    {
+        static const uint8_t arabic_line[] = {0xd8u, 0xa7u};
+        size_t before = model.cache_bytes;
+        length = build_lines_with_one_span(
+            payload, sizeof(payload), "view-0", 4u, 0u,
+            arabic_line, sizeof(arabic_line), 1u, 2u, "keyword");
+        assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_VIEW_LINES,
+                             payload, length, &action) ==
+               CDIN_FRONTEND_GUI_SDL_MODEL_INVALID);
+        assert(model.cache_bytes == before);
+        length = build_lines_with_one_span(
+            payload, sizeof(payload), "view-0", 4u, 0u,
+            line_bytes, sizeof(line_bytes) - 1u, 6u, 6u, "keyword");
+        assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_VIEW_LINES,
+                             payload, length, &action) ==
+               CDIN_FRONTEND_GUI_SDL_MODEL_INVALID);
+        assert(model.cache_bytes == before);
+    }
+    {
+        size_t before = model.cache_bytes;
+        length = build_lines_with_two_spans(
+            payload, sizeof(payload), "view-0", 4u, 0u,
+            line_bytes, sizeof(line_bytes) - 1u,
+            0u, 6u, 3u, 10u, "keyword");
+        assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_VIEW_LINES,
+                             payload, length, &action) ==
+               CDIN_FRONTEND_GUI_SDL_MODEL_INVALID);
+        assert(model.cache_bytes == before);
     }
     length = build_response_flush(payload, sizeof(payload), 2u);
     assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
