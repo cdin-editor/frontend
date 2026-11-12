@@ -255,6 +255,7 @@ static int decode_style(const uint8_t *encoded, size_t encoded_length,
     cursor.length = encoded_length;
     cursor.offset = 0u;
     if (!read_head(&cursor, &major, &count) || major != 5u) return 0;
+    (void)count;
     memset(&style, 0, sizeof(style));
     if (!optional_rgba(encoded, encoded_length, "foreground",
                        style.foreground, &style.has_foreground) ||
