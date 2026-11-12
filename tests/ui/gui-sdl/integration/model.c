@@ -904,6 +904,13 @@ static void test_styles_panels_prompts_and_line_spans(void)
                              payload, length, &action) ==
                CDIN_FRONTEND_GUI_SDL_MODEL_INVALID);
         assert(model.cache_bytes == before);
+        length = build_lines_with_one_span(
+            payload, sizeof(payload), "view-0", 4u, 0u,
+            line_bytes, sizeof(line_bytes) - 1u, 6u, 10u, "bad role");
+        assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_VIEW_LINES,
+                             payload, length, &action) ==
+               CDIN_FRONTEND_GUI_SDL_MODEL_INVALID);
+        assert(model.cache_bytes == before);
     }
     length = build_response_flush(payload, sizeof(payload), 2u);
     assert(apply_payload(&model, CDIN_FRONTEND_PROTOCOL_UI_FLUSH,
