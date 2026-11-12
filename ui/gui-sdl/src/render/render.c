@@ -447,7 +447,7 @@ static cdin_frontend_gui_sdl_render_status draw_layout(
         {
             cdin_frontend_gui_sdl_render_status status = draw_view_pane(
                 renderer, view, view_id, &rectangles[index], focused,
-                ime_overlay, stats);
+                ime_overlay, &model->presentation, stats);
             if (status != CDIN_FRONTEND_GUI_SDL_RENDER_OK) return status;
         }
     }
