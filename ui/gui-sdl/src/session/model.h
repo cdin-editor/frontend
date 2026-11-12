@@ -32,8 +32,8 @@ typedef enum cdin_frontend_gui_sdl_model_status {
 typedef struct cdin_frontend_gui_sdl_line {
     uint8_t *bytes;
     size_t length;
-    /* Exact CBOR encoding of the optional Protocol spans array. Kept opaque
-     * until the accepted style-role schema defines its presentation mapping. */
+    /* Exact CBOR encoding of the optional Protocol spans array. The renderer
+     * resolves these byte ranges against the committed typed style table. */
     uint8_t *spans_cbor;
     size_t spans_cbor_length;
     size_t span_count;
@@ -88,8 +88,9 @@ typedef struct cdin_frontend_gui_sdl_panel_state {
     uint8_t payload_cbor[CDIN_FRONTEND_GUI_SDL_MAX_PANEL_BYTES];
 } cdin_frontend_gui_sdl_panel_state;
 
-/* The Protocol 1.0 style/panel/prompt values are opaque declarative maps.
- * Preserve their exact bounded CBOR bytes; do not invent field semantics. */
+/* Preserve bounded declarative payload bytes for deterministic snapshot
+ * replay. Style roles are also decoded into a bounded typed lookup table;
+ * panel and prompt widget payloads remain opaque until their renderer phase. */
 typedef struct cdin_frontend_gui_sdl_presentation {
     uint64_t style_revision;
     size_t style_table_length;
