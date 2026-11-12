@@ -222,7 +222,8 @@ if(BUILD_TESTING)
     add_executable(cdin_frontend_gui_sdl_model_tests
         tests/ui/gui-sdl/integration/model.c
         ui/gui-sdl/src/session/model.c
-        ui/gui-sdl/src/session/layout.c)
+        ui/gui-sdl/src/session/layout.c
+        ui/gui-sdl/src/text/presentation.c)
     target_include_directories(cdin_frontend_gui_sdl_model_tests PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/ui/gui-sdl/src/session")
     target_link_libraries(cdin_frontend_gui_sdl_model_tests PRIVATE cdin::frontend_core)
