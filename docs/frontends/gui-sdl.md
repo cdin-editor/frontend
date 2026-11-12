@@ -97,11 +97,14 @@ Geometry is recomputed from the current pixel viewport on every frame. A
 committed empty PaneTree draws no synthetic view, and too-small split geometry
 degrades to the focused view rather than dividing into zero-sized panes.
 
-Text is still drawn with SDL's diagnostic debug-text primitive. Non-ASCII
-bytes are shown as placeholders; the original bytes remain unchanged in the
-cache. The renderer is therefore multi-pane, but not yet a production Unicode
-text renderer. Style roles, cursor/selection visualization, panels, widgets
-and production text shaping remain later phases. Byte-anchored bounded line
+Text is still drawn with SDL's diagnostic debug-text primitive. Each valid
+non-ASCII Unicode scalar is shown as one placeholder; the original bytes remain
+unchanged in the cache. The renderer is therefore multi-pane, but not yet a
+production Unicode text renderer. The accepted ADR-0026 style table is now
+validated into a bounded typed role map, and byte-anchored line spans apply
+RGBA foreground/background and supported debug-font emphasis. This does not
+provide glyph shaping, grapheme layout, cursor/selection visualization,
+panels/widgets or bidi. Byte-anchored bounded line
 requests are implemented behind `CDIN_FRONTEND_GUI_SDL_ENABLE_BYTE_ANCHORED_LINES`
 (default `OFF`); the live CDIN matrix remains the gate before normal product builds enable it.
 
@@ -110,10 +113,15 @@ requests are implemented behind `CDIN_FRONTEND_GUI_SDL_ENABLE_BYTE_ANCHORED_LINE
 The GUI model stages the Protocol `ui.style_table`, `ui.panel` and
 `ui.prompt` payloads with the same atomic snapshot as its PaneTree and views.
 Their CBOR maps are retained byte-for-byte under explicit limits (32 KiB for
-the style table, 16 panels at up to 4 KiB each, and 4 KiB for a prompt). A
-complete replacement snapshot starts with an empty panel/prompt/style state;
-omitted panels disappear, and `prompt:null` clears the prompt. The model does
-not interpret arbitrary attribute/widget fields.
+the style table, 16 panels at up to 4 KiB each, and 4 KiB for a prompt). Before
+the snapshot can commit, the complete style table is also decoded and checked
+against ADR-0026: role IDs, RGBA channels and known boolean attributes must be
+valid, and unknown bounded CBOR fields are ignored. The committed typed role
+lookup is used to resolve each line span by role ID; unknown roles use the
+default style. A complete replacement snapshot starts with an empty
+panel/prompt/style state; omitted panels disappear, and `prompt:null` clears
+the prompt. Panel and prompt widget payloads remain opaque and are not yet
+rendered.
 
 Optional `view.lines` spans are validated against the original line byte
 length and preserved as their encoded CBOR array beside the line bytes. Span
