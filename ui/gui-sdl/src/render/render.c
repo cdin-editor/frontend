@@ -98,9 +98,11 @@ static cdin_frontend_gui_sdl_render_status draw_view_pane(
     const cdin_frontend_gui_sdl_rect *rect,
     int focused,
     const cdin_frontend_gui_sdl_ime_overlay *ime_overlay,
+    const cdin_frontend_gui_sdl_presentation *presentation,
     cdin_frontend_gui_sdl_render_stats *stats)
 {
     SDL_FRect background;
+    uint8_t base_background[3];
     SDL_FRect border;
     SDL_Rect clip;
     uint8_t background_r = focused != 0 ? 31u : 25u;
@@ -118,6 +120,9 @@ static cdin_frontend_gui_sdl_render_status draw_view_pane(
     const size_t line_number_width = 56u;
     size_t text_capacity;
 
+    base_background[0] = background_r;
+    base_background[1] = background_g;
+    base_background[2] = background_b;
     background.x = x;
     background.y = y;
     background.w = width;
@@ -223,7 +228,7 @@ static cdin_frontend_gui_sdl_render_status draw_layout(
         const cdin_frontend_gui_sdl_view *focused = find_focused_view(model);
         return draw_view_pane(renderer, focused,
             focused != NULL ? focused->semantic.view_id : NULL,
-            viewport, focused != NULL, ime_overlay, stats);
+            viewport, focused != NULL, ime_overlay, &model->presentation, stats);
     }
     if (geometry_status != CDIN_FRONTEND_GUI_SDL_GEOMETRY_OK) {
         return CDIN_FRONTEND_GUI_SDL_RENDER_INVALID_LAYOUT;
@@ -284,7 +289,8 @@ cdin_frontend_gui_sdl_render_status cdin_frontend_gui_sdl_render_panes_with_layo
         status = draw_view_pane(
             renderer, focused_view,
             focused_view != NULL ? focused_view->semantic.view_id : NULL,
-            viewport, focused_view != NULL, ime_overlay, &stats);
+            viewport, focused_view != NULL, ime_overlay,
+            &model->presentation, &stats);
     }
     *out_stats = stats;
     return status;
