@@ -195,7 +195,9 @@ static int surface_has_rgb(
 static void test_line_spans_resolve_semantic_style_roles(
     SDL_Renderer *renderer)
 {
-    static const uint8_t line_bytes[] = "abcd";
+    /* The final space in the styled span leaves a background-only pixel
+     * region so source-over background compositing is observable. */
+    static const uint8_t line_bytes[] = "abc ";
     static const uint8_t spans[] = {
         0x81u,
         0xa3u,
