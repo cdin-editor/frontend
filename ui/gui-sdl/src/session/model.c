@@ -523,7 +523,9 @@ static cdin_frontend_gui_sdl_model_status validate_line_spans(
         if (status == CDIN_FRONTEND_PROTOCOL_BUFFER_TOO_SMALL) {
             return CDIN_FRONTEND_GUI_SDL_MODEL_LIMIT;
         }
-        if (status != CDIN_FRONTEND_PROTOCOL_OK || role_length == 0u ||
+        if (status != CDIN_FRONTEND_PROTOCOL_OK ||
+            !cdin_frontend_gui_sdl_style_role_id_valid(
+                (const uint8_t *)role, role_length) ||
             start >= end || start < previous_end ||
             end > (uint64_t)line_length ||
             !line_byte_boundary(line_bytes, line_length, (size_t)start) ||
