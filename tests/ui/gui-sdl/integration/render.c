@@ -210,16 +210,16 @@ static void test_line_spans_resolve_semantic_style_roles(
         0xa2u,
         0x6au, 'b', 'a', 'c', 'k', 'g', 'r', 'o', 'u', 'n', 'd',
         0xa4u,
-        0x61u, 'r', 0x0cu,
-        0x61u, 'g', 0x18u, 0x22u,
-        0x61u, 'b', 0x18u, 0x38u,
-        0x61u, 'a', 0x18u, 0xffu,
+        0x61u, 'r', 0x18u, 0x64u,
+        0x61u, 'g', 0x14u,
+        0x61u, 'b', 0x18u, 0x28u,
+        0x61u, 'a', 0x18u, 0x80u,
         0x6au, 'f', 'o', 'r', 'e', 'g', 'r', 'o', 'u', 'n', 'd',
         0xa4u,
         0x61u, 'r', 0x18u, 0xffu,
         0x61u, 'g', 0x18u, 0x3cu,
         0x61u, 'b', 0x0au,
-        0x61u, 'a', 0x18u, 0xffu
+        0x61u, 'a', 0x18u, 0x80u
     };
     cdin_frontend_gui_sdl_model model;
     cdin_frontend_gui_sdl_view *view;
@@ -249,8 +249,11 @@ static void test_line_spans_resolve_semantic_style_roles(
     /* The span carries a unique foreground and background. Search the
      * complete software-rendered surface rather than assuming a pane's
      * pixel origin or viewport partition. */
-    assert(surface_has_rgb(pixels, 255u, 60u, 10u));
-    assert(surface_has_rgb(pixels, 12u, 34u, 56u));
+    /* Pane 0 is focused: base RGB is (31, 36, 46). The role background
+     * (100, 20, 40, 128) composites to (66, 28, 43); the foreground
+     * (255, 60, 10, 128) composites over it to (161, 44, 26). */
+    assert(surface_has_rgb(pixels, 161u, 44u, 26u));
+    assert(surface_has_rgb(pixels, 66u, 28u, 43u));
     SDL_DestroySurface(pixels);
 }
 
