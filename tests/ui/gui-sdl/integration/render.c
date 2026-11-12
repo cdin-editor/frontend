@@ -252,8 +252,8 @@ static void test_line_spans_resolve_semantic_style_roles(
     /* Pane 0 is focused: base RGB is (31, 36, 46). The role background
      * (100, 20, 40, 128) composites to (66, 28, 43); the foreground
      * (255, 60, 10, 128) composites over it to (161, 44, 26). */
-    assert(surface_has_rgb(pixels, 161u, 44u, 26u));
     assert(surface_has_rgb(pixels, 66u, 28u, 43u));
+    assert(surface_has_rgb(pixels, 161u, 44u, 26u));
     SDL_DestroySurface(pixels);
 }
 
