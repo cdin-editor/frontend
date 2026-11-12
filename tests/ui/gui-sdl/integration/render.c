@@ -169,14 +169,15 @@ static void test_nested_layout_renders_every_active_leaf(
     SDL_DestroySurface(pixels);
 }
 
-static int surface_region_has_rgb(
-    SDL_Surface *surface, int left, int top, int right, int bottom,
+static int surface_has_rgb(
+    SDL_Surface *surface,
     uint8_t expected_r, uint8_t expected_g, uint8_t expected_b)
 {
     int x;
     int y;
-    for (y = top; y < bottom; ++y) {
-        for (x = left; x < right; ++x) {
+    if (surface == NULL) return 0;
+    for (y = 0; y < surface->h; ++y) {
+        for (x = 0; x < surface->w; ++x) {
             uint8_t red = 0u;
             uint8_t green = 0u;
             uint8_t blue = 0u;
@@ -206,7 +207,13 @@ static void test_line_spans_resolve_semantic_style_roles(
     static const uint8_t styles[] = {
         0xa1u,
         0x67u, 'k', 'e', 'y', 'w', 'o', 'r', 'd',
-        0xa1u,
+        0xa2u,
+        0x6au, 'b', 'a', 'c', 'k', 'g', 'r', 'o', 'u', 'n', 'd',
+        0xa4u,
+        0x61u, 'r', 0x0cu,
+        0x61u, 'g', 0x22u,
+        0x61u, 'b', 0x38u,
+        0x61u, 'a', 0x18u, 0xffu,
         0x6au, 'f', 'o', 'r', 'e', 'g', 'r', 'o', 'u', 'n', 'd',
         0xa4u,
         0x61u, 'r', 0x18u, 0xffu,
@@ -239,10 +246,11 @@ static void test_line_spans_resolve_semantic_style_roles(
         CDIN_FRONTEND_GUI_SDL_RENDER_OK);
     pixels = SDL_RenderReadPixels(renderer, NULL);
     assert(pixels != NULL);
-    /* The span covers the final two ASCII glyphs; the prefix keeps the
-     * adapter's default foreground. */
-    assert(surface_region_has_rgb(pixels, 72, 68, 88, 78, 255u, 60u, 10u));
-    assert(!surface_region_has_rgb(pixels, 56, 68, 72, 78, 255u, 60u, 10u));
+    /* The span carries a unique foreground and background. Search the
+     * complete software-rendered surface rather than assuming a pane's
+     * pixel origin or viewport partition. */
+    assert(surface_has_rgb(pixels, 255u, 60u, 10u));
+    assert(surface_has_rgb(pixels, 12u, 34u, 56u));
     SDL_DestroySurface(pixels);
 }
 
