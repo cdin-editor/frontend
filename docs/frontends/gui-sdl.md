@@ -102,9 +102,12 @@ non-ASCII Unicode scalar is shown as one placeholder; the original bytes remain
 unchanged in the cache. The renderer is therefore multi-pane, but not yet a
 production Unicode text renderer. The accepted ADR-0026 style table is now
 validated into a bounded typed role map, and byte-anchored line spans apply
-RGBA foreground/background and supported debug-font emphasis. This does not
-provide glyph shaping, grapheme layout, cursor/selection visualization,
-panels/widgets or bidi. Byte-anchored bounded line
+RGBA foreground/background with explicit source-over alpha compositing and
+supported debug-font emphasis. The compositor resolves missing colors from
+the pane base, composites the role background over that base, then composites
+the foreground over the resulting background. This does not provide glyph
+shaping, grapheme layout, cursor/selection visualization, panels/widgets or
+bidi. Byte-anchored bounded line
 requests are implemented behind `CDIN_FRONTEND_GUI_SDL_ENABLE_BYTE_ANCHORED_LINES`
 (default `OFF`); the live CDIN matrix remains the gate before normal product builds enable it.
 
