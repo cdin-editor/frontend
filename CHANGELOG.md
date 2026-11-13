@@ -16,7 +16,8 @@ immutable component candidates and live CDIN product verification.
 ### Fixed
 
 - Keep the 15 Core/TUI/GUI-SDL target package archives, checksum sidecars and artifact descriptors as flat Release assets. The exact archive basenames referenced by ADR-0028 metadata must exist as direct assets on the same tag Release; the published `v1.2.0` remains immutable and is not rewritten.
-- Pin the reusable Pipeline release workflow and its helper input to the same immutable Pipeline revision `0c2c89c7c64575c6b0f66c78925bdf5638abc5e9`.
+- Pin the reusable Pipeline release workflow and its helper input to the same immutable Pipeline revision `7cfdffd574d3b438228bc6b0faae7c61bb14f055`. This revision propagates `dry-run` into Bash and MSYS2 build commands; the previously selected `0c2c89c` omitted that variable, causing branch preview tags to be rejected as real SemVer tags.
+- Keep branch dry-run candidates (`v0.0.0-dev.<commit>`) separate from immutable component releases, which still require `v<package-version>` and an exact tag-resolved source commit.
 
 ### Specification references
 
