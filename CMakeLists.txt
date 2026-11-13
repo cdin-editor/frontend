@@ -5,6 +5,13 @@ if(NOT CDIN_FRONTEND_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
 endif()
 project(cdin_frontend VERSION "${CDIN_FRONTEND_VERSION}" LANGUAGES C)
 
+set(CDIN_FRONTEND_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/include")
+file(MAKE_DIRECTORY "${CDIN_FRONTEND_GENERATED_INCLUDE_DIR}/cdin/frontend/core")
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/frontend-version.h.in"
+    "${CDIN_FRONTEND_GENERATED_INCLUDE_DIR}/cdin/frontend/core/version.h"
+    @ONLY)
+
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 include(CTest)
@@ -49,6 +56,7 @@ set_target_properties(cdin_frontend_core PROPERTIES
 target_compile_features(cdin_frontend_core PUBLIC c_std_11)
 target_include_directories(cdin_frontend_core
     PUBLIC
+        $<BUILD_INTERFACE:${CDIN_FRONTEND_GENERATED_INCLUDE_DIR}>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_link_libraries(cdin_frontend_core PUBLIC m-mdy-m::log)
@@ -192,7 +200,8 @@ if(BUILD_TESTING)
     target_compile_definitions(cdin_frontend_version_tests PRIVATE
         CDIN_FRONTEND_PROJECT_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
         CDIN_FRONTEND_PROJECT_VERSION_MINOR=${PROJECT_VERSION_MINOR}
-        CDIN_FRONTEND_PROJECT_VERSION_PATCH=${PROJECT_VERSION_PATCH})
+        CDIN_FRONTEND_PROJECT_VERSION_PATCH=${PROJECT_VERSION_PATCH}
+        CDIN_FRONTEND_PROJECT_VERSION_STRING="${PROJECT_VERSION}")
     cdin_frontend_enable_test_strict(cdin_frontend_version_tests)
     add_test(NAME cdin_frontend_version_tests COMMAND cdin_frontend_version_tests)
     cdin_frontend_core_test(cdin_frontend_model_tests tests/core/unit/model_state.c)
@@ -353,6 +362,10 @@ if(NOT CDIN_FRONTEND_USE_LOG_STUB)
     install(DIRECTORY include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
         COMPONENT core
         FILES_MATCHING PATTERN "*.h")
+    install(FILES
+        "${CDIN_FRONTEND_GENERATED_INCLUDE_DIR}/cdin/frontend/core/version.h"
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/cdin/frontend/core"
+        COMPONENT core)
 
     configure_package_config_file(
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake/cdinFrontendCoreConfig.cmake.in"
