@@ -43,6 +43,71 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def resolve_release_identity(
+    tag: str,
+    *,
+    dry_run: bool,
+    project_root: Path,
+) -> tuple[str, str]:
+    """Resolve package version and source commit for a release or branch dry-run."""
+    if dry_run:
+        if not re.fullmatch(r"v0\.0\.0-dev\.[0-9a-f]{7}", tag):
+            raise SystemExit(
+                "--tag must be the Pipeline synthetic v0.0.0-dev.<7-hex> candidate during dry-run"
+            )
+
+        try:
+            head_revision = subprocess.check_output(
+                ["git", "rev-parse", "--verify", "HEAD"], text=True
+            ).strip().lower()
+        except subprocess.CalledProcessError as error:
+            raise SystemExit(f"cannot resolve checked-out source HEAD: {error}") from error
+
+        pipeline_revision = os.environ.get("PIPELINE_SOURCE_SHA", "").strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", head_revision):
+            raise SystemExit("checked-out source HEAD is not a full Git commit ID")
+        if pipeline_revision != head_revision:
+            raise SystemExit(
+                "refusing dry-run metadata generation: "
+                f"Pipeline source is {pipeline_revision or '<missing>'}, HEAD is {head_revision}"
+            )
+
+        cmake_file = project_root / "CMakeLists.txt"
+        try:
+            cmake_content = cmake_file.read_text(encoding="utf-8")
+        except OSError as error:
+            raise SystemExit(f"cannot read Frontend project version from {cmake_file}: {error}") from error
+        project_match = re.search(
+            r"(?m)^project\(cdin_frontend VERSION ([0-9]+\.[0-9]+\.[0-9]+) LANGUAGES C\)$",
+            cmake_content,
+        )
+        if project_match is None:
+            raise SystemExit("cannot determine the Frontend package version from CMakeLists.txt")
+        return project_match.group(1), head_revision
+
+    if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", tag):
+        raise SystemExit("--tag must be the exact immutable vMAJOR.MINOR.PATCH release tag")
+
+    version = tag[1:]
+    try:
+        tag_revision = subprocess.check_output(
+            ["git", "rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}"], text=True
+        ).strip().lower()
+        head_revision = subprocess.check_output(
+            ["git", "rev-parse", "--verify", "HEAD"], text=True
+        ).strip().lower()
+    except subprocess.CalledProcessError as error:
+        raise SystemExit(f"cannot resolve immutable release source/tag: {error}") from error
+    if tag_revision != head_revision:
+        raise SystemExit(
+            f"refusing metadata generation: tag {tag} resolves to {tag_revision}, "
+            f"but release source HEAD is {head_revision}"
+        )
+    if not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", tag_revision):
+        raise SystemExit("release tag did not resolve to a full Git object ID")
+    return version, tag_revision
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tag", default=os.environ.get("PIPELINE_RELEASE_TAG", ""))
@@ -50,22 +115,15 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path)
     args = parser.parse_args()
 
-    if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", args.tag):
-        parser.error("--tag must be the exact immutable vMAJOR.MINOR.PATCH release tag")
-    version = args.tag[1:]
-    tag_revision = subprocess.check_output(
-        ["git", "rev-parse", "--verify", f"refs/tags/{args.tag}^{{commit}}"], text=True
-    ).strip().lower()
-    head_revision = subprocess.check_output(
-        ["git", "rev-parse", "--verify", "HEAD"], text=True
-    ).strip().lower()
-    if tag_revision != head_revision:
-        raise SystemExit(
-            f"refusing metadata generation: tag {args.tag} resolves to {tag_revision}, "
-            f"but release source HEAD is {head_revision}"
-        )
-    if len(tag_revision) not in (40, 64) or not re.fullmatch(r"[0-9a-f]+", tag_revision):
-        raise SystemExit("release tag did not resolve to a full Git object ID")
+    dry_run = (
+        os.environ.get("PIPELINE_DRY_RUN", "false").lower() == "true"
+        and os.environ.get("GITHUB_REF_TYPE", "") != "tag"
+    )
+    version, tag_revision = resolve_release_identity(
+        args.tag,
+        dry_run=dry_run,
+        project_root=Path(__file__).resolve().parents[1],
+    )
 
     descriptors = sorted(args.artifact_dir.rglob("cdin-frontend-*.tar.gz.artifact.json"))
     if len(descriptors) != len(EXPECTED_TARGETS) * len(VARIANTS):
