@@ -167,6 +167,8 @@ class ReleaseArtifactLayoutTests(unittest.TestCase):
             repository_root / "scripts" / "generate-release-metadata.py"
         ).read_text(encoding="utf-8")
         cmake = (repository_root / "CMakeLists.txt").read_text(encoding="utf-8")
+        version_template = (repository_root / "cmake" / "frontend-version.h.in").read_text(encoding="utf-8")
+        version_test = (repository_root / "tests" / "core" / "unit" / "version.c").read_text(encoding="utf-8")
 
         self.assertIn("python3 scripts/release_identity.py", package_script)
         self.assertIn('-DCDIN_FRONTEND_VERSION="$version"', package_script)
@@ -177,6 +179,12 @@ class ReleaseArtifactLayoutTests(unittest.TestCase):
             cmake,
         )
         self.assertIn('project(cdin_frontend VERSION "${CDIN_FRONTEND_VERSION}" LANGUAGES C)', cmake)
+        self.assertIn("frontend-version.h.in", cmake)
+        self.assertIn("@PROJECT_VERSION_MAJOR@", version_template)
+        self.assertIn("@PROJECT_VERSION_MINOR@", version_template)
+        self.assertIn("@PROJECT_VERSION_PATCH@", version_template)
+        self.assertIn('"${PROJECT_VERSION}"', cmake)
+        self.assertIn("CDIN_FRONTEND_PROJECT_VERSION_STRING", version_test)
         self.assertNotIn('"$tag" == "v$version"', package_script)
 
     def test_package_script_keeps_branch_dry_runs_separate_from_immutable_tag_releases(self) -> None:
