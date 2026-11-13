@@ -63,6 +63,23 @@ class ReleaseIdentityTests(unittest.TestCase):
                     project_root=self.project_root,
                 )
 
+    def test_branch_dry_run_allows_pipeline_omitting_optional_source_sha(self) -> None:
+        with (
+            mock.patch(
+                "release_identity.subprocess.check_output",
+                return_value=self.revision + "\n",
+            ),
+            mock.patch.dict(os.environ, {}, clear=True),
+        ):
+            version, revision = resolve_release_identity(
+                "v0.0.0-dev.07e2ec0",
+                dry_run=True,
+                project_root=self.project_root,
+            )
+
+        self.assertEqual(version, "1.2.2")
+        self.assertEqual(revision, self.revision)
+
     def test_branch_dry_run_rejects_non_pipeline_candidate_tag(self) -> None:
         with self.assertRaisesRegex(SystemExit, "synthetic"):
             resolve_release_identity(
