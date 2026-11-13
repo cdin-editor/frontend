@@ -51,11 +51,16 @@ SDL3 remains a separate GUI-SDL environment dependency.
 The published `v1.1.0` GitHub Release predates the variant publisher merge and
 contains only the contributor source archive and checksums. It remains
 immutable and is not an installable Core/TUI/GUI-SDL package release. The
-`v1.2.0` package identity becomes RELEASED only after its exact tag triggers
-the complete native matrix and the Release assets are verified. This packaging
-work does not claim production Unicode shaping, bidi, Persian/Arabic rendering,
-or complete TUI/GUI-SDL product readiness; optional capabilities remain
-disabled until the exact CDIN product E2E gates pass.
+published `v1.2.0` Release is immutable and is not suitable for ADR-0028
+artifact-first consumption: its three canonical Metadata documents refer to
+15 variant package archives that were not attached as direct Release assets.
+Do not rewrite or consume that historical inventory. The corrected
+`v1.2.1` package identity becomes RELEASED only after its exact tag triggers
+the complete native matrix and all 15 direct package assets, their descriptors,
+checksums and Metadata are verified. This packaging work does not claim
+production Unicode shaping, bidi, Persian/Arabic rendering, or complete
+TUI/GUI-SDL product readiness; optional capabilities remain disabled until
+the exact CDIN product E2E gates pass.
 
 ## Build and test
 
