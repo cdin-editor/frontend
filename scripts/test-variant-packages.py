@@ -68,8 +68,19 @@ def verify_archive(artifact_dir: Path, version: str, variant: str, target_os: st
         raise RuntimeError(f"{filename}: release descriptor does not match archive bytes")
     if artifact.get("size_bytes") != archive.stat().st_size:
         raise RuntimeError(f"{filename}: descriptor byte size mismatch")
-    if descriptor.get("source_revision") != os.environ.get("GITHUB_SHA", descriptor.get("source_revision")):
-        raise RuntimeError(f"{filename}: package source revision differs from the checked-out source")
+    try:
+        checked_out_revision = subprocess.check_output(
+            ["git", "rev-parse", "--verify", "HEAD"],
+            cwd=Path(__file__).resolve().parents[1],
+            text=True,
+        ).strip().lower()
+    except subprocess.CalledProcessError as error:
+        raise RuntimeError(f"{filename}: cannot resolve checked-out source revision: {error}") from error
+    if descriptor.get("source_revision") != checked_out_revision:
+        raise RuntimeError(
+            f"{filename}: package source revision {descriptor.get('source_revision')!r} "
+            f"differs from checked-out source {checked_out_revision!r}"
+        )
     sidecar_fields = sidecar.read_text(encoding="ascii").split()
     if len(sidecar_fields) < 2 or sidecar_fields[0] != digest or sidecar_fields[1].lstrip("*") != filename:
         raise RuntimeError(f"{filename}: checksum sidecar mismatch")
