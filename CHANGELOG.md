@@ -5,7 +5,7 @@
 ### Fixed
 
 - Resolve the published Frontend package version from the immutable `vMAJOR.MINOR.PATCH` Git tag for source archives, Core/TUI/GUI-SDL native packages and ADR-0028 release metadata. Pass that version into CMake instead of requiring a duplicated, manually synchronized version in the build file.
-- Share one release-identity resolver across packaging and metadata generation. Real releases are accepted only when the exact Git tag resolves to the checked-out source commit; branch dry-runs continue to use Pipeline's synthetic candidate and the local development version.
+- Share one release-identity resolver across packaging and metadata generation. Real releases are accepted only when the exact Git tag resolves to the checked-out source commit; branch dry-runs continue to use Pipeline's synthetic candidate and the local development version. Generate the public Foundation version header from the same resolved CMake project version so the header, ABI/package tests and installed CMake package cannot drift.
 - Keep tagless local source archives supported without weakening the immutable-tag requirement for native release packages.
 
 ### Specification references
