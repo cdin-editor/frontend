@@ -20,7 +20,7 @@ class ReleaseIdentityTests(unittest.TestCase):
         self.project_root = Path(self.temporary.name)
         (self.project_root / "CMakeLists.txt").write_text(
             'set(CDIN_FRONTEND_VERSION "1.2.2" CACHE STRING "Local/development Frontend package version")\n'
-            'project(cdin_frontend VERSION "\${CDIN_FRONTEND_VERSION}" LANGUAGES C)\n',
+            'project(cdin_frontend VERSION "${CDIN_FRONTEND_VERSION}" LANGUAGES C)\n',
             encoding="utf-8",
         )
 
@@ -176,7 +176,7 @@ class ReleaseArtifactLayoutTests(unittest.TestCase):
             'set(CDIN_FRONTEND_VERSION "1.2.2" CACHE STRING',
             cmake,
         )
-        self.assertIn('project(cdin_frontend VERSION "\${CDIN_FRONTEND_VERSION}" LANGUAGES C)', cmake)
+        self.assertIn('project(cdin_frontend VERSION "${CDIN_FRONTEND_VERSION}" LANGUAGES C)', cmake)
         self.assertNotIn('"$tag" == "v$version"', package_script)
 
     def test_package_script_keeps_branch_dry_runs_separate_from_immutable_tag_releases(self) -> None:
@@ -188,7 +188,8 @@ class ReleaseArtifactLayoutTests(unittest.TestCase):
 
         self.assertIn('PIPELINE_DRY_RUN:-false', package_script)
         self.assertIn('GITHUB_REF_TYPE:-', package_script)
-        self.assertIn("v0.0.0-dev.", package_script)
+        identity_helper = (repository_root / "scripts" / "release_identity.py").read_text(encoding="utf-8")
+        self.assertIn("v0.0.0-dev.", identity_helper)
         self.assertIn("immutable Git tag", package_script)
         self.assertIn(
             "https://github.com/cdin-editor/spec/blob/main/docs/adr/"
