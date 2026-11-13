@@ -61,3 +61,6 @@ ctest --test-dir "${tui_consumer_build}" -C Release --output-on-failure
 
 bash scripts/check-boundaries.sh
 bash scripts/lint-docs.sh
+
+# Keep immutable release-tag and branch dry-run metadata behavior under CI.
+python3 -m unittest discover -s tests -p "test_release_metadata.py"
