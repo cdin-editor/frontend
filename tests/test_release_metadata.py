@@ -208,7 +208,10 @@ class ReleaseArtifactLayoutTests(unittest.TestCase):
         source_version_header = (repository_root / "include" / "cdin" / "frontend" / "core" / "version.h").read_text(encoding="utf-8")
         self.assertIn('CDIN_FRONTEND_FOUNDATION_VERSION_STRING "1.2.2"', source_version_header)
         self.assertIn("release_identity.py | cut -f1", release_workflow)
-        self.assertIn('cmake_version_args+=("-DCDIN_FRONTEND_VERSION=${CDIN_FRONTEND_VERSION}")', (repository_root / "scripts" / "ci-check.sh").read_text(encoding="utf-8"))
+        ci_check = (repository_root / "scripts" / "ci-check.sh").read_text(encoding="utf-8")
+        self.assertIn('cmake -S . -B build "-DCDIN_FRONTEND_VERSION=${CDIN_FRONTEND_VERSION}" "$@"', ci_check)
+        self.assertIn("configure_frontend -DCMAKE_BUILD_TYPE=Release", ci_check)
+        self.assertNotIn("cmake_version_args=()", ci_check)
         self.assertNotIn('"$tag" == "v$version"', package_script)
 
     def test_package_script_keeps_branch_dry_runs_separate_from_immutable_tag_releases(self) -> None:
