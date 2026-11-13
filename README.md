@@ -42,20 +42,25 @@ The current cross-project design authority is [CDIN Spec 1.2.0](https://github.c
 
 ## Package status
 
-The next Frontend package identity is **1.2.0**. Its release workflow
-publishes three separately consumable variants—Core, TUI and GUI-SDL—for the
-five supported native target tuples, together with canonical ADR-0028 metadata
-assets generated from the exact tag commit. Core is shared by both UI adapters;
-SDL3 remains a separate GUI-SDL environment dependency.
+The next Frontend package identity is **1.2.2**. Release builds resolve the
+package version from the exact immutable `vMAJOR.MINOR.PATCH` Git tag and use
+that same value for the source archive, Core/TUI/GUI-SDL packages, generated
+public Foundation version header and ADR-0028 metadata. Tagless development
+builds use the explicit local version setting.
 
 The published `v1.1.0` GitHub Release predates the variant publisher merge and
 contains only the contributor source archive and checksums. It remains
 immutable and is not an installable Core/TUI/GUI-SDL package release. The
-`v1.2.0` package identity becomes RELEASED only after its exact tag triggers
-the complete native matrix and the Release assets are verified. This packaging
-work does not claim production Unicode shaping, bidi, Persian/Arabic rendering,
-or complete TUI/GUI-SDL product readiness; optional capabilities remain
-disabled until the exact CDIN product E2E gates pass.
+published `v1.2.0` Release is also immutable and is not suitable for
+ADR-0028 artifact-first consumption: its three canonical Metadata documents
+refer to 15 variant package archives that were not attached as direct Release
+assets. Do not rewrite or consume that historical inventory. The corrected
+`v1.2.2` identity becomes RELEASED only after its exact tag triggers the full
+native matrix and all 15 direct package assets, descriptors, checksums and
+Metadata are verified. This packaging work does not claim production Unicode
+shaping, bidi, Persian/Arabic rendering, or complete TUI/GUI-SDL product
+readiness; optional capabilities remain disabled until the exact CDIN product
+E2E gates pass.
 
 ## Build and test
 
