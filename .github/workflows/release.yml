@@ -20,7 +20,9 @@ jobs:
       pipeline-ref: 7cfdffd574d3b438228bc6b0faae7c61bb14f055
       changelog-path: CHANGELOG.md
       dry-run: ${{ github.ref_type != 'tag' }}
-      test-command: make check
+      test-command: >-
+        export CDIN_FRONTEND_VERSION="$(python3 scripts/release_identity.py | cut -f1)" &&
+        make check
       build-command: bash scripts/package-variants.sh
       asset-preparation-command: >-
         python3 scripts/generate-release-metadata.py
