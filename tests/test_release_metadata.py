@@ -5,8 +5,17 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest import mock
+import importlib.util
+import sys
 
-from scripts.generate_release_metadata import resolve_release_identity
+SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "generate-release-metadata.py"
+SPEC = importlib.util.spec_from_file_location("frontend_release_metadata", SCRIPT_PATH)
+if SPEC is None or SPEC.loader is None:
+    raise RuntimeError(f"cannot load release metadata generator from {SCRIPT_PATH}")
+metadata_module = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = metadata_module
+SPEC.loader.exec_module(metadata_module)
+resolve_release_identity = metadata_module.resolve_release_identity
 
 
 class ReleaseIdentityTests(unittest.TestCase):
@@ -33,7 +42,7 @@ class ReleaseIdentityTests(unittest.TestCase):
 
         with (
             mock.patch(
-                "scripts.generate_release_metadata.subprocess.check_output",
+                "frontend_release_metadata.subprocess.check_output",
                 side_effect=git_output,
             ),
             mock.patch.dict(os.environ, {"PIPELINE_SOURCE_SHA": self.revision}),
@@ -51,7 +60,7 @@ class ReleaseIdentityTests(unittest.TestCase):
     def test_dry_run_rejects_pipeline_source_mismatch(self) -> None:
         with (
             mock.patch(
-                "scripts.generate_release_metadata.subprocess.check_output",
+                "frontend_release_metadata.subprocess.check_output",
                 return_value=self.revision + "\n",
             ),
             mock.patch.dict(os.environ, {"PIPELINE_SOURCE_SHA": "b" * 40}),
@@ -79,7 +88,7 @@ class ReleaseIdentityTests(unittest.TestCase):
             return self.revision + "\n"
 
         with mock.patch(
-            "scripts.generate_release_metadata.subprocess.check_output",
+            "frontend_release_metadata.subprocess.check_output",
             side_effect=git_output,
         ):
             version, revision = resolve_release_identity(
@@ -100,7 +109,7 @@ class ReleaseIdentityTests(unittest.TestCase):
 
     def test_real_release_rejects_tag_head_mismatch(self) -> None:
         with mock.patch(
-            "scripts.generate_release_metadata.subprocess.check_output",
+            "frontend_release_metadata.subprocess.check_output",
             side_effect=[self.revision + "\n", "b" * 40 + "\n"],
         ):
             with self.assertRaisesRegex(SystemExit, "but release source HEAD"):
