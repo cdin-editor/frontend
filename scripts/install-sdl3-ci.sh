@@ -7,7 +7,11 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 version="3.4.16"
 sha256="7322236cd12090c3eb40b9728be4d49c76f66ad17d04369584d4ecad5cf77c68"
 prefix="${SDL3_PREFIX:-$repo_root/.deps/sdl3}"
-work="${RUNNER_TEMP:-$repo_root/build}/frontend-sdl3-ci"
+runner_temp="${RUNNER_TEMP:-$repo_root/build}"
+if command -v cygpath >/dev/null 2>&1; then
+    runner_temp="$(cygpath -u "$runner_temp")"
+fi
+work="$runner_temp/frontend-sdl3-ci"
 archive="$work/SDL3-$version.tar.gz"
 source_dir="$work/source"
 build_dir="$work/build"
@@ -22,18 +26,22 @@ command -v curl >/dev/null 2>&1 || { echo "curl is required to prepare SDL3 in C
 curl --fail --location --retry 3 \
   "https://github.com/libsdl-org/SDL/releases/download/release-$version/SDL3-$version.tar.gz" \
   --output "$archive"
-if command -v sha256sum >/dev/null 2>&1; then
-    printf '%s  %s\n' "$sha256" "$archive" | sha256sum --check
-elif command -v shasum >/dev/null 2>&1; then
-    actual_sha256="$(shasum -a 256 "$archive" | awk '{print $1}')"
-    [[ "$actual_sha256" == "$sha256" ]] || {
-        echo "SDL3 $version source archive checksum mismatch" >&2
-        exit 1
-    }
-else
-    echo "sha256sum or shasum is required to verify SDL3 $version" >&2
-    exit 2
-fi
+python3 - "$archive" "$sha256" <<'PY'
+import hashlib
+import pathlib
+import sys
+
+archive = pathlib.Path(sys.argv[1])
+expected = sys.argv[2]
+digest = hashlib.sha256()
+with archive.open("rb") as source:
+    for chunk in iter(lambda: source.read(1024 * 1024), b""):
+        digest.update(chunk)
+actual = digest.hexdigest()
+if actual != expected:
+    raise SystemExit(f"SDL3 source checksum mismatch: expected {expected}, got {actual}")
+print(f"Verified SDL3 source archive SHA-256: {actual}")
+PY
 
 rm -rf "$source_dir" "$build_dir" "$prefix"
 mkdir -p "$source_dir" "$prefix"
