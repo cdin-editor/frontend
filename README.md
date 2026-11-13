@@ -42,7 +42,7 @@ The current cross-project design authority is [CDIN Spec 1.2.0](https://github.c
 
 ## Package status
 
-The next Frontend package identity is **1.2.0**. Its release workflow
+The next Frontend package identity is **1.2.1**. Its release workflow
 publishes three separately consumable variants—Core, TUI and GUI-SDL—for the
 five supported native target tuples, together with canonical ADR-0028 metadata
 assets generated from the exact tag commit. Core is shared by both UI adapters;
