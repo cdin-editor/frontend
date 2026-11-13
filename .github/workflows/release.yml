@@ -2,6 +2,7 @@ name: Build and publish Frontend source and variant packages
 
 on:
   push:
+    branches: ["**"]
     tags: ["v*"]
 
 permissions:
@@ -14,10 +15,11 @@ jobs:
       contents: write
       id-token: write
       attestations: write
-    uses: m-mdy-m/pipeline/.github/workflows/release.yml@0c2c89c7c64575c6b0f66c78925bdf5638abc5e9
+    uses: m-mdy-m/pipeline/.github/workflows/release.yml@75c09b9e6962f3d037198cf72796daf2a35bfb03
     with:
-      pipeline-ref: 0c2c89c7c64575c6b0f66c78925bdf5638abc5e9
+      pipeline-ref: 75c09b9e6962f3d037198cf72796daf2a35bfb03
       changelog-path: CHANGELOG.md
+      dry-run: ${{ github.ref_type != 'tag' }}
       test-command: make check
       build-command: bash scripts/package-variants.sh
       asset-preparation-command: >-
@@ -37,7 +39,7 @@ jobs:
             "target_os":"linux",
             "architecture":"x86_64",
             "abi":"gnu-glibc-2.39",
-            "build_command":"sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build pkg-config curl python3 && bash scripts/package-release.sh && FRONTEND_TARGET_OS=linux FRONTEND_TARGET_ARCH=x86_64 FRONTEND_TARGET_ABI=gnu-glibc-2.39 FRONTEND_TARGET_RUNNER=github-actions-ubuntu-24.04 bash scripts/package-variants.sh",
+            "build_command":"sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build pkg-config curl python3 libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxkbcommon-dev libwayland-dev libegl1-mesa-dev libgles2-mesa-dev libasound2-dev && bash scripts/package-release.sh && FRONTEND_TARGET_OS=linux FRONTEND_TARGET_ARCH=x86_64 FRONTEND_TARGET_ABI=gnu-glibc-2.39 FRONTEND_TARGET_RUNNER=github-actions-ubuntu-24.04 bash scripts/package-variants.sh",
             "artifact_path":"dist/release-build-*/*\ndist/cdin-frontend-*-source.tar.gz\ndist/cdin-frontend-*-source.tar.gz.sha256"
           },
           {
@@ -46,7 +48,7 @@ jobs:
             "target_os":"linux",
             "architecture":"arm64",
             "abi":"gnu-glibc-2.39",
-            "build_command":"sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build pkg-config curl python3 && FRONTEND_TARGET_OS=linux FRONTEND_TARGET_ARCH=arm64 FRONTEND_TARGET_ABI=gnu-glibc-2.39 FRONTEND_TARGET_RUNNER=github-actions-ubuntu-24.04-arm64 bash scripts/package-variants.sh"
+            "build_command":"sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build pkg-config curl python3 libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxkbcommon-dev libwayland-dev libegl1-mesa-dev libgles2-mesa-dev libasound2-dev && FRONTEND_TARGET_OS=linux FRONTEND_TARGET_ARCH=arm64 FRONTEND_TARGET_ABI=gnu-glibc-2.39 FRONTEND_TARGET_RUNNER=github-actions-ubuntu-24.04-arm64 bash scripts/package-variants.sh"
           },
           {
             "id":"macos-x86_64",
