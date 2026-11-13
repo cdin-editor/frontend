@@ -160,7 +160,13 @@ done
 
 asset_arch="${target_arch//_/-}"
 target_key="$target_os-$asset_arch-$target_abi"
-output_dir="$repo_root/dist/release-build-$target_key"
+# ADR-0028 requires the package basename embedded in each artifact URI to be
+# an actual GitHub Release asset. Keep each archive, checksum and descriptor
+# flat in dist/ so Pipeline's artifact upload/download cannot wrap them in a
+# target directory and replace the 15 package assets with five nested bundles.
+# Contract: https://github.com/cdin-editor/spec/blob/main/docs/adr/ADR-0028-github-release-metadata-discovery.md#L19-L23
+# Delivery: https://github.com/cdin-editor/spec/blob/main/docs/adr/ADR-0025-immutable-target-artifact-delivery.md#L17-L21
+output_dir="$repo_root/dist"
 mkdir -p "$output_dir"
 
 python3 - "$stage_root" "$output_dir" "$version" "$target_os" "$target_arch" "$target_abi" "$target_runner" "$source_revision" "$tag" <<'PY'

@@ -120,5 +120,51 @@ class ReleaseIdentityTests(unittest.TestCase):
                 )
 
 
+class ReleaseArtifactLayoutTests(unittest.TestCase):
+    def test_release_assets_are_flat_and_pipeline_pin_is_consistent(self) -> None:
+        repository_root = Path(__file__).resolve().parents[1]
+        package_script = (repository_root / "scripts" / "package-variants.sh").read_text(
+            encoding="utf-8"
+        )
+        release_workflow = (
+            repository_root / ".github" / "workflows" / "release.yml"
+        ).read_text(encoding="utf-8")
+
+        # The metadata generator records direct, tag-qualified Release asset URIs.
+        # Keep their physical output at dist/ so Pipeline uploads each basename,
+        # not an enclosing target directory.
+        self.assertIn('output_dir="$repo_root/dist"', package_script)
+        self.assertIn("dist/cdin-frontend-*", release_workflow)
+        self.assertNotIn("dist/release-build-*", release_workflow)
+
+        # Pipeline's reusable workflow ref and helper implementation must be
+        # the same immutable commit for reproducible package assembly.
+        pinned_pipeline = "7cfdffd574d3b438228bc6b0faae7c61bb14f055"
+        self.assertIn(f"release.yml@{pinned_pipeline}", release_workflow)
+        self.assertIn(f"pipeline-ref: {pinned_pipeline}", release_workflow)
+
+
+    def test_package_script_keeps_branch_dry_runs_separate_from_immutable_tag_releases(self) -> None:
+        repository_root = Path(__file__).resolve().parents[1]
+        package_script = (
+            repository_root / "scripts" / "package-variants.sh"
+        ).read_text(encoding="utf-8")
+        changelog = (repository_root / "CHANGELOG.md").read_text(encoding="utf-8")
+
+        # Branch previews use the synthetic candidate supplied by Pipeline and
+        # must not try to resolve it as a Git tag. Actual tag builds still bind
+        # package version to the exact tag-resolved commit.
+        self.assertIn('PIPELINE_DRY_RUN:-false', package_script)
+        self.assertIn('GITHUB_REF_TYPE:-', package_script)
+        self.assertIn('v0.0.0-dev.*', package_script)
+        self.assertIn('"$tag" == "v$version"', package_script)
+        self.assertIn('refs/tags/$tag^{commit}', package_script)
+        self.assertIn(
+            "https://github.com/cdin-editor/spec/blob/main/docs/adr/"
+            "ADR-0028-github-release-metadata-discovery.md#L19-L24",
+            changelog,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -11,6 +11,19 @@ themselves declare the complete TUI, GUI-SDL, or CDIN application production
 ready. Optional IME and pane-splitter capabilities remain gated on compatible
 immutable component candidates and live CDIN product verification.
 
+## [Unreleased]
+
+### Fixed
+
+- Keep the 15 Core/TUI/GUI-SDL target package archives, checksum sidecars and artifact descriptors as flat Release assets. The exact archive basenames referenced by ADR-0028 metadata must exist as direct assets on the same tag Release; the published `v1.2.0` remains immutable and is not rewritten.
+- Pin the reusable Pipeline release workflow and its helper input to the same immutable Pipeline revision `7cfdffd574d3b438228bc6b0faae7c61bb14f055`. This revision propagates `dry-run` into Bash and MSYS2 build commands; the previously selected `0c2c89c` omitted that variable, causing branch preview tags to be rejected as real SemVer tags.
+- Keep branch dry-run candidates (`v0.0.0-dev.<commit>`) separate from immutable component releases, which still require `v<package-version>` and an exact tag-resolved source commit.
+
+### Specification references
+
+- [ADR-0028 publisher contract, lines 19–24](https://github.com/cdin-editor/spec/blob/main/docs/adr/ADR-0028-github-release-metadata-discovery.md#L19-L24).
+- [ADR-0025 immutable artifact delivery, lines 17–21](https://github.com/cdin-editor/spec/blob/main/docs/adr/ADR-0025-immutable-target-artifact-delivery.md#L17-L21).
+
 ## [1.2.0] - 2026-11-13
 
 ### Added
