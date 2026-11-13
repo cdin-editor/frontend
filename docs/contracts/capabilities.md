@@ -41,6 +41,7 @@ current Frontend or Backend supports them all.
 | `truecolor` | Full 24-bit foreground/background color | Depends on terminal capability detection | Supported by renderer when enabled |
 | `ime` | Input-method composition; committed result travels through `input.text` | Terminal/platform dependent | Desktop input-method integration |
 | `byte-anchored-lines/1` | Version-pinned byte scroll anchor resolved to a logical line by Backend; `first_byte` identifies the returned window start | Not requested by the current TUI adapter | Opt-in GUI-SDL bounded line-window scrolling; requires same-snapshot Backend support |
+| `ui-presentation/1` | ADR-0026 typed style-role, panel, prompt and declarative-widget payloads; interactive use requires explicit `HELLO_ACK` acceptance | Not requested; no complete widget renderer yet | Not requested; style-role decoding exists, but panel/widget rendering and shared vectors are not complete |
 
 The Headless adapter can emulate any registered capability for tests, but its
 reported accepted set must describe the fake implementation explicitly; it
@@ -60,7 +61,7 @@ must not pretend a real clipboard or dialog exists.
   connection; support is not the same as acceptance.
 - Capability state is cleared when the session disconnects and renegotiated
   on reconnect.
-- Do not infer `mouse`, `clipboard`, `dialogs`, `canvas`, `images` or `ime`
+- Do not infer `mouse`, `clipboard`, `dialogs`, `canvas`, `images`, `ime` or `ui-presentation/1`
   from `units`, terminal type, or platform name.
 
 ## 4. Foundation 1.0.0 Core API
@@ -109,8 +110,12 @@ Protocol behavior.
   capabilities, so the accepted set is currently empty in the paired source
   integration path.
 - **Adapters:** the TUI preview defaults to an empty requested set. It must not
-  advertise mouse, clipboard, dialogs, canvas, images, truecolor or IME until
-  each implementation and its tests exist. GUI-SDL supports opt-in IME, splitter
+  advertise mouse, clipboard, dialogs, canvas, images, truecolor, IME or
+  `ui-presentation/1` until
+  each implementation and its tests exist. In particular, `ui-presentation/1`
+  remains registered-but-not-requested until the GUI-SDL/TUI schema renderer,
+  Backend validation and shared ADR-0026 vectors all pass. GUI-SDL supports
+  opt-in IME, splitter
   and byte-anchored line windows in component builds; normal product builds keep
   their compile-time gates disabled until CDIN #118 live E2E passes. Headless
   records protocol messages but does not implement optional device services.

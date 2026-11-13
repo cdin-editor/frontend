@@ -9,6 +9,7 @@ int main(void)
     const char *names[] = { "mouse", "clipboard", "driver-role-events/1", "future.optional" };
     const char *duplicate_names[] = { "mouse", "mouse" };
     const char *invalid_names[] = { "bad\xc0\xaf" };
+    const char *presentation_names[] = { "ui-presentation/1" };
     static const uint8_t valid_array[] = {
         0x83u, 0x65u, 'm','o','u','s','e',
         0x74u, 'd','r','i','v','e','r','-','r','o','l','e','-','e','v','e','n','t','s','/','1',
@@ -18,6 +19,7 @@ int main(void)
     static const uint8_t invalid_item_array[] = { 0x81u, 0x01u };
     cdin_frontend_capability_mask parsed = 0u;
     cdin_frontend_capability_mask accepted = 0u;
+    cdin_frontend_capability_mask presentation = 0u;
     cdin_frontend_capability capability = CDIN_FRONTEND_CAP_MOUSE;
     const char *name = NULL;
 
@@ -33,6 +35,15 @@ int main(void)
                   "ime-composition/1") == 0);
     assert(strcmp(cdin_frontend_capability_name(CDIN_FRONTEND_CAP_BYTE_ANCHORED_LINES),
                   "byte-anchored-lines/1") == 0);
+    assert(strcmp(cdin_frontend_capability_name(CDIN_FRONTEND_CAP_UI_PRESENTATION),
+                  "ui-presentation/1") == 0);
+    assert(cdin_frontend_capability_from_name("ui-presentation/1", &capability));
+    assert(capability == CDIN_FRONTEND_CAP_UI_PRESENTATION);
+    assert(cdin_frontend_capabilities_parse_names(presentation_names, 1u, &presentation) ==
+           CDIN_FRONTEND_CAPABILITY_OK);
+    assert(presentation == CDIN_FRONTEND_CAP_BIT(CDIN_FRONTEND_CAP_UI_PRESENTATION));
+    assert(cdin_frontend_capabilities_validate_accepted(
+        0u, presentation, &accepted) == CDIN_FRONTEND_CAPABILITY_NOT_REQUESTED);
     assert(cdin_frontend_capability_from_name("ime-composition/1", &capability));
     assert(capability == CDIN_FRONTEND_CAP_IME_COMPOSITION);
     assert(cdin_frontend_capability_from_name("byte-anchored-lines/1", &capability));
