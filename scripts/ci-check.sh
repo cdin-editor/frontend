@@ -4,11 +4,17 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$repo_root"
 
 bash scripts/install-deps.sh
-cmake_version_args=()
-if [[ -n "${CDIN_FRONTEND_VERSION:-}" ]]; then
-    cmake_version_args+=("-DCDIN_FRONTEND_VERSION=${CDIN_FRONTEND_VERSION}")
-fi
-cmake -S . -B build "${cmake_version_args[@]}" -DCMAKE_BUILD_TYPE=Release \
+# Bash 3.2 (the system Bash on macOS runners) treats expansion of an
+# empty array under set -u as an unbound variable. Keep the optional package
+# version positional and pass all shared CMake arguments through "$@".
+configure_frontend() {
+    if [[ -n "${CDIN_FRONTEND_VERSION:-}" ]]; then
+        cmake -S . -B build "-DCDIN_FRONTEND_VERSION=${CDIN_FRONTEND_VERSION}" "$@"
+    else
+        cmake -S . -B build "$@"
+    fi
+}
+configure_frontend -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_PREFIX_PATH="${repo_root}/.deps/log" \
     -DCDIN_FRONTEND_USE_LOG_STUB=OFF \
     -DCDIN_FRONTEND_BUILD_UI_TUI=ON \
