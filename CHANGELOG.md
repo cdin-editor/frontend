@@ -11,7 +11,7 @@ themselves declare the complete TUI, GUI-SDL, or CDIN application production
 ready. Optional IME and pane-splitter capabilities remain gated on compatible
 immutable component candidates and live CDIN product verification.
 
-## [Unreleased]
+## [1.2.1] - 2026-11-13
 
 ### Fixed
 
