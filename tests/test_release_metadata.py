@@ -26,7 +26,7 @@ class ReleaseIdentityTests(unittest.TestCase):
         self.project_root = Path(self.temporary.name)
         (self.project_root / "CMakeLists.txt").write_text(
             "cmake_minimum_required(VERSION 3.22)\n"
-            "project(cdin_frontend VERSION 1.2.0 LANGUAGES C)\n",
+            "project(cdin_frontend VERSION 1.2.1 LANGUAGES C)\n",
             encoding="utf-8",
         )
 
@@ -53,7 +53,7 @@ class ReleaseIdentityTests(unittest.TestCase):
                 project_root=self.project_root,
             )
 
-        self.assertEqual(version, "1.2.0")
+        self.assertEqual(version, "1.2.1")
         self.assertEqual(revision, self.revision)
         self.assertEqual(calls, [["git", "rev-parse", "--verify", "HEAD"]])
 
@@ -75,7 +75,7 @@ class ReleaseIdentityTests(unittest.TestCase):
     def test_dry_run_rejects_non_pipeline_candidate_tag(self) -> None:
         with self.assertRaisesRegex(SystemExit, "synthetic"):
             resolve_release_identity(
-                "v1.2.0",
+                "v1.2.1",
                 dry_run=True,
                 project_root=self.project_root,
             )
@@ -92,17 +92,17 @@ class ReleaseIdentityTests(unittest.TestCase):
             side_effect=git_output,
         ):
             version, revision = resolve_release_identity(
-                "v1.2.0",
+                "v1.2.1",
                 dry_run=False,
                 project_root=self.project_root,
             )
 
-        self.assertEqual(version, "1.2.0")
+        self.assertEqual(version, "1.2.1")
         self.assertEqual(revision, self.revision)
         self.assertEqual(
             calls,
             [
-                ["git", "rev-parse", "--verify", "refs/tags/v1.2.0^{commit}"],
+                ["git", "rev-parse", "--verify", "refs/tags/v1.2.1^{commit}"],
                 ["git", "rev-parse", "--verify", "HEAD"],
             ],
         )
@@ -114,7 +114,7 @@ class ReleaseIdentityTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(SystemExit, "but release source HEAD"):
                 resolve_release_identity(
-                    "v1.2.0",
+                    "v1.2.1",
                     dry_run=False,
                     project_root=self.project_root,
                 )
@@ -164,6 +164,32 @@ class ReleaseArtifactLayoutTests(unittest.TestCase):
             "ADR-0028-github-release-metadata-discovery.md#L19-L24",
             changelog,
         )
+
+
+    def test_package_version_is_aligned_across_cmake_public_header_and_release_docs(self) -> None:
+        repository_root = Path(__file__).resolve().parents[1]
+        cmake = (repository_root / "CMakeLists.txt").read_text(encoding="utf-8")
+        header = (
+            repository_root / "include" / "cdin" / "frontend" / "core" / "version.h"
+        ).read_text(encoding="utf-8")
+        version_test = (
+            repository_root / "tests" / "core" / "unit" / "version.c"
+        ).read_text(encoding="utf-8")
+        changelog = (repository_root / "CHANGELOG.md").read_text(encoding="utf-8")
+        readme = (repository_root / "README.md").read_text(encoding="utf-8")
+
+        self.assertIn(
+            "project(cdin_frontend VERSION 1.2.1 LANGUAGES C)",
+            cmake,
+        )
+        self.assertIn("#define CDIN_FRONTEND_FOUNDATION_VERSION_MAJOR 1u", header)
+        self.assertIn("#define CDIN_FRONTEND_FOUNDATION_VERSION_MINOR 2u", header)
+        self.assertIn("#define CDIN_FRONTEND_FOUNDATION_VERSION_PATCH 1u", header)
+        self.assertIn('#define CDIN_FRONTEND_FOUNDATION_VERSION_STRING "1.2.1"', header)
+        self.assertIn('CDIN_FRONTEND_FOUNDATION_VERSION_STRING, "1.2.1"', version_test)
+        self.assertIn("## [1.2.1] - 2026-11-13", changelog)
+        self.assertIn("next Frontend package identity is **1.2.1**", readme)
+        self.assertIn("The published `v1.2.0` Release is immutable", readme)
 
 
 if __name__ == "__main__":
