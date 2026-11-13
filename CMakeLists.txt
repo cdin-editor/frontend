@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.22)
-project(cdin_frontend VERSION 1.2.0 LANGUAGES C)
+set(CDIN_FRONTEND_VERSION "1.2.2" CACHE STRING "Local/development Frontend package version")
+if(NOT CDIN_FRONTEND_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+    message(FATAL_ERROR "CDIN_FRONTEND_VERSION must be a MAJOR.MINOR.PATCH version")
+endif()
+project(cdin_frontend VERSION "${CDIN_FRONTEND_VERSION}" LANGUAGES C)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
