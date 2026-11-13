@@ -255,5 +255,5 @@ for variant in variants:
     print(f"Created {filename}: {size} bytes sha256={digest}")
 PY
 
-python3 scripts/test-variant-packages.py --artifact-dir "$output_dir" --logger-prefix "$logger_prefix" --sdl3-prefix "$SDL3_PREFIX"
+python3 scripts/test-variant-packages.py --artifact-dir "$output_dir" --logger-prefix "$logger_prefix" --sdl3-prefix "$SDL3_PREFIX" --version "$version"
 echo "Frontend native packages verified for $target_key at $source_revision"
