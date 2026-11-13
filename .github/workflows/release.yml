@@ -39,7 +39,7 @@ jobs:
             "target_os":"linux",
             "architecture":"x86_64",
             "abi":"gnu-glibc-2.39",
-            "build_command":"sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build pkg-config curl python3 libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxkbcommon-dev libwayland-dev libegl1-mesa-dev libgles2-mesa-dev libasound2-dev && bash scripts/package-release.sh && FRONTEND_TARGET_OS=linux FRONTEND_TARGET_ARCH=x86_64 FRONTEND_TARGET_ABI=gnu-glibc-2.39 FRONTEND_TARGET_RUNNER=github-actions-ubuntu-24.04 bash scripts/package-variants.sh",
+            "build_command":"sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build pkg-config curl python3 libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxkbcommon-dev libwayland-dev libegl1-mesa-dev libgles2-mesa-dev libasound2-dev libxtst-dev && bash scripts/package-release.sh && FRONTEND_TARGET_OS=linux FRONTEND_TARGET_ARCH=x86_64 FRONTEND_TARGET_ABI=gnu-glibc-2.39 FRONTEND_TARGET_RUNNER=github-actions-ubuntu-24.04 bash scripts/package-variants.sh",
             "artifact_path":"dist/release-build-*/*\ndist/cdin-frontend-*-source.tar.gz\ndist/cdin-frontend-*-source.tar.gz.sha256"
           },
           {
@@ -48,7 +48,7 @@ jobs:
             "target_os":"linux",
             "architecture":"arm64",
             "abi":"gnu-glibc-2.39",
-            "build_command":"sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build pkg-config curl python3 libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxkbcommon-dev libwayland-dev libegl1-mesa-dev libgles2-mesa-dev libasound2-dev && FRONTEND_TARGET_OS=linux FRONTEND_TARGET_ARCH=arm64 FRONTEND_TARGET_ABI=gnu-glibc-2.39 FRONTEND_TARGET_RUNNER=github-actions-ubuntu-24.04-arm64 bash scripts/package-variants.sh"
+            "build_command":"sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build pkg-config curl python3 libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxkbcommon-dev libwayland-dev libegl1-mesa-dev libgles2-mesa-dev libasound2-dev libxtst-dev && FRONTEND_TARGET_OS=linux FRONTEND_TARGET_ARCH=arm64 FRONTEND_TARGET_ABI=gnu-glibc-2.39 FRONTEND_TARGET_RUNNER=github-actions-ubuntu-24.04-arm64 bash scripts/package-variants.sh"
           },
           {
             "id":"macos-x86_64",
