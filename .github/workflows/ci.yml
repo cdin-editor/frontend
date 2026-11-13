@@ -150,7 +150,7 @@ jobs:
         with:
           msystem: UCRT64
           update: true
-          install: git make mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake
+          install: git make python mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake
       # GitHub Actions does not permit the matrix context in steps.shell.
       # Keep each shell static and select the matching step with its condition.
       - if: matrix.os != 'windows-latest'
