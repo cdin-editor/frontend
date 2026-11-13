@@ -120,5 +120,29 @@ class ReleaseIdentityTests(unittest.TestCase):
                 )
 
 
+class ReleaseArtifactLayoutTests(unittest.TestCase):
+    def test_release_assets_are_flat_and_pipeline_pin_is_consistent(self) -> None:
+        repository_root = Path(__file__).resolve().parents[1]
+        package_script = (repository_root / "scripts" / "package-variants.sh").read_text(
+            encoding="utf-8"
+        )
+        release_workflow = (
+            repository_root / ".github" / "workflows" / "release.yml"
+        ).read_text(encoding="utf-8")
+
+        # The metadata generator records direct, tag-qualified Release asset URIs.
+        # Keep their physical output at dist/ so Pipeline uploads each basename,
+        # not an enclosing target directory.
+        self.assertIn('output_dir="$repo_root/dist"', package_script)
+        self.assertIn("dist/cdin-frontend-*", release_workflow)
+        self.assertNotIn("dist/release-build-*", release_workflow)
+
+        # Pipeline's reusable workflow ref and helper implementation must be
+        # the same immutable commit for reproducible package assembly.
+        pinned_pipeline = "0c2c89c7c64575c6b0f66c78925bdf5638abc5e9"
+        self.assertIn(f"release.yml@{pinned_pipeline}", release_workflow)
+        self.assertIn(f"pipeline-ref: {pinned_pipeline}", release_workflow)
+
+
 if __name__ == "__main__":
     unittest.main()
