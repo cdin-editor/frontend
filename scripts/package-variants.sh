@@ -11,16 +11,26 @@ tag="${PIPELINE_RELEASE_TAG:-${GITHUB_REF_NAME:-}}"
 version="$(sed -n 's/^project(cdin_frontend VERSION \([^ ]*\) LANGUAGES C)$/\1/p' CMakeLists.txt)"
 version="${version:-}"
 [[ -n "$version" ]] || { echo "Could not determine Frontend package version" >&2; exit 2; }
-[[ "$tag" == "v$version" ]] || {
-  echo "Release tag '$tag' does not match Frontend version '$version'." >&2
-  exit 1
-}
 source_revision="$(git rev-parse --verify HEAD)"
-tag_revision="$(git rev-parse --verify "refs/tags/$tag^{commit}")"
-[[ "$source_revision" == "$tag_revision" ]] || {
-  echo "Release tag $tag resolves to $tag_revision, but package source HEAD is $source_revision." >&2
-  exit 1
-}
+if [[ "${PIPELINE_DRY_RUN:-false}" == "true" && "${GITHUB_REF_TYPE:-}" != "tag" ]]; then
+  # Branch dry-runs use a synthetic Pipeline candidate tag. The package keeps
+  # its project-declared version; no Git tag is required or published.
+  [[ "$tag" == v0.0.0-dev.* ]] || {
+    echo "Unexpected branch dry-run candidate tag: '$tag'." >&2
+    exit 1
+  }
+  echo "Validating Frontend package version $version against branch dry-run candidate $tag."
+else
+  [[ "$tag" == "v$version" ]] || {
+    echo "Release tag '$tag' does not match Frontend version '$version'." >&2
+    exit 1
+  }
+  tag_revision="$(git rev-parse --verify "refs/tags/$tag^{commit}")"
+  [[ "$source_revision" == "$tag_revision" ]] || {
+    echo "Release tag $tag resolves to $tag_revision, but package source HEAD is $source_revision." >&2
+    exit 1
+  }
+fi
 git diff --quiet && git diff --cached --quiet || {
   echo "Refusing to package a dirty Frontend source checkout." >&2
   exit 1
