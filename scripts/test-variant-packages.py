@@ -79,8 +79,17 @@ def verify_archive(artifact_dir: Path, version: str, variant: str, target_os: st
 
 
 def configure_and_test(source: Path, build: Path, prefix_paths: list[Path]) -> None:
-    separator = ";" if os.name == "nt" or os.environ.get("MSYSTEM") else ";"
-    prefix_value = separator.join(str(path) for path in prefix_paths)
+    # CMake is a native Windows executable on MSYS2 runners. Convert MSYS
+    # paths before passing the semicolon-delimited CMake prefix list.
+    native_prefixes: list[str] = []
+    for path in prefix_paths:
+        value = str(path)
+        if os.environ.get("MSYSTEM") and shutil.which("cygpath"):
+            value = subprocess.check_output(
+                ["cygpath", "-m", value], text=True
+            ).strip()
+        native_prefixes.append(value)
+    prefix_value = ";".join(native_prefixes)
     run([
         "cmake", "-S", str(source), "-B", str(build),
         "-DCMAKE_BUILD_TYPE=Release",
