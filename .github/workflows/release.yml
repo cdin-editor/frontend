@@ -15,9 +15,9 @@ jobs:
       contents: write
       id-token: write
       attestations: write
-    uses: m-mdy-m/pipeline/.github/workflows/release.yml@7cfdffd574d3b438228bc6b0faae7c61bb14f055
+    uses: m-mdy-m/pipeline/.github/workflows/release.yml@0c2c89c7c64575c6b0f66c78925bdf5638abc5e9
     with:
-      pipeline-ref: 7cfdffd574d3b438228bc6b0faae7c61bb14f055
+      pipeline-ref: 0c2c89c7c64575c6b0f66c78925bdf5638abc5e9
       changelog-path: CHANGELOG.md
       dry-run: ${{ github.ref_type != 'tag' }}
       test-command: make check
@@ -27,10 +27,7 @@ jobs:
         --tag "$PIPELINE_RELEASE_TAG"
         --artifact-dir "$RELEASE_ASSETS_DIRECTORY"
         --output-dir "$RELEASE_ASSETS_DIRECTORY/release-build-metadata"
-      artifact-path: |
-        dist/release-build-*/*.tar.gz
-        dist/release-build-*/*.tar.gz.sha256
-        dist/release-build-*/*.tar.gz.artifact.json
+      artifact-path: dist/cdin-frontend-*
       build-matrix-json: >-
         {"include":[
           {
@@ -40,7 +37,7 @@ jobs:
             "architecture":"x86_64",
             "abi":"gnu-glibc-2.39",
             "build_command":"sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build pkg-config curl python3 libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxkbcommon-dev libwayland-dev libegl1-mesa-dev libgles2-mesa-dev libasound2-dev libxtst-dev && bash scripts/package-release.sh && FRONTEND_TARGET_OS=linux FRONTEND_TARGET_ARCH=x86_64 FRONTEND_TARGET_ABI=gnu-glibc-2.39 FRONTEND_TARGET_RUNNER=github-actions-ubuntu-24.04 bash scripts/package-variants.sh",
-            "artifact_path":"dist/release-build-*/*\ndist/cdin-frontend-*-source.tar.gz\ndist/cdin-frontend-*-source.tar.gz.sha256"
+            "artifact_path":"dist/cdin-frontend-*"
           },
           {
             "id":"linux-arm64",
