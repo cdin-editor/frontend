@@ -42,7 +42,7 @@ The current cross-project design authority is [CDIN Spec 1.2.0](https://github.c
 
 ## Package status
 
-The next Frontend package identity is **1.1.1**. Its release workflow
+The next Frontend package identity is **1.2.0**. Its release workflow
 publishes three separately consumable variants—Core, TUI and GUI-SDL—for the
 five supported native target tuples, together with canonical ADR-0028 metadata
 assets generated from the exact tag commit. Core is shared by both UI adapters;
@@ -51,7 +51,7 @@ SDL3 remains a separate GUI-SDL environment dependency.
 The published `v1.1.0` GitHub Release predates the variant publisher merge and
 contains only the contributor source archive and checksums. It remains
 immutable and is not an installable Core/TUI/GUI-SDL package release. The
-`v1.1.1` package identity becomes RELEASED only after its exact tag triggers
+`v1.2.0` package identity becomes RELEASED only after its exact tag triggers
 the complete native matrix and the Release assets are verified. This packaging
 work does not claim production Unicode shaping, bidi, Persian/Arabic rendering,
 or complete TUI/GUI-SDL product readiness; optional capabilities remain
