@@ -3,13 +3,10 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$repo_root"
 
-version="${1:-${PIPELINE_RELEASE_TAG:-${GITHUB_REF_NAME:-}}}"
-version="${version#v}"
-if [[ -z "$version" ]]; then
-    version="$(sed -n 's/^project(cdin_frontend VERSION \([^ ]*\) LANGUAGES C)$/\1/p' CMakeLists.txt)"
-fi
-if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
-    echo "invalid release version: ${version:-<empty>}" >&2
+identity="$(python3 scripts/release_identity.py --allow-untagged)"
+IFS=$'\t' read -r version source_revision <<< "$identity"
+if [[ -n "${1:-}" && "${1#v}" != "$version" ]]; then
+    echo "requested source archive version '${1#v}' does not match resolved Frontend version '$version'" >&2
     exit 2
 fi
 mkdir -p dist
