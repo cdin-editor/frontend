@@ -25,6 +25,6 @@
 
 int main(void)
 {
-    assert(strcmp(CDIN_FRONTEND_FOUNDATION_VERSION_STRING, "1.1.1") == 0);
+    assert(strcmp(CDIN_FRONTEND_FOUNDATION_VERSION_STRING, "1.2.0") == 0);
     return 0;
 }
