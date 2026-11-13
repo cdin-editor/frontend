@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.2] - 2026-11-13
+
+### Fixed
+
+- Resolve the published Frontend package version from the immutable `vMAJOR.MINOR.PATCH` Git tag for source archives, Core/TUI/GUI-SDL native packages and ADR-0028 release metadata. Pass that version into CMake instead of requiring a duplicated, manually synchronized version in the build file.
+- Share one release-identity resolver across packaging and metadata generation. Real releases are accepted only when the exact Git tag resolves to the checked-out source commit; branch dry-runs continue to use Pipeline's synthetic candidate and the local development version.
+- Keep tagless local source archives supported without weakening the immutable-tag requirement for native release packages.
+
+### Specification references
+
+- [ADR-0028 GitHub Release metadata publisher contract](https://github.com/cdin-editor/spec/blob/main/docs/adr/ADR-0028-github-release-metadata-discovery.md#L19-L24).
+- [ADR-0025 immutable target artifact delivery](https://github.com/cdin-editor/spec/blob/main/docs/adr/ADR-0025-immutable-target-artifact-delivery.md#L17-L21).
+
 All notable changes to CDIN Frontend are documented in this file.
 
 The format follows [Keep a Changelog].
