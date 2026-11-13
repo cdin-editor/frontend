@@ -139,9 +139,31 @@ class ReleaseArtifactLayoutTests(unittest.TestCase):
 
         # Pipeline's reusable workflow ref and helper implementation must be
         # the same immutable commit for reproducible package assembly.
-        pinned_pipeline = "0c2c89c7c64575c6b0f66c78925bdf5638abc5e9"
+        pinned_pipeline = "7cfdffd574d3b438228bc6b0faae7c61bb14f055"
         self.assertIn(f"release.yml@{pinned_pipeline}", release_workflow)
         self.assertIn(f"pipeline-ref: {pinned_pipeline}", release_workflow)
+
+
+    def test_package_script_keeps_branch_dry_runs_separate_from_immutable_tag_releases(self) -> None:
+        repository_root = Path(__file__).resolve().parents[1]
+        package_script = (
+            repository_root / "scripts" / "package-variants.sh"
+        ).read_text(encoding="utf-8")
+        changelog = (repository_root / "CHANGELOG.md").read_text(encoding="utf-8")
+
+        # Branch previews use the synthetic candidate supplied by Pipeline and
+        # must not try to resolve it as a Git tag. Actual tag builds still bind
+        # package version to the exact tag-resolved commit.
+        self.assertIn('PIPELINE_DRY_RUN:-false', package_script)
+        self.assertIn('GITHUB_REF_TYPE:-', package_script)
+        self.assertIn('v0.0.0-dev.*', package_script)
+        self.assertIn('"$tag" == "v$version"', package_script)
+        self.assertIn('refs/tags/$tag^{commit}', package_script)
+        self.assertIn(
+            "https://github.com/cdin-editor/spec/blob/main/docs/adr/"
+            "ADR-0028-github-release-metadata-discovery.md#L19-L24",
+            changelog,
+        )
 
 
 if __name__ == "__main__":
