@@ -233,5 +233,22 @@ class ReleaseArtifactLayoutTests(unittest.TestCase):
         )
 
 
+    def test_readme_package_identity_matches_cmake_and_marks_historical_release(self) -> None:
+        repository_root = Path(__file__).resolve().parents[1]
+        cmake = (repository_root / "CMakeLists.txt").read_text(encoding="utf-8")
+        readme = (repository_root / "README.md").read_text(encoding="utf-8")
+        version_match = re.search(
+            r'^set\\(CDIN_FRONTEND_VERSION "([0-9]+\\.[0-9]+\\.[0-9]+)" CACHE STRING',
+            cmake,
+            flags=re.MULTILINE,
+        )
+        self.assertIsNotNone(version_match, "CMake development package version is missing")
+        assert version_match is not None
+        version = version_match.group(1)
+        self.assertIn(f"next Frontend package identity is **{version}**", readme)
+        self.assertIn("published `v1.2.0` Release is also immutable", readme)
+        self.assertIn("15 variant package archives", readme)
+
+
 if __name__ == "__main__":
     unittest.main()
