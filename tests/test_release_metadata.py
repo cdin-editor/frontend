@@ -184,6 +184,9 @@ class ReleaseArtifactLayoutTests(unittest.TestCase):
             repository_root / "scripts" / "generate-release-metadata.py"
         ).read_text(encoding="utf-8")
         cmake = (repository_root / "CMakeLists.txt").read_text(encoding="utf-8")
+        release_workflow = (
+            repository_root / ".github" / "workflows" / "release.yml"
+        ).read_text(encoding="utf-8")
         version_template = (repository_root / "cmake" / "frontend-version.h.in").read_text(encoding="utf-8")
         version_test = (repository_root / "tests" / "core" / "unit" / "version.c").read_text(encoding="utf-8")
 
