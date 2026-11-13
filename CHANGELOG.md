@@ -21,7 +21,7 @@ immutable component candidates and live CDIN product verification.
 
 ### Specification references
 
-- [ADR-0028 publisher contract, lines 19–23](https://github.com/cdin-editor/spec/blob/main/docs/adr/ADR-0028-github-release-metadata-discovery.md#L19-L23).
+- [ADR-0028 publisher contract, lines 19–24](https://github.com/cdin-editor/spec/blob/main/docs/adr/ADR-0028-github-release-metadata-discovery.md#L19-L24).
 - [ADR-0025 immutable artifact delivery, lines 17–21](https://github.com/cdin-editor/spec/blob/main/docs/adr/ADR-0025-immutable-target-artifact-delivery.md#L17-L21).
 
 ## [1.2.0] - 2026-11-13
