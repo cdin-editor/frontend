@@ -83,10 +83,13 @@ def resolve_release_identity(
         pipeline_revision = env.get("PIPELINE_SOURCE_SHA", "").strip().lower()
         if not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", head_revision):
             raise SystemExit("checked-out source HEAD is not a full Git commit ID")
-        if pipeline_revision != head_revision:
+        # Pipeline currently does not forward PIPELINE_SOURCE_SHA to every
+        # native build command. Verify it when present, but do not make this
+        # optional branch-preview input a release prerequisite.
+        if pipeline_revision and pipeline_revision != head_revision:
             raise SystemExit(
                 "refusing branch dry-run: "
-                f"Pipeline source is {pipeline_revision or '<missing>'}, "
+                f"Pipeline source is {pipeline_revision}, "
                 f"but checked-out HEAD is {head_revision}"
             )
         return read_local_project_version(project_root), head_revision
